@@ -17,7 +17,7 @@ class BaseWorker(threading.Thread):
         return self.__workerType
 
     def _queueType(self) -> QueueMgr.QueueType:
-        raise NotImplementedError("subclass of BaseWorker Must Implement queueType()")
+        raise NotImplementedError("subclasses of BaseWorker must implement method _queueType")
 
     def run(self):
         while True:
@@ -35,7 +35,7 @@ class BaseWorker(threading.Thread):
                 break
 
     def _process(self, item: BaseQueueItem) -> bool:
-        raise NotImplementedError("subclass of BaseWorker Must Implement process()")
+        raise NotImplementedError("subclasses of BaseWorker must implement method _process")
 
     def reportDeath(self):
         if self.is_alive():

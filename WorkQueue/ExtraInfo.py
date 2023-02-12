@@ -6,10 +6,10 @@ class BaseExtraInfo(object):
         super().__init__()
 
     def queueType(self):
-        raise NotImplementedError("")
+        raise NotImplementedError("subclasses of BaseExtraInfo must implement method queueType")
 
     def priority(self):
-        raise NotImplementedError("")
+        raise NotImplementedError("subclasses of BaseExtraInfo must implement method priority")
 
 
 class ActorsExtraInfo(BaseExtraInfo):

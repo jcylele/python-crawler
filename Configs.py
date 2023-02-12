@@ -24,7 +24,7 @@ class DownConfig(object):
 
 
 __ConfigDict: dict[ConfigType, DownConfig] = {
-    ConfigType.All: DownConfig(0, 25000, 1 * 1024 * 1024 * 1024),  # 所有Post，1G资源
+    ConfigType.All: DownConfig(0, 25000, 1 * 1024 * 1024 * 1024),  # 所有Post，1G以下资源
     ConfigType.Liked: DownConfig(0, 200, 200 * 1024 * 1024),  # 200条，200M
     ConfigType.Sample: DownConfig(50, 50, 50 * 1024 * 1024),  # 50条，50M
 }

@@ -30,7 +30,7 @@ WorkerCount = {
 def createWorker(work_type: WorkerType) -> BaseWorker:
     cls = WorkerClasses.get(work_type)
     if not cls:
-        raise NotImplementedError(f"WorkerType {work_type} Class Not Exist")
+        raise ReferenceError(f"WorkerType {work_type} Class Not Exist")
     return cls()
 
 

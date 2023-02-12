@@ -1,0 +1,121 @@
+from enum import Enum
+import sqlalchemy as sa
+from sqlalchemy import String, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
+
+import Configs
+import Consts
+
+
+class IntEnum(sa.types.TypeDecorator):
+    impl = sa.Integer
+    cache_ok = True
+
+    def __init__(self, enumtype, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._enumtype = enumtype
+
+    def process_bind_param(self, value, dialect):
+        return value.value
+
+    def process_result_value(self, value, dialect):
+        return self._enumtype(value)
+
+
+class ActorTag(Enum):
+    Init = 1
+    Liked = 2
+    Dislike = 3
+    Enough = 4
+
+
+class BaseModel(DeclarativeBase):
+    pass
+
+
+class ActorModel(BaseModel):
+    __tablename__ = "tab_actor"
+
+    actor_name: Mapped[str] = mapped_column(String(30), primary_key=True)
+    actor_desc: Mapped[str] = mapped_column(String(100), nullable=True)
+    actor_tag: Mapped[ActorTag] = mapped_column(IntEnum(ActorTag))
+    completed: Mapped[bool] = mapped_column(default=False)
+    post_list: Mapped[list["PostModel"]] = relationship(
+        back_populates="actor",
+        cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"Actor(name={self.actor_name!r}, tag={self.actor_tag!r}, desc={self.actor_desc!r})"
+
+
+class PostModel(BaseModel):
+    __tablename__ = "tab_post"
+
+    post_id: Mapped[int] = mapped_column(primary_key=True)
+    actor_name: Mapped[str] = mapped_column(ForeignKey("tab_actor.actor_name"))
+    actor: Mapped["ActorModel"] = relationship(back_populates="post_list")
+    completed: Mapped[bool] = mapped_column(default=False)
+    res_list: Mapped[list["ResModel"]] = relationship(
+        back_populates="post",
+        cascade="all, delete-orphan",
+        order_by="ResModel.res_index"
+    )
+
+    def __repr__(self) -> str:
+        return f"Post(post_id={self.post_id!r}, actor_name={self.actor_name})"
+
+
+class ResType(Enum):
+    Image = 1
+    Video = 2
+
+
+class ResState(Enum):
+    Init = 1
+    Down = 2
+    Skip = 3
+    Del = 4
+
+
+class ResModel(BaseModel):
+    __tablename__ = "tab_res"
+
+    res_id: Mapped[int] = mapped_column(primary_key=True)
+    res_url: Mapped[str] = mapped_column(String)
+    res_index: Mapped[int] = mapped_column()
+    res_state: Mapped[ResState] = mapped_column(IntEnum(ResState))
+    res_type: Mapped[ResType] = mapped_column(IntEnum(ResType))
+    res_size: Mapped[int] = mapped_column(default=0)
+
+    post_id: Mapped[int] = mapped_column(ForeignKey("tab_post.post_id", ondelete="CASCADE"))
+    post: Mapped["PostModel"] = relationship(back_populates="res_list")
+
+    def fileName(self) -> str:
+        ext = self.res_url.split('.')[-1]
+        return f"{self.post_id}_{self.res_index}.{ext}"
+
+    def filePath(self) -> str:
+        return f"{Consts.RootFolder}/{self.post.actor_name}/{self.fileName()}"
+
+    def tmpFilePath(self) -> str:
+        return f"{Consts.RootFolder}/{self.post.actor_name}/_{self.fileName()}"
+
+    def shouldDownload(self) -> bool:
+        if self.res_state == ResState.Init:
+            return True
+        if self.res_state != ResState.Skip:
+            return False
+        if self.res_size > Configs.MaxFileSize:
+            # LogUtil.info(f"({self.res_id} of {self.post_id} of {self.post.actor_name}) too big: {self.res_size}")
+            return False
+        return True
+
+    def __repr__(self) -> str:
+        return f"Res(id={self.res_id!r}, " \
+               f"post_id={self.post_id}, " \
+               f"index={self.res_index}, " \
+               f"type={self.res_type}, " \
+               f"size={self.res_size}, " \
+               f"status={self.res_state}, " \
+               f"url={self.res_url}) "

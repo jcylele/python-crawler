@@ -3,7 +3,7 @@
 from enum import Enum
 
 import sqlalchemy as sa
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import String, ForeignKey, BigInteger
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
@@ -13,6 +13,7 @@ class IntEnum(sa.types.TypeDecorator):
     """
     convert between enum in python and integer in database
     """
+
     impl = sa.Integer
     cache_ok = True
 
@@ -63,7 +64,7 @@ class ActorModel(BaseModel):
 class PostModel(BaseModel):
     __tablename__ = "tab_post"
 
-    post_id: Mapped[int] = mapped_column(primary_key=True)
+    post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     actor_name: Mapped[str] = mapped_column(ForeignKey("tab_actor.actor_name"))
     actor: Mapped["ActorModel"] = relationship(back_populates="post_list")
     completed: Mapped[bool] = mapped_column(default=False)

@@ -9,6 +9,9 @@ MaxFileSize = 0
 # left count for MaxActorsCount
 __left_actor_count = -1
 
+
+# connection string
+DbConnectString = "mysql+pymysql://jcylele:123456@localhost:3306/onlyfans"
 # Root Folder for all downloaded resources(files)
 RootFolder = "D:/OnlyFans"
 # tmp file inside RootFolder for downloading files which will be  moved to other locations when completed

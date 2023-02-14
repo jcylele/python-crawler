@@ -1,28 +1,59 @@
-from enum import Enum
+from enum import Enum, auto
 
-# 拉多少个新Actor
+# limit the number of new actors
 MaxActorsCount = 0
-# 每个Actor拉取多少个Post
+# limit the numbers of posts of each actor
 MaxPostCount = 0
-# 文件大小限制
+# limit the maximal size of resource(file)
 MaxFileSize = 0
-# 剩余可拉Actor数量
+# left count for MaxActorsCount
 __left_actor_count = -1
+
+# Root Folder for all downloaded resources(files)
+RootFolder = "D:/OnlyFans"
+# tmp file inside RootFolder for downloading files which will be  moved to other locations when completed
+TmpFolder = "_downloading"
+
+
+def formatTmpFolderPath() -> str:
+    """
+    temporary folder for downloading files
+    :return:
+    """
+    return f"{RootFolder}/{TmpFolder}"
+
+
+def formatActorFolderPath(actor_name: str) -> str:
+    """
+    path of the folder for an actor
+    :param actor_name:
+    :return:
+    """
+    return f"{RootFolder}/{actor_name}"
 
 
 class ConfigType(Enum):
-    All = 1
-    Liked = 2
-    Sample = 3
+    """
+    set of numbers
+    """
+    All = auto()
+    Liked = auto()
+    Sample = auto()
 
 
 class DownConfig(object):
+    """
+    just to group numbers
+    """
+
     def __init__(self, ac: int, pc: int, fs: int):
         self.MaxActorsCount = ac
         self.MaxPostCount = pc
         self.MaxFileSize = fs
 
 
+# configuration set
+# TODO: Use json instead
 __ConfigDict: dict[ConfigType, DownConfig] = {
     ConfigType.All: DownConfig(0, 25000, 1 * 1024 * 1024 * 1024),  # 所有Post，1G以下资源
     ConfigType.Liked: DownConfig(0, 200, 200 * 1024 * 1024),  # 200条，200M
@@ -31,6 +62,9 @@ __ConfigDict: dict[ConfigType, DownConfig] = {
 
 
 def setConfig(config_type: ConfigType):
+    """
+    set limits in batch
+    """
     config = __ConfigDict.get(config_type)
     if config is None:
         raise Exception(f"invalid Config Type: {config_type}")
@@ -50,7 +84,8 @@ def setConfig(config_type: ConfigType):
 
 def moreActor(use: bool) -> bool:
     """
-    还可以拉么
+    continue to enqueue new actors or not
+    :param use decrease the number
     """
     global __left_actor_count
     if __left_actor_count > 0:

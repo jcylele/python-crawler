@@ -2,8 +2,7 @@ from bs4 import BeautifulSoup
 
 import Configs
 from Consts import WorkerType
-from Ctrls import ActorCtrl, PostCtrl, CtrlUtil
-from Models.BaseModel import ActorTag
+from Ctrls import ActorCtrl, PostCtrl, DbCtrl
 from WorkQueue import QueueMgr, QueueUtil
 from WorkQueue.ExtraInfo import ActorExtraInfo
 from WorkQueue.PageQueueItem import PageQueueItem
@@ -11,6 +10,10 @@ from Workers.BaseWorker import BaseWorker
 
 
 class AnalyseActorWorker(BaseWorker):
+    """
+    worker to analyse the post list page of an actor
+    """
+
     def __init__(self):
         super().__init__(worker_type=WorkerType.AnalyseActor)
 
@@ -18,7 +21,7 @@ class AnalyseActorWorker(BaseWorker):
         return QueueMgr.QueueType.AnalyseUser
 
     def _process(self, item: PageQueueItem) -> bool:
-        with CtrlUtil.getSession() as session, session.begin():
+        with DbCtrl.getSession() as session, session.begin():
             if item.content is None:
                 return False
             extra_info: ActorExtraInfo = item.extra_info
@@ -32,12 +35,12 @@ class AnalyseActorWorker(BaseWorker):
                 if post is None:
                     PostCtrl.addPost(session, extra_info.actor_name, post_id)
                     QueueUtil.enqueuePost(extra_info.actor_name, post_id, item.url)
-                elif not post.completed:
+                elif not post.completed:    # the post is not analysed yet
                     QueueUtil.enqueuePost(extra_info.actor_name, post_id, item.url)
-                else:
+                else:   # all resources of the post are already added
                     QueueUtil.enqueueAllRes(post)
 
-            if len(article_list) > 0:
+            if len(article_list) > 0:  # last page reached
                 start_order = extra_info.start_order + len(article_list)
                 if start_order < Configs.MaxPostCount:
                     QueueUtil.enqueueActor(extra_info.actor_name, start_order, item.url)
@@ -45,8 +48,3 @@ class AnalyseActorWorker(BaseWorker):
                 actor.completed = True
 
             return True
-
-
-
-
-

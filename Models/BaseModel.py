@@ -1,13 +1,18 @@
+# Data Models consistent with table structs in database
+
 from enum import Enum
+
 import sqlalchemy as sa
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
-import Consts
 
 
 class IntEnum(sa.types.TypeDecorator):
+    """
+    convert between enum in python and integer in database
+    """
     impl = sa.Integer
     cache_ok = True
 
@@ -16,17 +21,23 @@ class IntEnum(sa.types.TypeDecorator):
         self._enumtype = enumtype
 
     def process_bind_param(self, value, dialect):
+        """
+        from python to database
+        """
         return value.value
 
     def process_result_value(self, value, dialect):
+        """
+        from database to python
+        """
         return self._enumtype(value)
 
 
 class ActorTag(Enum):
-    Init = 1
-    Liked = 2
-    Dislike = 3
-    Enough = 4
+    Init = 1        # initial state of an actor
+    Liked = 2       # mark as liked
+    Dislike = 3     # dislike and remove the folder
+    Enough = 4      # once liked, then remove the folder
 
 
 class BaseModel(DeclarativeBase):
@@ -38,7 +49,7 @@ class ActorModel(BaseModel):
 
     actor_name: Mapped[str] = mapped_column(String(30), primary_key=True)
     actor_desc: Mapped[str] = mapped_column(String(100), nullable=True)
-    actor_tag: Mapped[ActorTag] = mapped_column(IntEnum(ActorTag))
+    actor_tag: Mapped[ActorTag] = mapped_column(IntEnum(ActorTag), default=ActorTag.Init)
     completed: Mapped[bool] = mapped_column(default=False)
     post_list: Mapped[list["PostModel"]] = relationship(
         back_populates="actor",
@@ -84,7 +95,7 @@ class ResModel(BaseModel):
     res_id: Mapped[int] = mapped_column(primary_key=True)
     res_url: Mapped[str] = mapped_column(String)
     res_index: Mapped[int] = mapped_column()
-    res_state: Mapped[ResState] = mapped_column(IntEnum(ResState))
+    res_state: Mapped[ResState] = mapped_column(IntEnum(ResState), default=ResState.Init)
     res_type: Mapped[ResType] = mapped_column(IntEnum(ResType))
     res_size: Mapped[int] = mapped_column(default=0)
 
@@ -96,12 +107,27 @@ class ResModel(BaseModel):
         return f"{self.post_id}_{self.res_index}.{ext}"
 
     def filePath(self) -> str:
-        return f"{Consts.RootFolder}/{self.post.actor_name}/{self.fileName()}"
+        """
+        real location for valid resources
+        :return:
+        """
+        return f"{Configs.RootFolder}/{self.post.actor_name}/{self.fileName()}"
+
+    def tmpFileName(self) -> str:
+        return f"{self.post.actor_name}_{self.fileName()}"
 
     def tmpFilePath(self) -> str:
-        return f"{Consts.RootFolder}/{self.post.actor_name}/_{self.fileName()}"
+        """
+        temporary location for resources before validation
+        :return:
+        """
+        return f"{Configs.formatTmpFolderPath()}/{self.tmpFileName()}"
 
     def shouldDownload(self) -> bool:
+        """
+        check whether resources should be downloaded
+        :return:
+        """
         if self.res_state == ResState.Init:
             return True
         if self.res_state != ResState.Skip:

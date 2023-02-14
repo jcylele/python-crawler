@@ -3,6 +3,9 @@ from WorkQueue.ExtraInfo import BaseExtraInfo
 
 
 class UrlQueueItem(BaseQueueItem):
+    """
+    A queue item containing urls for getting or downloading and extra information
+    """
     def __init__(self, url: str, from_url: str = None, extra_info: BaseExtraInfo = None):
         super().__init__()
 

@@ -3,6 +3,9 @@ from WorkQueue.ExtraInfo import BaseExtraInfo
 
 
 class PageQueueItem(BaseQueueItem):
+    """
+    A queue item containing a web page content and extra information
+    """
     def __init__(self, url: str, content: str, extra_info: BaseExtraInfo):
         super().__init__()
         self.url = url

@@ -2,12 +2,12 @@ from enum import Enum, auto
 
 import Configs
 import Consts
-import LogUtil
-from Ctrls import ActorCtrl, CtrlUtil, ResCtrl
+from Utils import LogUtil
+from Ctrls import ActorCtrl, DbCtrl, ResCtrl
 from Guarder import Guarder
 from Models.BaseModel import ActorTag
 from WorkQueue import QueueMgr, QueueUtil
-from Workers import WorkUtil
+from Workers import WorkerMgr
 
 StrActorName = "input actor's name: "
 StrOnlyInfo = "all but only info[y] or normal download[n]: "
@@ -16,6 +16,9 @@ StrMoreSample = "more sample(y) or normal sample(n): "
 
 
 class MainOperation(Enum):
+    """
+    configuration to begin the process
+    """
     DownOne = auto()
     DownLiked = auto()
     DownSample = auto()
@@ -47,36 +50,47 @@ def setConfig(config_type: Configs.ConfigType):
 
 
 def setWorkerCount(worker_type: Consts.WorkerType, count: int):
-    WorkUtil.WorkerCount[worker_type] = count
+    WorkerMgr.WorkerCount[worker_type] = count
 
 
 def startDownload():
+    """
+    new all threads and start running
+    :return:
+    """
     guarder = Guarder()
     for work_type in Consts.WorkerType:
-        count = WorkUtil.getWorkerCount(work_type)
+        count = WorkerMgr.getWorkerCount(work_type)
         for i in range(count):
-            worker = WorkUtil.createWorker(work_type)
+            worker = WorkerMgr.createWorker(work_type)
             guarder.addWorker(worker)
     guarder.start()
 
 
-def removeInvalidRes():
-    with CtrlUtil.getSession() as session, session.begin():
-        ResCtrl.removeInvalidRes(session)
-
-
 def downloadActor(actor_name: str):
+    """
+    download an actor only
+    """
     QueueUtil.enqueueActor(actor_name)
     startDownload()
 
 
 def downloadNewActors():
+    """
+    download new actors
+    :return:
+    """
     QueueUtil.enqueueActors()
     startDownload()
 
 
 def downloadByActorTag(actor_tag: ActorTag):
-    with CtrlUtil.getSession() as session, session.begin():
+    """
+    download actors which has the corresponding tag
+    :param actor_tag: tag to filter actors
+    :return:
+    """
+    with DbCtrl.getSession() as session, session.begin():
         actors = ActorCtrl.getActorsByTag(session, actor_tag)
         for actor in actors:
             QueueUtil.enqueueActor(actor.actor_name)
@@ -84,20 +98,32 @@ def downloadByActorTag(actor_tag: ActorTag):
 
 
 def likeAllActors():
-    with CtrlUtil.getSession() as session, session.begin():
-        ActorCtrl.likeAllActors(session)
+    """
+    mark all existing  actors as liked
+    :return:
+    """
+    with DbCtrl.getSession() as session, session.begin():
+        ActorCtrl.favorAllInitActors(session)
 
 
 def repairRecords():
-    with CtrlUtil.getSession() as session, session.begin():
+    """
+    refresh database according to the existence of files and folders
+    :return:
+    """
+    with DbCtrl.getSession() as session, session.begin():
         ActorCtrl.repairRecords(session)
-    with CtrlUtil.getSession() as session, session.begin():
+    with DbCtrl.getSession() as session, session.begin():
         ResCtrl.repairRecords(session)
 
 
 def initEnv():
+    """
+    initialize the environment
+    :return:
+    """
     LogUtil.info("initializing...")
-    CtrlUtil.init()
+    DbCtrl.init()
     QueueMgr.init()
     repairRecords()
 

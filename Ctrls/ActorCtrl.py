@@ -1,70 +1,95 @@
-import json
+# ActorModel related operations
+
 import os
 
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
-import Consts
-import LogUtil
-from Ctrls import PostCtrl, ResCtrl, CtrlUtil
+import Configs
+from Ctrls import PostCtrl
 from Models.BaseModel import ActorModel, ActorTag
 
 
 def getActor(session: Session, actor_name: str) -> ActorModel:
+    """
+    get record of the actor
+    :return:
+    """
     return session.get(ActorModel, actor_name)
 
 
 def createActorFolder(actor_name: str):
-    # 创建文件夹
-    os.makedirs(Consts.formatActorFolderPath(actor_name), exist_ok=True)
+    """
+    create a folder for the actor
+    :param actor_name:
+    :return:
+    """
+    os.makedirs(Configs.formatActorFolderPath(actor_name), exist_ok=True)
 
 
-def addActor(session: Session, actor_name: str, tag: ActorTag = ActorTag.Init) -> ActorModel:
+def addActor(session: Session, actor_name: str) -> ActorModel:
+    """
+    create a record for the actor, skip if already exist
+    :param session:
+    :param actor_name:
+    :return: actor record
+    """
     actor = getActor(session, actor_name)
     if actor is not None:
-        # LogUtil.debug(f"{actor_name} already exist")
         return actor
 
     createActorFolder(actor_name)
-    actor = ActorModel(actor_name=actor_name, actor_tag=tag)
+    actor = ActorModel(actor_name=actor_name)
     session.add(actor)
+
     return actor
 
 
-def delActor(session: Session, actor_name: str):
-    actor = getActor(session, actor_name)
-    if actor is None:
-        return
-    session.delete(actor)
-
-
 def hasActor(session: Session, actor_name: str) -> bool:
+    """
+    check if actor already exist
+    :param session:
+    :param actor_name:
+    :return: exist or not
+    """
     actor = getActor(session, actor_name)
     return actor is not None
 
 
 def getActorsByTag(session: Session, tag: ActorTag) -> ScalarResult[ActorModel]:
+    """
+    search actors by actor_tag
+    :param session:
+    :param tag:
+    :return:
+    """
     stmt = select(ActorModel).where(ActorModel.actor_tag == tag)
     return session.scalars(stmt)
 
 
-def likeAllActors(session: Session):
+def favorAllInitActors(session: Session):
+    """
+    mark all actor with an init tag as liked if their folders are not deleted,
+    delete his/her folder if you don't like hime/her before execute this
+    :param session:
+    :return:
+    """
     actor_list = getActorsByTag(session, ActorTag.Init)
     for actor in actor_list:
-        # 文件夹还在代表喜欢
-        if os.path.exists(Consts.formatActorFolderPath(actor.actor_name)):
+        # check existence of actor's folder
+        if os.path.exists(Configs.formatActorFolderPath(actor.actor_name)):
             actor.actor_tag = ActorTag.Liked
 
 
 def repairRecords(session: Session):
     """
-    根据文件是否存在刷新记录
+    refresh the records according to the existence of folders
     """
     stmt = select(ActorModel).where(ActorModel.actor_tag != ActorTag.Dislike)
     actor_list: ScalarResult[ActorModel] = session.scalars(stmt)
     for actor in actor_list:
-        # 已删代表不喜欢
-        if not os.path.exists(Consts.formatActorFolderPath(actor.actor_name)):
+        # deletion means you don't like
+        if not os.path.exists(Configs.formatActorFolderPath(actor.actor_name)):
             if actor.actor_tag == ActorTag.Init:
                 actor.actor_tag = ActorTag.Dislike
             else:

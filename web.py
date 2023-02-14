@@ -1,5 +1,8 @@
+# web server for more convenient operations
+# TODO far from completed, just for practice
+
 from enum import Enum
-from typing import Union, List
+from typing import Union
 
 from fastapi import FastAPI, Query, Path, Body
 from pydantic import BaseModel, Field
@@ -8,7 +11,7 @@ from starlette.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from Steps.DataInputSteps import MainOperation
+from Entrance import MainOperation
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="web/static"), name="static")

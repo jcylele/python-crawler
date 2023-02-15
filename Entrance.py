@@ -1,3 +1,4 @@
+import os.path
 from enum import Enum, auto
 
 import Configs
@@ -123,6 +124,8 @@ def initEnv():
     :return:
     """
     LogUtil.info("initializing...")
+    os.makedirs(Configs.RootFolder, exist_ok=True)
+    os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
     DbCtrl.init()
     QueueMgr.init()
     repairRecords()

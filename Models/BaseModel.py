@@ -1,5 +1,5 @@
 # Data Models consistent with table structs in database
-
+import json
 from enum import Enum
 
 import sqlalchemy as sa
@@ -34,31 +34,92 @@ class IntEnum(sa.types.TypeDecorator):
         return self._enumtype(value)
 
 
-class ActorTag(Enum):
-    Init = 1        # initial state of an actor
-    Liked = 2       # mark as liked
-    Dislike = 3     # dislike and remove the folder
-    Enough = 4      # once liked, then remove the folder
+class BaseModelEncoder(json.JSONEncoder):
+    """
+    json encoder for BaseModel
+    """
+    def default(self, obj):
+        if isinstance(obj, BaseModel):
+            return obj.toJson()
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, obj)
 
 
 class BaseModel(DeclarativeBase):
-    pass
+    def toJson(self):
+        json_data = {}
+        for c in self.__table__.columns:
+            attr = getattr(self, c.name)
+            if isinstance(attr, Enum):
+                attr = attr.value
+
+            if attr is not None:
+                json_data[c.name] = attr
+
+        return json_data
+
+
+class ActorTagRelationship(BaseModel):
+    __tablename__ = "rel_actor_tag"
+
+    actor_name: Mapped[str] = mapped_column(
+        ForeignKey("tab_actor.actor_name"),
+        primary_key=True
+    )
+    tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tab_actor_tag.tag_id"),
+        primary_key=True
+    )
+
+    tag: Mapped["ActorTagModel"] = relationship(back_populates="rel_actors")
+    actor: Mapped["ActorModel"] = relationship(back_populates="rel_tags")
+
+
+class ActorCategory(Enum):
+    All = 0  # all actors
+    Init = 1  # initial state of an actor
+    Liked = 2  # mark as liked
+    Dislike = 3  # dislike and remove the folder
+    Enough = 4  # once liked, then remove the folder
 
 
 class ActorModel(BaseModel):
     __tablename__ = "tab_actor"
 
     actor_name: Mapped[str] = mapped_column(String(30), primary_key=True)
-    actor_desc: Mapped[str] = mapped_column(String(100), nullable=True)
-    actor_tag: Mapped[ActorTag] = mapped_column(IntEnum(ActorTag), default=ActorTag.Init)
+    actor_category: Mapped[ActorCategory] = mapped_column(IntEnum(ActorCategory), default=ActorCategory.Init)
     completed: Mapped[bool] = mapped_column(default=False)
+
     post_list: Mapped[list["PostModel"]] = relationship(
         back_populates="actor",
         cascade="all, delete-orphan"
     )
+    rel_tags: Mapped[list["ActorTagRelationship"]] = relationship(
+        back_populates="actor",
+        # order_by="ActorTagRelationship.tag.tag_priority"
+    )
+
+    def toJson(self):
+        json_data = super().toJson()
+        tag_list = []
+        for tag in self.rel_tags:
+            tag_list.append(tag.tag_id)
+        json_data['rel_tags'] = tag_list
+        return json_data
 
     def __repr__(self) -> str:
-        return f"Actor(name={self.actor_name!r}, tag={self.actor_tag!r}, desc={self.actor_desc!r})"
+        return f"Actor(name={self.actor_name!r}, category={self.actor_category!r})"
+
+
+class ActorTagModel(BaseModel):
+    __tablename__ = "tab_actor_tag"
+    tag_id: Mapped[int] = mapped_column(primary_key=True)
+    tag_name: Mapped[str] = mapped_column(String(30))
+    tag_priority: Mapped[int] = mapped_column(default=0)
+
+    rel_actors: Mapped[list["ActorTagRelationship"]] = relationship(
+        back_populates="tag"
+    )
 
 
 class PostModel(BaseModel):

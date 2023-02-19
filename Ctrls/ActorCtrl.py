@@ -6,8 +6,8 @@ from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
 import Configs
-from Ctrls import PostCtrl
-from Models.BaseModel import ActorModel, ActorTag
+from Ctrls import PostCtrl, DbCtrl
+from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship
 
 
 def getActor(session: Session, actor_name: str) -> ActorModel:
@@ -56,44 +56,78 @@ def hasActor(session: Session, actor_name: str) -> bool:
     return actor is not None
 
 
-def getActorsByTag(session: Session, tag: ActorTag) -> ScalarResult[ActorModel]:
+def getActorCount(session: Session, category: ActorCategory) -> int:
+    _query = session.query(ActorModel)
+    if category != ActorCategory.All:
+        _query = _query.where(ActorModel.actor_category == category)
+    return DbCtrl.queryCount(_query)
+
+
+def getActorsByCategory(session: Session, category: ActorCategory, limit: int = 0, start: int = 0) -> ScalarResult[
+    ActorModel]:
     """
-    search actors by actor_tag
-    :param session:
-    :param tag:
-    :return:
+    search actors by category
     """
-    stmt = select(ActorModel).where(ActorModel.actor_tag == tag)
-    return session.scalars(stmt)
+    _query = session.query(ActorModel).order_by(ActorModel.actor_name)
+    if category != ActorCategory.All:
+        _query = _query.where(ActorModel.actor_category == category)
+    if start != 0:
+        _query = _query.offset(start)
+    if limit != 0:
+        _query = _query.limit(limit)
+    return session.scalars(_query)
+
+
+def removeTagFromActor(session: Session, actor_name: str, tag_id: int) -> ActorModel:
+    actor = getActor(session, actor_name)
+    for rel in actor.rel_tags:
+        if rel.tag_id == tag_id:
+            actor.rel_tags.remove(rel)
+            session.delete(rel)
+            break
+
+    session.flush()
+    return actor
+
+
+def addTagToActor(session: Session, actor_name: str, tag_id: int) -> ActorModel:
+    actor = getActor(session, actor_name)
+
+    relation = ActorTagRelationship()
+    relation.tag_id = tag_id
+    relation.actor_name = actor_name
+
+    actor.rel_tags.append(relation)
+
+    session.flush()
+    return actor
 
 
 def favorAllInitActors(session: Session):
     """
-    mark all actor with an init tag as liked if their folders are not deleted,
+    mark all actor in init category as liked if their folders are not deleted,
     delete his/her folder if you don't like hime/her before execute this
     :param session:
     :return:
     """
-    actor_list = getActorsByTag(session, ActorTag.Init)
+    actor_list = getActorsByCategory(session, ActorCategory.Init)
     for actor in actor_list:
         # check existence of actor's folder
         if os.path.exists(Configs.formatActorFolderPath(actor.actor_name)):
-            actor.actor_tag = ActorTag.Liked
+            actor.actor_category = ActorCategory.Liked
 
 
 def repairRecords(session: Session):
     """
     refresh the records according to the existence of folders
     """
-    stmt = select(ActorModel).where(ActorModel.actor_tag != ActorTag.Dislike)
+    stmt = select(ActorModel).where(ActorModel.actor_category != ActorCategory.Dislike)
     actor_list: ScalarResult[ActorModel] = session.scalars(stmt)
     for actor in actor_list:
         # deletion means you don't like
         if not os.path.exists(Configs.formatActorFolderPath(actor.actor_name)):
-            if actor.actor_tag == ActorTag.Init:
-                actor.actor_tag = ActorTag.Dislike
+            if actor.actor_category == ActorCategory.Init:
+                actor.actor_category = ActorCategory.Dislike
             else:
-                actor.actor_tag = ActorTag.Enough
+                actor.actor_category = ActorCategory.Enough
             PostCtrl.deleteAllPostOfActor(session, actor.actor_name)
-
-

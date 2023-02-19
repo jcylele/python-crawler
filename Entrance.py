@@ -3,10 +3,10 @@ from enum import Enum, auto
 
 import Configs
 import Consts
-from Utils import LogUtil
 from Ctrls import ActorCtrl, DbCtrl, ResCtrl
 from Guarder import Guarder
-from Models.BaseModel import ActorTag
+from Models.BaseModel import ActorCategory
+from Utils import LogUtil
 from WorkQueue import QueueMgr, QueueUtil
 from Workers import WorkerMgr
 
@@ -85,14 +85,14 @@ def downloadNewActors():
     startDownload()
 
 
-def downloadByActorTag(actor_tag: ActorTag):
+def downloadByActorCategory(actor_category: ActorCategory):
     """
-    download actors which has the corresponding tag
-    :param actor_tag: tag to filter actors
+    download actors in corresponding category
+    :param actor_category: category to filter actors
     :return:
     """
     with DbCtrl.getSession() as session, session.begin():
-        actors = ActorCtrl.getActorsByTag(session, actor_tag)
+        actors = ActorCtrl.getActorsByCategory(session, actor_category)
         for actor in actors:
             QueueUtil.enqueueActor(actor.actor_name)
     startDownload()
@@ -146,7 +146,7 @@ def enter():
             setConfig(Configs.ConfigType.Liked)
         else:
             raise Exception(f"invalid option {is_all}")
-        downloadByActorTag(ActorTag.Liked)
+        downloadByActorCategory(ActorCategory.Liked)
     elif eop == MainOperation.DownSample:
         is_new = input(StrNewActors)
         if is_new == 'y':
@@ -160,7 +160,7 @@ def enter():
                 setConfig(Configs.ConfigType.Sample)
             else:
                 raise Exception(f"invalid option {is_more}")
-            downloadByActorTag(ActorTag.Init)
+            downloadByActorCategory(ActorCategory.Init)
         else:
             raise Exception(f"invalid option {is_new}")
     elif eop == MainOperation.DownOne:

@@ -10,7 +10,7 @@
 
    A SQL toolkit and Object Relational Mapper for Python.
    It's used to operate databases(MySQL is used in this project). 
-   ORM is quite easy to use, but watch out for sessions. 
+   ORM is quite easy to use, but watch out for sessions and various traps.
    Keep their lives short and avoid doing time-consuming jobs inside.
 
 2. Beautiful Soup
@@ -34,8 +34,13 @@
 
    Each worker fetches work from corresponding queue and processes it repeatedly.
    Different queues containing different types of tasks.
-   A guarder monitors and reports the running status of workers and queues
+   A guarder monitors and reports the running status of workers and queues.
 
-## TODO
-A local website built in [FastAPI](https://fastapi.tiangolo.com/) and [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/)
+5. FastAPI
+   
+   [Official Website](https://fastapi.tiangolo.com/)
+   A modern, fast (high-performance), web framework for building APIs with Python 3.7+ based on standard Python type hints.
+   It's famous for elegant routing, concise API docs and easy-to-use features.
+   
+   
 

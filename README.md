@@ -39,6 +39,7 @@
 5. FastAPI
    
    [Official Website](https://fastapi.tiangolo.com/)
+   
    A modern, fast (high-performance), web framework for building APIs with Python 3.7+ based on standard Python type hints.
    It's famous for elegant routing, concise API docs and easy-to-use features.
    

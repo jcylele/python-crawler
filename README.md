@@ -1,5 +1,6 @@
 # python-crawler
-traverse a website, download resources and manage them with a database, the corresponding frontend project can be found [here](https://github.com/jcylele/python-crawler)
+- traverse a website, download resources and manage them with a database
+- the corresponding frontend project can be found [here](https://github.com/jcylele/vue_element_plus)
 
 ## main features
 

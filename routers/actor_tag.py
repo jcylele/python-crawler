@@ -36,10 +36,11 @@ class ActorTagForm(BaseModel):
 
 
 @router.post("/add")
-def add_actor_tag(tag_form: ActorTagForm):
+def add_actor_tag(form: ActorTagForm):
     with DbCtrl.getSession() as session, session.begin():
         tag = ActorTagModel()
-        tag.__dict__.update(tag_form.__dict__)
+        tag.tag_name = form.tag_name
+        tag.tag_priority = form.tag_priority
         ActorTagCtrl.addActorTag(session, tag)
         return DbCtrl.CustomJsonResponse(tag)
 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from fastapi.params import Query
+from pydantic import BaseModel
 
 from Ctrls import DbCtrl, ActorCtrl
 from Models.BaseModel import ActorCategory
@@ -45,8 +46,13 @@ def delete_actor_tag(tag_id: int, actor_name: str):
         return DbCtrl.CustomJsonResponse(actor)
 
 
+class AddTagForm(BaseModel):
+    actor_name: str
+    tag_list: list[int]
+
+
 @router.post("/tag")
-def add_actor_tag(tag_id: int, actor_name: str):
+def add_actor_tag(form: AddTagForm):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.addTagToActor(session, actor_name, tag_id)
+        actor = ActorCtrl.addTagsToActor(session, form.actor_name, form.tag_list)
         return DbCtrl.CustomJsonResponse(actor)

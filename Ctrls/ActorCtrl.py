@@ -90,14 +90,14 @@ def removeTagFromActor(session: Session, actor_name: str, tag_id: int) -> ActorM
     return actor
 
 
-def addTagToActor(session: Session, actor_name: str, tag_id: int) -> ActorModel:
+def addTagsToActor(session: Session, actor_name: str, tag_list: list[int]) -> ActorModel:
     actor = getActor(session, actor_name)
 
-    relation = ActorTagRelationship()
-    relation.tag_id = tag_id
-    relation.actor_name = actor_name
-
-    actor.rel_tags.append(relation)
+    for tag_id in tag_list:
+        relation = ActorTagRelationship()
+        relation.tag_id = tag_id
+        relation.actor_name = actor_name
+        actor.rel_tags.append(relation)
 
     session.flush()
     return actor

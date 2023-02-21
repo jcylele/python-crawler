@@ -1,7 +1,10 @@
+import subprocess
+from typing import List
+
 from fastapi import APIRouter
 from fastapi.params import Query
-from pydantic import BaseModel
 
+import Configs
 from Ctrls import DbCtrl, ActorCtrl
 from Models.BaseModel import ActorCategory
 
@@ -39,20 +42,27 @@ def get_actor(actor_name: str):
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.delete("/tag")
+@router.patch("/{actor_name}")
+def change_actor_category(actor_name: str, actor_category: int = Query(alias='category')):
+    with DbCtrl.getSession() as session, session.begin():
+        actor = ActorCtrl.changeActorCategory(session, actor_name, ActorCategory(actor_category))
+        return DbCtrl.CustomJsonResponse(actor)
+
+
+@router.get("/{actor_name}/open")
+def get_actor(actor_name: str):
+    subprocess.Popen(f'explorer "{Configs.formatActorFolderPath(actor_name)}"')
+
+
+@router.delete("/{actor_name}/{tag_id}")
 def delete_actor_tag(tag_id: int, actor_name: str):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.removeTagFromActor(session, actor_name, tag_id)
         return DbCtrl.CustomJsonResponse(actor)
 
 
-class AddTagForm(BaseModel):
-    actor_name: str
-    tag_list: list[int]
-
-
-@router.post("/tag")
-def add_actor_tag(form: AddTagForm):
+@router.post("/{actor_name}/tag")
+def add_actor_tag(actor_name: str, tag_list: List[int] = Query(alias='id')):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.addTagsToActor(session, form.actor_name, form.tag_list)
+        actor = ActorCtrl.addTagsToActor(session, actor_name, tag_list)
         return DbCtrl.CustomJsonResponse(actor)

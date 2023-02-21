@@ -1,12 +1,13 @@
 # ActorModel related operations
 
 import os
+import shutil
 
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
 import Configs
-from Ctrls import PostCtrl, DbCtrl
+from Ctrls import PostCtrl, DbCtrl, ResCtrl
 from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship
 
 
@@ -98,6 +99,49 @@ def addTagsToActor(session: Session, actor_name: str, tag_list: list[int]) -> Ac
         relation.tag_id = tag_id
         relation.actor_name = actor_name
         actor.rel_tags.append(relation)
+
+    session.flush()
+    return actor
+
+
+__SwitchRemoveFiles = {
+    ActorCategory.Init: {
+        ActorCategory.Liked: False,
+        ActorCategory.Dislike: True,
+        ActorCategory.Enough: True,
+    },
+    ActorCategory.Liked: {
+        ActorCategory.Init: False,
+        ActorCategory.Dislike: True,
+        ActorCategory.Enough: True,
+    },
+    ActorCategory.Dislike: {
+        ActorCategory.Init: False,
+    },
+    ActorCategory.Enough: {
+        ActorCategory.Init: False,
+        ActorCategory.Liked: False,
+        ActorCategory.Dislike: False,
+    },
+}
+
+
+def changeActorCategory(session: Session, actor_name: str, new_category: ActorCategory) -> ActorModel:
+    actor = getActor(session, actor_name)
+    # no change
+    if actor.actor_category == new_category:
+        return actor
+    switch_map = __SwitchRemoveFiles.get(actor.actor_category)
+    remove_files = switch_map.get(new_category)
+    # unable to change
+    if remove_files is None:
+        return actor
+    # remove files
+    if remove_files:
+        shutil.rmtree(Configs.formatActorFolderPath(actor.actor_name))
+        PostCtrl.deleteAllFilesOfActor(session, actor.actor_name)
+    # set field
+    actor.actor_category = new_category
 
     session.flush()
     return actor

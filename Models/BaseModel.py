@@ -173,7 +173,7 @@ class ResModel(BaseModel):
         real location for valid resources
         :return:
         """
-        return f"{Configs.RootFolder}/{self.post.actor_name}/{self.fileName()}"
+        return f"{Configs.RootFolder}\\{self.post.actor_name}\\{self.fileName()}"
 
     def tmpFileName(self) -> str:
         return f"{self.post.actor_name}_{self.fileName()}"

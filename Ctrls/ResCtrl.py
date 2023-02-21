@@ -24,17 +24,6 @@ def getAllRes(session: Session, post_id: int) -> ScalarResult[ResModel]:
     return session.scalars(stmt)
 
 
-def delAllRes(session: Session, post_id: int):
-    """
-    delete all resource records of a post
-    """
-    stmt = (
-        delete(ResModel)
-            .where(ResModel.post_id == post_id)
-    )
-    session.execute(stmt)
-
-
 def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]]):
     """
     add resource records of a post

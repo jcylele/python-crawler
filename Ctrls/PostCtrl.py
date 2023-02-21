@@ -4,7 +4,7 @@ from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
 from Ctrls import ResCtrl
-from Models.BaseModel import PostModel
+from Models.BaseModel import PostModel, ResState
 
 
 def getPost(session: Session, post_id: int) -> PostModel:
@@ -24,16 +24,14 @@ def addPost(session: Session, actor_name: str, post_id: int):
     session.add(post)
 
 
-def deleteAllPostOfActor(session: Session, actor_name: str):
-    """
-    delete all posts of an actor, along with all resource records
-    :TODO not efficient enough, need optimization
-    """
+def deleteAllFilesOfActor(session: Session, actor_name: str):
     stmt = (
         select(PostModel)
-        .where(PostModel.actor_name == actor_name)
+            .where(PostModel.actor_name == actor_name)
     )
     post_list: ScalarResult[PostModel] = session.scalars(stmt)
     for post in post_list:
-        ResCtrl.delAllRes(session, post.post_id)
-        session.delete(post)
+        for res in post.res_list:
+            if res.res_state == ResState.Down:
+                res.res_state = ResState.Del
+

@@ -7,6 +7,7 @@ from fastapi.params import Query
 import Configs
 from Ctrls import DbCtrl, ActorCtrl
 from Models.BaseModel import ActorCategory
+from routers.Web_data import ActorConditionForm
 
 router = APIRouter(
     prefix="/api/actor",
@@ -16,17 +17,17 @@ router = APIRouter(
 )
 
 
-@router.get("/count")
-def get_actor_count(*, actor_category: int = Query(alias='category')):
+@router.post("/count")
+def get_actor_count(form: ActorConditionForm):
     with DbCtrl.getSession() as session, session.begin():
-        actor_count = ActorCtrl.getActorCount(session, ActorCategory(actor_category))
+        actor_count = ActorCtrl.getActorCount(session, form)
         return DbCtrl.CustomJsonResponse({'value': actor_count})
 
 
-@router.get("/list")
-def get_actor_list(*, actor_category: int = Query(alias='category'), limit: int, start: int):
+@router.post("/list")
+def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
     with DbCtrl.getSession() as session, session.begin():
-        actors = ActorCtrl.getActorsByCategory(session, ActorCategory(actor_category), limit, start)
+        actors = ActorCtrl.getActorList(session, form, limit, start)
 
         response = []
         for actor in actors:

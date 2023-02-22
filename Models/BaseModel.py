@@ -76,7 +76,6 @@ class ActorTagRelationship(BaseModel):
 
 
 class ActorCategory(Enum):
-    All = 0  # all actors
     Init = 1  # initial state of an actor
     Liked = 2  # mark as liked
     Dislike = 3  # dislike and remove the folder

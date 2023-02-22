@@ -35,8 +35,8 @@ class ActorsExtraInfo(BaseExtraInfo):
         return QueueMgr.QueueType.AnalyseActors
 
     def priority(self):
-        # lowest priority
-        return 40000
+        # highest priority
+        return 0
 
     def __repr__(self) -> str:
         return f"(actors?o={self.start_order})"
@@ -56,7 +56,7 @@ class ActorExtraInfo(BaseExtraInfo):
 
     def priority(self):
         # smaller start_order, higher priority
-        return 30000 + self.start_order
+        return 10000 + self.start_order
 
     def __repr__(self) -> str:
         return f"({self.actor_name}?o={self.start_order})"

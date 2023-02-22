@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from Ctrls import DbCtrl, ActorTagCtrl
 from Models.BaseModel import ActorTagModel
+from routers.Web_data import ActorTagForm
 
 router = APIRouter(
     prefix="/api/actor_tag",
@@ -28,11 +29,6 @@ def get_actor_tag(tag_id: int):
     with DbCtrl.getSession() as session, session.begin():
         tag = ActorTagCtrl.getActorTag(session, tag_id)
         return DbCtrl.CustomJsonResponse(tag)
-
-
-class ActorTagForm(BaseModel):
-    tag_name: str
-    tag_priority: int
 
 
 @router.post("/add")

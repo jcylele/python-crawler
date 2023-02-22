@@ -4,11 +4,12 @@ import os
 import shutil
 
 from sqlalchemy import select, ScalarResult
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 
 import Configs
 from Ctrls import PostCtrl, DbCtrl, ResCtrl
 from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship
+from routers.Web_data import ActorConditionForm
 
 
 def getActor(session: Session, actor_name: str) -> ActorModel:
@@ -57,25 +58,40 @@ def hasActor(session: Session, actor_name: str) -> bool:
     return actor is not None
 
 
-def getActorCount(session: Session, category: ActorCategory) -> int:
+def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
     _query = session.query(ActorModel)
-    if category != ActorCategory.All:
-        _query = _query.where(ActorModel.actor_category == category)
+    if form.name is not None and len(form.name) > 0:
+        _query = _query.where(ActorModel.actor_name.like(f'%{form.name}%'))
+    actor_category_list = form.get_category_list()
+    _query = _query.where(ActorModel.actor_category.in_(actor_category_list))
+    if len(form.tag_list) > 0:
+        _query = _query.where(ActorModel.rel_tags.any(ActorTagRelationship.tag_id.in_(form.tag_list)))
+    return _query
+
+
+def getActorCount(session: Session, form: ActorConditionForm) -> int:
+    _query = _buildQuery(session, form)
     return DbCtrl.queryCount(_query)
 
 
-def getActorsByCategory(session: Session, category: ActorCategory, limit: int = 0, start: int = 0) -> ScalarResult[
+def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> ScalarResult[
     ActorModel]:
-    """
-    search actors by category
-    """
-    _query = session.query(ActorModel).order_by(ActorModel.actor_name)
-    if category != ActorCategory.All:
-        _query = _query.where(ActorModel.actor_category == category)
+    _query = _buildQuery(session, form)
     if start != 0:
         _query = _query.offset(start)
     if limit != 0:
         _query = _query.limit(limit)
+    return session.scalars(_query)
+
+
+def getActorsByCategory(session: Session, category: ActorCategory) -> ScalarResult[
+    ActorModel]:
+    """
+    search actors by category
+    """
+    _query = (session.query(ActorModel)
+              .order_by(ActorModel.actor_name)
+              .where(ActorModel.actor_category == category))
     return session.scalars(_query)
 
 
@@ -174,4 +190,4 @@ def repairRecords(session: Session):
                 actor.actor_category = ActorCategory.Dislike
             else:
                 actor.actor_category = ActorCategory.Enough
-            PostCtrl.deleteAllPostOfActor(session, actor.actor_name)
+            PostCtrl.deleteAllFilesOfActor(session, actor.actor_name)

@@ -60,12 +60,18 @@ def hasActor(session: Session, actor_name: str) -> bool:
 
 def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
     _query = session.query(ActorModel)
+    # name
     if form.name is not None and len(form.name) > 0:
         _query = _query.where(ActorModel.actor_name.like(f'%{form.name}%'))
+    # category
     actor_category_list = form.get_category_list()
     _query = _query.where(ActorModel.actor_category.in_(actor_category_list))
-    if len(form.tag_list) > 0:
+    # tag
+    if form.no_tag:
+        _query = _query.where(~ActorModel.rel_tags.any())
+    elif len(form.tag_list) > 0:
         _query = _query.where(ActorModel.rel_tags.any(ActorTagRelationship.tag_id.in_(form.tag_list)))
+
     return _query
 
 

@@ -7,7 +7,7 @@ from fastapi.params import Query
 import Configs
 from Ctrls import DbCtrl, ActorCtrl
 from Models.BaseModel import ActorCategory
-from routers.Web_data import ActorConditionForm
+from routers.web_data import ActorConditionForm
 
 router = APIRouter(
     prefix="/api/actor",

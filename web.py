@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from Ctrls import DbCtrl
-from routers import actor, actor_tag
+from routers import actor, actor_tag, download
 
 app = FastAPI()
 
@@ -21,6 +21,7 @@ app.add_middleware(
 
 app.include_router(actor.router)
 app.include_router(actor_tag.router)
+app.include_router(download.router)
 
 DbCtrl.init()
 

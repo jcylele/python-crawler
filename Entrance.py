@@ -46,10 +46,6 @@ class MainOperation(Enum):
         return str_list
 
 
-def setConfig(config_type: Configs.ConfigType):
-    Configs.setConfig(config_type)
-
-
 def setWorkerCount(worker_type: Consts.WorkerType, count: int):
     WorkerMgr.WorkerCount[worker_type] = count
 
@@ -128,7 +124,7 @@ def initEnv():
     os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
     DbCtrl.init()
     QueueMgr.init()
-    repairRecords()
+    # repairRecords()
 
 
 def enter():
@@ -140,24 +136,23 @@ def enter():
     if eop == MainOperation.DownLiked:
         is_all = input(StrOnlyInfo)
         if is_all == 'y':
-            setConfig(Configs.ConfigType.All)
-            setWorkerCount(Consts.WorkerType.FileDown, 0)
+            Configs.setConfig(0, 10000, 0)
         elif is_all == 'n':
-            setConfig(Configs.ConfigType.Liked)
+            Configs.setConfig(0, 100, 100 * 1024 * 1024)
         else:
             raise Exception(f"invalid option {is_all}")
         downloadByActorCategory(ActorCategory.Liked)
     elif eop == MainOperation.DownSample:
         is_new = input(StrNewActors)
         if is_new == 'y':
-            setConfig(Configs.ConfigType.Sample)
+            Configs.setConfig(50, 50, 20 * 1024 * 1024)
             downloadNewActors()
         elif is_new == 'n':
             is_more = input(StrMoreSample)
             if is_more == 'y':
-                setConfig(Configs.ConfigType.Liked)
+                Configs.setConfig(0, 100, 100 * 1024 * 1024)
             elif is_more == 'n':
-                setConfig(Configs.ConfigType.Sample)
+                Configs.setConfig(50, 50, 20 * 1024 * 1024)
             else:
                 raise Exception(f"invalid option {is_more}")
             downloadByActorCategory(ActorCategory.Init)
@@ -165,7 +160,7 @@ def enter():
             raise Exception(f"invalid option {is_new}")
     elif eop == MainOperation.DownOne:
         actor_name = input(StrActorName)
-        Configs.setConfig(Configs.ConfigType.All)
+        Configs.setConfig(0, 10000, 1024 * 1024 * 1024)
         downloadActor(actor_name)
     elif eop == MainOperation.LikeAll:
         likeAllActors()

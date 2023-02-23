@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, Query
 import Configs
 from Ctrls import PostCtrl, DbCtrl, ResCtrl
 from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship
-from routers.Web_data import ActorConditionForm
+from routers.web_data import ActorConditionForm
 
 
 def getActor(session: Session, actor_name: str) -> ActorModel:

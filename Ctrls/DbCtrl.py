@@ -12,6 +12,9 @@ __Session = None
 
 
 def init():
+    global __Session
+    if __Session is not None:
+        return
     """
     init database
     """
@@ -20,7 +23,6 @@ def init():
     # create all table if not exist
     BaseModel.metadata.create_all(engine)
 
-    global __Session
     __Session = sessionmaker(engine)
 
 

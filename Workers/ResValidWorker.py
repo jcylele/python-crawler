@@ -43,7 +43,10 @@ class ResValidWorker(BaseWorker):
 
             # move to real location
             true_file_path = res2.filePath()
-            shutil.move(tmp_file_path, true_file_path)
+            try:
+                shutil.move(tmp_file_path, true_file_path)
+            except:
+                return False
             res2.res_state = ResState.Down
 
             LogUtil.info(f"{true_file_path} saved")

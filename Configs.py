@@ -35,51 +35,15 @@ def formatActorFolderPath(actor_name: str) -> str:
     return f"{RootFolder}\\{actor_name}"
 
 
-class ConfigType(Enum):
-    """
-    set of numbers
-    """
-    All = auto()
-    Liked = auto()
-    Sample = auto()
-
-
-class DownConfig(object):
-    """
-    just to group numbers
-    """
-
-    def __init__(self, ac: int, pc: int, fs: int):
-        self.MaxActorsCount = ac
-        self.MaxPostCount = pc
-        self.MaxFileSize = fs
-
-
-# configuration set
-# TODO: Use json instead
-__ConfigDict: dict[ConfigType, DownConfig] = {
-    ConfigType.All: DownConfig(0, 25000, 1 * 1024 * 1024 * 1024),  # 所有Post，1G以下资源
-    ConfigType.Liked: DownConfig(0, 200, 200 * 1024 * 1024),  # 200条，200M
-    ConfigType.Sample: DownConfig(50, 50, 50 * 1024 * 1024),  # 50条，50M
-}
-
-
-def setConfig(config_type: ConfigType):
-    """
-    set limits in batch
-    """
-    config = __ConfigDict.get(config_type)
-    if config is None:
-        raise Exception(f"invalid Config Type: {config_type}")
-
+def setConfig(actor_count: int, post_count:int, file_size: int):
     global MaxActorsCount
-    MaxActorsCount = config.MaxActorsCount
+    MaxActorsCount = actor_count
 
     global MaxPostCount
-    MaxPostCount = config.MaxPostCount
+    MaxPostCount = post_count
 
     global MaxFileSize
-    MaxFileSize = config.MaxFileSize
+    MaxFileSize = file_size
 
     global __left_actor_count
     __left_actor_count = MaxActorsCount

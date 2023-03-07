@@ -14,6 +14,7 @@ class BaseWorker(threading.Thread):
     def __init__(self, worker_type: WorkerType):
         super().__init__()
         self.__waiting = False
+        self.__stop = False
         self.__workerType = worker_type
 
     def workerType(self) -> WorkerType:
@@ -27,7 +28,7 @@ class BaseWorker(threading.Thread):
         raise NotImplementedError("subclasses of BaseWorker must implement method _queueType")
 
     def run(self):
-        while True:
+        while not self.__stop:
             # wait for work
             self.__waiting = True
             item = QueueMgr.get(self._queueType())
@@ -39,8 +40,8 @@ class BaseWorker(threading.Thread):
                     if item.shouldRetry():
                         QueueMgr.put(self._queueType(), item)
             except BaseException as e:  # unhandled exceptions in the process
-                LogUtil.error(f"{self} died of {type(e)}({e.args})")
-                break
+                LogUtil.error(f"{self} encounter {type(e)}({e.args})")
+                # break
 
     def _process(self, item: BaseQueueItem) -> bool:
         """
@@ -52,3 +53,6 @@ class BaseWorker(threading.Thread):
 
     def isWaiting(self) -> bool:
         return self.__waiting
+
+    def Stop(self):
+        self.__stop = True

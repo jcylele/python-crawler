@@ -14,11 +14,11 @@ class Guarder(threading.Thread):
     """
     monitor and report running status of all workers and queues
     """
+
     def __init__(self):
         super().__init__()
         self.workers: List[BaseWorker] = []
         self.next_report_time = 0
-        self.__done = False
 
     def run(self):
         # start all worker threads
@@ -29,23 +29,25 @@ class Guarder(threading.Thread):
         LogUtil.useList(True)
         # loop
         while True:
-            sleep(0.05)  # 20fps
+            sleep(0.0333)  # 30fps
             LogUtil.printAll()  # print cached logs
-            if not self.__done:
-                self.reportRunningStatus()
-                self.__done = self.isJobDone()
-                if self.__done:
-                    LogUtil.info("Done!!!")
+            self.reportRunningStatus()
+            if self.isJobDone():
+                LogUtil.info("Done!!!")
+                for worker in self.workers:
+                    worker.Stop()
+                LogUtil.printAll()  # print cached logs
+                break
 
     def isJobDone(self) -> bool:
         """
         check if all tasks are down
         :return:
         """
-        if not QueueMgr.empty(): # all queues are empty
+        if not QueueMgr.empty():  # all queues are empty
             return False
         for worker in self.workers:
-            if not worker.isWaiting(): # all workers are waiting for job
+            if not worker.isWaiting():  # all workers are waiting for job
                 return False
         return True
 

@@ -2,11 +2,13 @@
 
 import os
 
+import Configs
 from Utils import LogUtil
 from Ctrls import RequestCtrl
 from Models.BaseModel import ResState, PostModel
 from WorkQueue import QueueMgr
-from WorkQueue.ExtraInfo import ActorExtraInfo, PostExtraInfo, ResInfoExtraInfo, ActorsExtraInfo, ResFileExtraInfo
+from WorkQueue.ExtraInfo import ActorExtraInfo, PostExtraInfo, ResInfoExtraInfo, ActorsExtraInfo, ResFileExtraInfo, \
+    FilePathExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 
 
@@ -68,3 +70,11 @@ def enqueueResFile(item: UrlQueueItem, file_path: str, file_size: int):
 
 def enqueueResValid(item: UrlQueueItem):
     QueueMgr.put(QueueMgr.QueueType.ResValid, item)
+
+
+def enqueueActorIcon(actor_name: str):
+    file_path = f"{Configs.formatIconFolderPath()}/{actor_name}.jfif"
+    out_extra = FilePathExtraInfo(file_path)
+    url = RequestCtrl.formatActorIconUrl(actor_name)
+    out_item = UrlQueueItem(url, None, out_extra)
+    QueueMgr.put(QueueMgr.QueueType.SimpleFile, out_item)

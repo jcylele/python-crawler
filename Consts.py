@@ -14,5 +14,4 @@ class WorkerType(Enum):
     AnalysePost = auto()
 
     ResValid = auto()
-
-
+    SimpleFile = auto()

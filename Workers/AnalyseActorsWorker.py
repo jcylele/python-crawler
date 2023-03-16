@@ -34,6 +34,10 @@ class AnalyseActorsWorker(BaseWorker):
                 actor_name = actor_node.get('data-id')
                 if actor_name is None:
                     continue
+
+                # it's not the best place, but okay
+                QueueUtil.enqueueActorIcon(actor_name)
+
                 actor_count += 1
                 if not ActorCtrl.hasActor(session, actor_name) \
                         and Configs.moreActor(True):

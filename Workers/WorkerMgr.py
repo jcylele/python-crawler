@@ -8,6 +8,7 @@ from Workers.FileDownWorker import FileDownWorker
 from Workers.PageDownWorker import PageDownWorker
 from Workers.ResInfoWorker import ResInfoWorker
 from Workers.ResValidWorker import ResValidWorker
+from Workers.SimpleFileDownWorker import SimpleFileDownWorker
 
 # specify the corresponding class for each worker type
 WorkerClasses = {
@@ -18,7 +19,7 @@ WorkerClasses = {
     WorkerType.AnalysePost: AnalysePostWorker,
     WorkerType.ResInfo: ResInfoWorker,
     WorkerType.ResValid: ResValidWorker,
-
+    WorkerType.SimpleFile: SimpleFileDownWorker,
 }
 
 # specify worker count for types, count is 1 if not specified
@@ -26,6 +27,7 @@ WorkerCount = {
     WorkerType.PageDown: 10,
     WorkerType.FileDown: 10,
     WorkerType.ResInfo: 10,
+    WorkerType.SimpleFile: 1,
 }
 
 

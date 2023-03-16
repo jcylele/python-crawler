@@ -55,6 +55,10 @@ def formatActorsUrl(start_index: int) -> str:
     return f"{__RootUrl}/artists?o={start_index}"
 
 
+def formatActorIconUrl(actor_name: str) -> str:
+    return f"{__RootUrl}/icons/{__Platform}/{actor_name}"
+
+
 def formatUserUrl(actor_name: str, start_index: int) -> str:
     return f"{__RootUrl}/{__Platform}/user/{actor_name}?o={start_index}"
 
@@ -65,6 +69,3 @@ def formatPostUrl(actor_name: str, post_id: int) -> str:
 
 def formatFullUrl(relative_url: str) -> str:
     return __RootUrl + relative_url
-
-
-

@@ -14,6 +14,7 @@ class QueueType(Enum):
     AnalysePost = auto()
     ResInfo = auto()
     ResValid = auto()
+    SimpleFile = auto()
 
 
 __all_queues: dict[QueueType, queue.Queue] = {}
@@ -30,6 +31,7 @@ def init():
         QueueType.ResInfo: queue.PriorityQueue(),
         QueueType.FileDownload: queue.PriorityQueue(),
         QueueType.ResValid: queue.Queue(),
+        QueueType.SimpleFile: queue.Queue(),
     }
 
 

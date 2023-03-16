@@ -23,6 +23,12 @@ class BaseExtraInfo(object):
         raise NotImplementedError("subclasses of BaseExtraInfo must implement method priority")
 
 
+class FilePathExtraInfo(BaseExtraInfo):
+    def __init__(self, file_path: str):
+        super().__init__()
+        self.file_path = file_path
+
+
 class ActorsExtraInfo(BaseExtraInfo):
     """
     attached to UrlQueueItem, indicate that it's a page for lists of actors

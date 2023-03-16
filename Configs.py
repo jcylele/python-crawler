@@ -16,6 +16,7 @@ DbConnectString = "mysql+pymysql://jcylele:123456@localhost:3306/onlyfans"
 RootFolder = "D:\\OnlyFans"
 # tmp file inside RootFolder for downloading files which will be  moved to other locations when completed
 TmpFolder = "_downloading"
+IconFolder = "_icon"
 
 
 def formatTmpFolderPath() -> str:
@@ -24,6 +25,14 @@ def formatTmpFolderPath() -> str:
     :return:
     """
     return f"{RootFolder}\\{TmpFolder}"
+
+
+def formatIconFolderPath() -> str:
+    """
+    folder for downloading icons of actors
+    :return:
+    """
+    return f"{RootFolder}\\{IconFolder}"
 
 
 def formatActorFolderPath(actor_name: str) -> str:

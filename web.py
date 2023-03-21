@@ -2,9 +2,10 @@
 import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 from Ctrls import DbCtrl
-from routers import actor, actor_tag, download, file
+from routers import actor, actor_tag, download, file, vue
 
 app = FastAPI()
 
@@ -18,9 +19,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
 app.include_router(actor.router)
 app.include_router(actor_tag.router)
 app.include_router(download.router)
+app.include_router(vue.router)
 
 # start file server
 # TODO redirect from fastAPI

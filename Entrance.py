@@ -64,11 +64,12 @@ def startDownload():
     guarder.start()
 
 
-def downloadActor(actor_name: str):
+def downloadActors(actor_names: list[str]):
     """
     download an actor only
     """
-    QueueUtil.enqueueActor(actor_name)
+    for actor_name in actor_names:
+        QueueUtil.enqueueActor(actor_name)
     startDownload()
 
 
@@ -122,6 +123,7 @@ def initEnv():
     LogUtil.info("initializing...")
     os.makedirs(Configs.RootFolder, exist_ok=True)
     os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
+    os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
     DbCtrl.init()
     QueueMgr.init()
     # repairRecords()

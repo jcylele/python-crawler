@@ -36,11 +36,13 @@ def addActor(session: Session, actor_name: str) -> ActorModel:
     :param actor_name:
     :return: actor record
     """
+
+    createActorFolder(actor_name)
+
     actor = getActor(session, actor_name)
     if actor is not None:
         return actor
 
-    createActorFolder(actor_name)
     actor = ActorModel(actor_name=actor_name)
     session.add(actor)
 
@@ -160,7 +162,9 @@ def changeActorCategory(session: Session, actor_name: str, new_category: ActorCa
         return actor
     # remove files
     if remove_files:
-        shutil.rmtree(Configs.formatActorFolderPath(actor.actor_name))
+        actor_folder = Configs.formatActorFolderPath(actor.actor_name)
+        if os.path.exists(actor_folder):
+            shutil.rmtree(actor_folder)
         PostCtrl.deleteAllFilesOfActor(session, actor.actor_name)
     # set field
     actor.actor_category = new_category

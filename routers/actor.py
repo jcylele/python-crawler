@@ -43,10 +43,17 @@ def get_actor(actor_name: str):
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.patch("/{actor_name}")
-def change_actor_category(actor_name: str, actor_category: int = Query(alias='category')):
+@router.patch("/{actor_name}/category")
+def change_actor_category(actor_name: str, actor_category: int = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.changeActorCategory(session, actor_name, ActorCategory(actor_category))
+        return DbCtrl.CustomJsonResponse(actor)
+
+
+@router.patch("/{actor_name}/star")
+def change_actor_category(actor_name: str, star: bool = Query(alias='val')):
+    with DbCtrl.getSession() as session, session.begin():
+        actor = ActorCtrl.changeActorStar(session, actor_name, star)
         return DbCtrl.CustomJsonResponse(actor)
 
 

@@ -24,9 +24,9 @@ WorkerClasses = {
 
 # specify worker count for types, count is 1 if not specified
 WorkerCount = {
-    WorkerType.PageDown: 10,
-    WorkerType.FileDown: 10,
-    WorkerType.ResInfo: 10,
+    WorkerType.PageDown: 3,
+    WorkerType.FileDown: 5,
+    WorkerType.ResInfo: 3,
     WorkerType.SimpleFile: 1,
 }
 

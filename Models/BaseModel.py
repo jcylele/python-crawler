@@ -88,6 +88,7 @@ class ActorModel(BaseModel):
     actor_name: Mapped[str] = mapped_column(String(30), primary_key=True)
     actor_category: Mapped[ActorCategory] = mapped_column(IntEnum(ActorCategory), default=ActorCategory.Init)
     completed: Mapped[bool] = mapped_column(default=False)
+    star: Mapped[bool] = mapped_column(default=False)
 
     post_list: Mapped[list["PostModel"]] = relationship(
         back_populates="actor",

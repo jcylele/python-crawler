@@ -28,11 +28,15 @@ class FilePathExtraInfo(BaseExtraInfo):
         super().__init__()
         self.file_path = file_path
 
+    def __repr__(self) -> str:
+        return f"(file_path={self.file_path})"
+
 
 class ActorsExtraInfo(BaseExtraInfo):
     """
     attached to UrlQueueItem, indicate that it's a page for lists of actors
     """
+
     def __init__(self, start_order: int = 0):
         super().__init__()
         self.start_order = start_order
@@ -52,6 +56,7 @@ class ActorExtraInfo(BaseExtraInfo):
     """
     attached to UrlQueueItem, indicate that it's a page for lists of posts of an actor
     """
+
     def __init__(self, actor_name: str, start_order: int = 0):
         super().__init__()
         self.actor_name = actor_name
@@ -72,6 +77,7 @@ class PostExtraInfo(BaseExtraInfo):
     """
     attached to UrlQueueItem, indicate that it's a page for resources of a post
     """
+
     def __init__(self, actor_name: str, post_id: int):
         super().__init__()
         self.actor_name = actor_name
@@ -92,6 +98,7 @@ class ResInfoExtraInfo(BaseExtraInfo):
     """
     attached to UrlQueueItem, indicate that it's fetching the size of a resource
     """
+
     def __init__(self, actor_name: str, post_id: int, res_id: int):
         super().__init__()
         self.actor_name = actor_name
@@ -113,6 +120,7 @@ class ResFileExtraInfo(ResInfoExtraInfo):
     """
     attached to UrlQueueItem, indicate that it's downloading a resource
     """
+
     def __init__(self, extra: ResInfoExtraInfo, file_path: str, file_size: int):
         super().__init__(extra.actor_name, extra.post_id, extra.res_id)
         self.file_path = file_path
@@ -127,5 +135,3 @@ class ResFileExtraInfo(ResInfoExtraInfo):
 
     def __repr__(self) -> str:
         return f"(file {self.res_id} of {self.post_id} of {self.actor_name})"
-
-

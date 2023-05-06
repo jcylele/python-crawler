@@ -173,6 +173,17 @@ def changeActorCategory(session: Session, actor_name: str, new_category: ActorCa
     return actor
 
 
+def changeActorStar(session: Session, actor_name: str, star: bool) -> ActorModel:
+    actor = getActor(session, actor_name)
+    # no change
+    if actor.star == star:
+        return actor
+    # set field
+    actor.star = star
+    session.flush()
+    return actor
+
+
 def favorAllInitActors(session: Session):
     """
     mark all actor in init category as liked if their folders are not deleted,

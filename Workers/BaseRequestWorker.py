@@ -1,3 +1,4 @@
+import random
 import shutil
 import time
 
@@ -6,6 +7,8 @@ from Ctrls import RequestCtrl
 from Utils import LogUtil
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseWorker import BaseWorker
+
+average_wait_time = 1
 
 
 class BaseRequestWorker(BaseWorker):
@@ -17,12 +20,15 @@ class BaseRequestWorker(BaseWorker):
         super().__init__(worker_type)
         self.requestSession = RequestCtrl.createRequestSession()
 
+    def _sleep(self):
+        time.sleep(random.randint(1, 2 * average_wait_time))
+
     def _head(self, item: UrlQueueItem) -> (bool, int):
         """
         get size of a web resource
         :return (succeed or not, size of the resource)
         """
-        # time.sleep(1.0)
+        self._sleep()
         # set the last url, some websites check for it
         self.requestSession.headers["referer"] = item.from_url
         try:
@@ -40,7 +46,7 @@ class BaseRequestWorker(BaseWorker):
             item.from_url = item.url
             item.url = res.headers['Location']
             return self._head(item)
-        elif res.status_code == 429:  # too fast
+        elif res.status_code == 429 or res.status_code == 403:  # too fast
             time.sleep(5)
             LogUtil.warn(f"head {item.extra_info} too fast")
             return self._head(item)
@@ -53,7 +59,7 @@ class BaseRequestWorker(BaseWorker):
         download the web page
         """
 
-        # time.sleep(1.0)
+        self._sleep()
         # set the last url, some websites check for it
         self.requestSession.headers["referer"] = item.from_url
         try:
@@ -77,6 +83,7 @@ class BaseRequestWorker(BaseWorker):
             return None
 
     def _downloadStream(self, url: str, file_path: str, file_mode: str = "wb"):
+        self._sleep()
         with self.requestSession.get(url, stream=True) as r:
             with open(file_path, file_mode) as f:
                 # write stream data into file, the most efficient way of download that I know

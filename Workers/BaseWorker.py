@@ -33,15 +33,18 @@ class BaseWorker(threading.Thread):
             self.__waiting = True
             item = QueueMgr.get(self._queueType())
             self.__waiting = False
+            processed = False
             try:
                 LogUtil.debug(f"{self.workerType().name} process {item}")
-                if not self._process(item):
-                    item.onFailed()
-                    if item.shouldRetry():
-                        QueueMgr.put(self._queueType(), item)
+                processed = self._process(item)
             except BaseException as e:  # unhandled exceptions in the process
                 LogUtil.error(f"{self} encounter {type(e)}({e.args})")
                 # break
+            finally:
+                if not processed:
+                    item.onFailed()
+                    if item.shouldRetry():
+                        QueueMgr.put(self._queueType(), item)
 
     def _process(self, item: BaseQueueItem) -> bool:
         """

@@ -18,6 +18,7 @@ class ActorConditionForm(BaseModel):
 class ActorTagForm(BaseModel):
     tag_name: str
     tag_priority: int
+    tag_color: str
 
 
 class DownloadLimitForm(BaseModel):

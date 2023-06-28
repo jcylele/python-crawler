@@ -3,13 +3,21 @@
 import os
 import shutil
 
-from sqlalchemy import select, ScalarResult
+from sqlalchemy import ScalarResult
 from sqlalchemy.orm import Session, Query
 
 import Configs
-from Ctrls import PostCtrl, DbCtrl, ResCtrl
-from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship
+from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl
+from Models.ActorInfo import ActorInfo
+from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship, ResState
 from routers.web_data import ActorConditionForm
+
+
+def getActorInfo(session: Session, actor_name: str) -> ActorInfo:
+    actor = getActor(session, actor_name)
+    if actor is None:
+        return None
+    return ActorInfo(actor)
 
 
 def getActor(session: Session, actor_name: str) -> ActorModel:
@@ -29,21 +37,21 @@ def createActorFolder(actor_name: str):
     os.makedirs(Configs.formatActorFolderPath(actor_name), exist_ok=True)
 
 
-def addActor(session: Session, actor_name: str) -> ActorModel:
+def addActor(session: Session, actor_info: ActorInfo) -> ActorModel:
     """
     create a record for the actor, skip if already exist
-    :param session:
-    :param actor_name:
     :return: actor record
     """
 
-    createActorFolder(actor_name)
+    createActorFolder(actor_info.actor_name)
 
-    actor = getActor(session, actor_name)
+    actor = getActor(session, actor_info.actor_name)
     if actor is not None:
         return actor
 
-    actor = ActorModel(actor_name=actor_name)
+    actor = ActorModel(actor_name=actor_info.actor_name,
+                       actor_platform=actor_info.actor_platform,
+                       actor_link=actor_info.actor_link)
     session.add(actor)
 
     return actor
@@ -103,22 +111,29 @@ def getActorsByCategory(session: Session, category: ActorCategory) -> ScalarResu
     return session.scalars(_query)
 
 
-def removeTagFromActor(session: Session, actor_name: str, tag_id: int) -> ActorModel:
+def changeActorTags(session: Session, actor_name: str, tag_list: list[int]) -> ActorModel:
     actor = getActor(session, actor_name)
-    for rel in actor.rel_tags:
-        if rel.tag_id == tag_id:
-            actor.rel_tags.remove(rel)
-            session.delete(rel)
-            break
 
-    session.flush()
-    return actor
-
-
-def addTagsToActor(session: Session, actor_name: str, tag_list: list[int]) -> ActorModel:
-    actor = getActor(session, actor_name)
+    tag_dict = {}
+    remove_list = []
 
     for tag_id in tag_list:
+        tag_dict[tag_id] = True
+
+    for tag in actor.rel_tags:
+        if tag.tag_id in tag_dict:
+            tag_dict.pop(tag.tag_id)
+        else:
+            remove_list.append(tag.tag_id)
+
+    for tag_id in remove_list:
+        for rel in actor.rel_tags:
+            if rel.tag_id == tag_id:
+                actor.rel_tags.remove(rel)
+                session.delete(rel)
+                break
+
+    for tag_id in tag_dict:
         relation = ActorTagRelationship()
         relation.tag_id = tag_id
         relation.actor_name = actor_name
@@ -128,25 +143,11 @@ def addTagsToActor(session: Session, actor_name: str, tag_list: list[int]) -> Ac
     return actor
 
 
-__SwitchRemoveFiles = {
-    ActorCategory.Init: {
-        ActorCategory.Liked: False,
-        ActorCategory.Dislike: True,
-        ActorCategory.Enough: True,
-    },
-    ActorCategory.Liked: {
-        ActorCategory.Init: False,
-        ActorCategory.Dislike: True,
-        ActorCategory.Enough: True,
-    },
-    ActorCategory.Dislike: {
-        ActorCategory.Init: False,
-    },
-    ActorCategory.Enough: {
-        ActorCategory.Init: False,
-        ActorCategory.Liked: False,
-        ActorCategory.Dislike: False,
-    },
+__HasFiles = {
+    ActorCategory.Init: True,
+    ActorCategory.Liked: True,
+    ActorCategory.Dislike: False,
+    ActorCategory.Enough: False,
 }
 
 
@@ -155,17 +156,21 @@ def changeActorCategory(session: Session, actor_name: str, new_category: ActorCa
     # no change
     if actor.actor_category == new_category:
         return actor
-    switch_map = __SwitchRemoveFiles.get(actor.actor_category)
-    remove_files = switch_map.get(new_category)
-    # unable to change
-    if remove_files is None:
-        return actor
-    # remove files
-    if remove_files:
-        actor_folder = Configs.formatActorFolderPath(actor.actor_name)
-        if os.path.exists(actor_folder):
-            shutil.rmtree(actor_folder)
-        PostCtrl.deleteAllFilesOfActor(session, actor.actor_name)
+    oldHas = __HasFiles.get(actor.actor_category)
+    newHas = __HasFiles.get(actor.new_category)
+    if oldHas != newHas:
+        if oldHas:
+            actor_folder = Configs.formatActorFolderPath(actor.actor_name)
+            if os.path.exists(actor_folder):
+                shutil.rmtree(actor_folder)
+                FileInfoCacheCtrl.OnActorFileChanged(actor.actor_name)
+                FileInfoCacheCtrl.RemoveDownloadingFiles(actor.actor_name)
+
+            PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Deleted)
+        else:
+            createActorFolder(actor.actor_name)
+            PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Init)
+
     # set field
     actor.actor_category = new_category
 
@@ -184,31 +189,5 @@ def changeActorStar(session: Session, actor_name: str, star: bool) -> ActorModel
     return actor
 
 
-def favorAllInitActors(session: Session):
-    """
-    mark all actor in init category as liked if their folders are not deleted,
-    delete his/her folder if you don't like hime/her before execute this
-    :param session:
-    :return:
-    """
-    actor_list = getActorsByCategory(session, ActorCategory.Init)
-    for actor in actor_list:
-        # check existence of actor's folder
-        if os.path.exists(Configs.formatActorFolderPath(actor.actor_name)):
-            actor.actor_category = ActorCategory.Liked
-
-
 def repairRecords(session: Session):
-    """
-    refresh the records according to the existence of folders
-    """
-    stmt = select(ActorModel).where(ActorModel.actor_category != ActorCategory.Dislike)
-    actor_list: ScalarResult[ActorModel] = session.scalars(stmt)
-    for actor in actor_list:
-        # deletion means you don't like
-        if not os.path.exists(Configs.formatActorFolderPath(actor.actor_name)):
-            if actor.actor_category == ActorCategory.Init:
-                actor.actor_category = ActorCategory.Dislike
-            else:
-                actor.actor_category = ActorCategory.Enough
-            PostCtrl.deleteAllFilesOfActor(session, actor.actor_name)
+    pass

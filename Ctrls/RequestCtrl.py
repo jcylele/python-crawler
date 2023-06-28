@@ -1,7 +1,10 @@
 import random
-
+import socket
+import socks
 import requests
 from requests import Session
+
+from Models.ActorInfo import ActorInfo
 
 __user_agents = [
     "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
@@ -34,6 +37,15 @@ __RootUrl = "https://coomer.party"
 __Platform = "onlyfans"
 
 
+def initProxy():
+    """
+    set global proxy
+    :return:
+    """
+    socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 10888)
+    socket.socket = socks.socksocket
+
+
 def createRequestSession() -> Session:
     """
     create a request session with cookies and user agent
@@ -52,20 +64,31 @@ def createRequestSession() -> Session:
 
 
 def formatActorsUrl(start_index: int) -> str:
-    return f"{__RootUrl}/artists?o={start_index}"
+    return f"{__RootUrl}/artists#o={start_index}"
 
 
-def formatActorIconUrl(actor_name: str) -> str:
-    return f"{__RootUrl}/icons/{__Platform}/{actor_name}"
+def formatActorIconUrl(actor_platform: str, actor_link: str) -> str:
+    return f"{__RootUrl}/icons/{actor_platform}/{actor_link}"
 
 
-def formatUserUrl(actor_name: str, start_index: int) -> str:
-    return f"{__RootUrl}/{__Platform}/user/{actor_name}?o={start_index}"
+def formatActorHref(actor_platform: str, actor_link: str) -> str:
+    return f"{__RootUrl}/{actor_platform}/user/{actor_link}"
 
 
-def formatPostUrl(actor_name: str, post_id: int) -> str:
-    return f"{__RootUrl}/{__Platform}/user/{actor_name}/post/{post_id}"
+def formatActorUrl(actor_info: ActorInfo) -> str:
+    return formatActorHref(actor_info.actor_platform, actor_info.actor_link)
+
+
+def formatPostUrl(actor_info: ActorInfo, post_id: int) -> str:
+    return f"{__RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_id}"
 
 
 def formatFullUrl(relative_url: str) -> str:
-    return __RootUrl + relative_url
+    if relative_url.startswith('/'):
+        return __RootUrl + relative_url
+    else:
+        return relative_url
+
+
+def platform() -> str:
+    return __Platform

@@ -2,6 +2,7 @@ import random
 import shutil
 import time
 
+import Configs
 from Consts import WorkerType
 from Ctrls import RequestCtrl
 from Utils import LogUtil
@@ -16,12 +17,17 @@ class BaseRequestWorker(BaseWorker):
     base class for workers working through request
     """
 
-    def __init__(self, worker_type: WorkerType):
-        super().__init__(worker_type)
+    def __init__(self, worker_type: WorkerType, task: 'DownloadTask'):
+        super().__init__(worker_type, task)
+        self.requestSession = RequestCtrl.createRequestSession()
+
+    def _onException(self, item, e: BaseException):
+        super()._onException(item, e)
+        # fake a new session
         self.requestSession = RequestCtrl.createRequestSession()
 
     def _sleep(self):
-        time.sleep(random.randint(1, 2 * average_wait_time))
+        time.sleep(random.random() * 2 * average_wait_time)
 
     def _head(self, item: UrlQueueItem) -> (bool, int):
         """
@@ -44,7 +50,8 @@ class BaseRequestWorker(BaseWorker):
             return True, int(content_length)
         elif res.status_code == 302:  # redirect
             item.from_url = item.url
-            item.url = res.headers['Location']
+            url = res.headers['Location']
+            item.url = RequestCtrl.formatFullUrl(url)
             return self._head(item)
         elif res.status_code == 429 or res.status_code == 403:  # too fast
             time.sleep(5)
@@ -72,12 +79,13 @@ class BaseRequestWorker(BaseWorker):
             return res.text
         elif res.status_code == 302:  # redirect
             item.from_url = item.url
-            item.url = res.headers['Location']
-            return self.__download(item)
+            url = res.headers['Location']
+            item.url = RequestCtrl.formatFullUrl(url)
+            return self._download(item)
         elif res.status_code == 429:  # too fast
             time.sleep(5)
             LogUtil.warn(f"get {item.extra_info} too fast")
-            return self.__download(item)
+            return self._download(item)
         else:
             LogUtil.info(f"get error {res.status_code}: {item.url}")
             return None
@@ -88,4 +96,3 @@ class BaseRequestWorker(BaseWorker):
             with open(file_path, file_mode) as f:
                 # write stream data into file, the most efficient way of download that I know
                 shutil.copyfileobj(r.raw, f)
-

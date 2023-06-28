@@ -1,12 +1,11 @@
 # Resource related operations
 
-import os
 from typing import List, Tuple
 
-from sqlalchemy import select, ScalarResult, delete
+from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
-from Models.BaseModel import ResModel, ResState, ResType
+from Models.BaseModel import ResModel, ResType
 
 
 def getRes(session: Session, res_id: int) -> ResModel:
@@ -44,13 +43,4 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
 
 
 def repairRecords(session: Session):
-    """
-    refresh the state of a resource record if corresponding file is deleted
-    :TODO full traverse if time consuming, should be optimized
-    """
-    stmt = select(ResModel).where(ResModel.res_state == ResState.Down)
-    result: ScalarResult[ResModel] = session.scalars(stmt)
-    for res in result:
-        file_path = res.filePath()
-        if not os.path.exists(file_path):
-            res.res_state = ResState.Del
+    pass

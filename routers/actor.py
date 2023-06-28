@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from fastapi.params import Query
 
 import Configs
-from Ctrls import DbCtrl, ActorCtrl
+from Ctrls import DbCtrl, ActorCtrl, FileInfoCacheCtrl
 from Models.BaseModel import ActorCategory
 from routers.web_data import ActorConditionForm
 
@@ -62,15 +62,8 @@ def get_actor(actor_name: str):
     subprocess.Popen(f'explorer "{Configs.formatActorFolderPath(actor_name)}"')
 
 
-@router.delete("/{actor_name}/{tag_id}")
-def delete_actor_tag(tag_id: int, actor_name: str):
-    with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.removeTagFromActor(session, actor_name, tag_id)
-        return DbCtrl.CustomJsonResponse(actor)
-
-
 @router.post("/{actor_name}/tag")
-def add_actor_tag(actor_name: str, tag_list: List[int] = Query(alias='id')):
+def change_actor_tag(actor_name: str, tag_list: List[int] = Query(alias='id')):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.addTagsToActor(session, actor_name, tag_list)
+        actor = ActorCtrl.changeActorTags(session, actor_name, tag_list)
         return DbCtrl.CustomJsonResponse(actor)

@@ -19,10 +19,3 @@ def addActorTag(session: Session, tag: ActorTagModel) -> ActorTagModel:
     return tag
 
 
-def deleteActorTag(session: Session, tag_id: int):
-    actor_tag_model = getActorTag(session, tag_id)
-    for rel in actor_tag_model.rel_actors:
-        session.delete(rel)
-    session.delete(actor_tag_model)
-    return actor_tag_model.tag_name
-

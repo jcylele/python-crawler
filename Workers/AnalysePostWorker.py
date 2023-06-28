@@ -1,7 +1,7 @@
 import bs4.element
 from bs4 import BeautifulSoup
 
-from Consts import WorkerType
+from Consts import WorkerType, QueueType
 from Utils import LogUtil
 from Ctrls import DbCtrl, ResCtrl, PostCtrl, RequestCtrl
 from Models.BaseModel import ResType
@@ -16,11 +16,11 @@ class AnalysePostWorker(BaseWorker):
     worker to analyse post detail and extract resources
     """
 
-    def __init__(self):
-        super().__init__(worker_type=WorkerType.AnalysePost)
+    def __init__(self, task: 'DownloadTask'):
+        super().__init__(worker_type=WorkerType.AnalysePost, task=task)
 
-    def _queueType(self) -> QueueMgr.QueueType:
-        return QueueMgr.QueueType.AnalysePost
+    def _queueType(self) -> QueueType:
+        return QueueType.AnalysePost
 
     def __processElement(self, ele: bs4.element.Tag, extra_info: PostExtraInfo) -> str:
         href: str = ele.a['href']
@@ -62,8 +62,6 @@ class AnalysePostWorker(BaseWorker):
             ResCtrl.addAllRes(session, extra_info.post_id, url_list)
             session.flush()
             # enqueue all resources of the post
-            QueueUtil.enqueueAllRes(post)
+            QueueUtil.enqueueAllRes(self.QueueMgr(), extra_info.actor_info, post, self.DownloadLimit().file_size)
 
             return True
-
-

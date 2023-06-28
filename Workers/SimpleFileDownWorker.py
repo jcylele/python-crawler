@@ -1,8 +1,7 @@
 import os
 
-from Consts import WorkerType
+from Consts import WorkerType, QueueType
 from Utils import LogUtil
-from WorkQueue import QueueMgr
 from WorkQueue.ExtraInfo import FilePathExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseRequestWorker import BaseRequestWorker
@@ -13,11 +12,11 @@ class SimpleFileDownWorker(BaseRequestWorker):
     worker to download small images
     """
 
-    def __init__(self):
-        super().__init__(worker_type=WorkerType.SimpleFile)
+    def __init__(self, task: 'DownloadTask'):
+        super().__init__(worker_type=WorkerType.SimpleFile, task=task)
 
-    def _queueType(self) -> QueueMgr.QueueType:
-        return QueueMgr.QueueType.SimpleFile
+    def _queueType(self) -> QueueType:
+        return QueueType.SimpleFile
 
     def _process(self, item: UrlQueueItem) -> bool:
         extra_info: FilePathExtraInfo = item.extra_info
@@ -31,11 +30,10 @@ class SimpleFileDownWorker(BaseRequestWorker):
         self._downloadStream(item.url, file_path)
 
         real_size = os.path.getsize(file_path)
-        if real_size < size:
+        if real_size != size:
             # delete invalid file
             LogUtil.warn(f"{file_path} incorrect size, expect {size:,d} get {real_size:,d}")
             os.remove(file_path)
             return False
 
         return True
-

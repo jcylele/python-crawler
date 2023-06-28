@@ -4,7 +4,6 @@ from time import sleep
 from typing import List
 
 from Utils import LogUtil
-from WorkQueue import QueueMgr
 from Workers.BaseWorker import BaseWorker
 
 ReportQueueInterval = 10
@@ -15,10 +14,12 @@ class Guarder(threading.Thread):
     monitor and report running status of all workers and queues
     """
 
-    def __init__(self):
+    def __init__(self, task: 'DownloadTask'):
         super().__init__()
         self.workers: List[BaseWorker] = []
         self.next_report_time = 0
+        self.task = task
+        self.done = False
 
     def run(self):
         # start all worker threads
@@ -33,6 +34,7 @@ class Guarder(threading.Thread):
             LogUtil.printAll()  # print cached logs
             self.reportRunningStatus()
             if self.isJobDone():
+                self.done = True
                 LogUtil.info("Done!!!")
                 for worker in self.workers:
                     worker.Stop()
@@ -44,7 +46,7 @@ class Guarder(threading.Thread):
         check if all tasks are down
         :return:
         """
-        if not QueueMgr.empty():  # all queues are empty
+        if not self.task.queueMgr.empty():  # all queues are empty
             return False
         for worker in self.workers:
             if not worker.isWaiting():  # all workers are waiting for job
@@ -58,8 +60,10 @@ class Guarder(threading.Thread):
         """
         if self.next_report_time > time.time():
             return
+        # Task
+        LogUtil.info(self.task)
         # Queue
-        LogUtil.info(QueueMgr.runningReport())
+        LogUtil.info(self.task.queueMgr.runningReport())
         # Worker
         worker_count_dict = {}
         for worker in self.workers:

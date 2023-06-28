@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
-from Ctrls import DbCtrl
+from Download.DownloadTask import DownloadTask
 from routers import actor, actor_tag, download, file, vue
 
 app = FastAPI()
@@ -30,7 +30,9 @@ app.include_router(vue.router)
 # TODO redirect from fastAPI
 file.start()
 
-DbCtrl.init()
+DownloadTask.initEnv()
+
+# RequestCtrl.initProxy()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

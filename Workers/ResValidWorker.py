@@ -1,11 +1,11 @@
 import os.path
 import shutil
 
-from Consts import WorkerType
-from Utils import LogUtil
-from Ctrls import DbCtrl, ResCtrl
+from Consts import WorkerType, QueueType
+from Ctrls import DbCtrl, ResCtrl, FileInfoCacheCtrl
 from Models.BaseModel import ResState
-from WorkQueue import QueueMgr, QueueUtil
+from Utils import LogUtil
+from WorkQueue import QueueUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseWorker import BaseWorker
@@ -16,11 +16,11 @@ class ResValidWorker(BaseWorker):
     worker to validate the size of temporary files
     """
 
-    def __init__(self):
-        super().__init__(worker_type=WorkerType.ResValid)
+    def __init__(self, task: 'DownloadTask'):
+        super().__init__(worker_type=WorkerType.ResValid, task=task)
 
-    def _queueType(self) -> QueueMgr.QueueType:
-        return QueueMgr.QueueType.ResValid
+    def _queueType(self) -> QueueType:
+        return QueueType.ResValid
 
     def _process(self, item: UrlQueueItem) -> bool:
         extra_info: ResFileExtraInfo = item.extra_info
@@ -38,7 +38,7 @@ class ResValidWorker(BaseWorker):
 
             if not os.path.exists(tmp_file_path):
                 # throw back to file download queue
-                QueueUtil.enqueueResFile(item, extra_info.file_path, res2.res_size)
+                QueueUtil.putbackResFile(self.QueueMgr(), item)
                 return True
 
             # move to real location
@@ -48,9 +48,7 @@ class ResValidWorker(BaseWorker):
             except:
                 return False
             res2.res_state = ResState.Down
+            FileInfoCacheCtrl.OnActorFileChanged(res2.post.actor_name)
 
             LogUtil.info(f"{true_file_path} saved")
             return True
-
-
-

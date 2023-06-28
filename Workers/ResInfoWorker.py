@@ -1,9 +1,8 @@
-import Configs
-from Consts import WorkerType
+from Consts import WorkerType, QueueType
 from Ctrls import DbCtrl, ResCtrl
 from Models.BaseModel import ResState, ResModel
 from Utils import LogUtil
-from WorkQueue import QueueMgr, QueueUtil
+from WorkQueue import QueueUtil
 from WorkQueue.ExtraInfo import ResInfoExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseRequestWorker import BaseRequestWorker
@@ -14,11 +13,11 @@ class ResInfoWorker(BaseRequestWorker):
     worker to get the size of a resource from the header
     """
 
-    def __init__(self):
-        super().__init__(worker_type=WorkerType.ResInfo)
+    def __init__(self, task: 'DownloadTask'):
+        super().__init__(worker_type=WorkerType.ResInfo, task=task)
 
-    def _queueType(self) -> QueueMgr.QueueType:
-        return QueueMgr.QueueType.ResInfo
+    def _queueType(self) -> QueueType:
+        return QueueType.ResInfo
 
     def _process(self, item: UrlQueueItem) -> bool:
         succeed, size = self._head(item)
@@ -37,14 +36,12 @@ class ResInfoWorker(BaseRequestWorker):
 
             res1.res_size = size
             # skip files which are too large for now
-            if size > Configs.MaxFileSize:
+            if size > self.DownloadLimit().file_size:
                 res1.res_state = ResState.Skip
                 LogUtil.info(f"{extra_info} too big: {size:,d}")
                 return True
 
             # enqueue for downloading
-            QueueUtil.enqueueResFile(item, res1.tmpFilePath(), size)
+            QueueUtil.enqueueResFile(self.QueueMgr(), item, res1.tmpFilePath(), size)
 
             return True
-
-

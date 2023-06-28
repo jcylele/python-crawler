@@ -46,12 +46,8 @@ def put_actor_tag(tag_id: int, tag_form: ActorTagForm):
         tag = ActorTagCtrl.getActorTag(session, tag_id)
         tag.tag_name = tag_form.tag_name
         tag.tag_priority = tag_form.tag_priority
+        tag.tag_color = tag_form.tag_color
         session.flush()
         return DbCtrl.CustomJsonResponse(tag)
 
 
-@router.delete("/{tag_id}")
-def delete_actor_tag(tag_id: int):
-    with DbCtrl.getSession() as session, session.begin():
-        tag_name = ActorTagCtrl.deleteActorTag(session, tag_id)
-        return DbCtrl.CustomJsonResponse({"value": tag_name})

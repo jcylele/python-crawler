@@ -7,6 +7,7 @@ from sqlalchemy import String, ForeignKey, BigInteger
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
+from Ctrls import FileInfoCacheCtrl, RequestCtrl
 
 
 class IntEnum(sa.types.TypeDecorator):
@@ -87,6 +88,8 @@ class ActorModel(BaseModel):
 
     actor_name: Mapped[str] = mapped_column(String(30), primary_key=True)
     actor_category: Mapped[ActorCategory] = mapped_column(IntEnum(ActorCategory), default=ActorCategory.Init)
+    actor_platform: Mapped[str] = mapped_column(String(30))
+    actor_link: Mapped[str] = mapped_column(String(30))
     completed: Mapped[bool] = mapped_column(default=False)
     star: Mapped[bool] = mapped_column(default=False)
 
@@ -102,9 +105,16 @@ class ActorModel(BaseModel):
     def toJson(self):
         json_data = super().toJson()
         tag_list = []
+
         for tag in self.rel_tags:
             tag_list.append(tag.tag_id)
         json_data['rel_tags'] = tag_list
+
+        info = FileInfoCacheCtrl.GetFileInfo(self.actor_name)
+        json_data['file_info'] = info
+
+        json_data['href'] = RequestCtrl.formatActorHref(self.actor_platform, self.actor_link)
+
         return json_data
 
     def __repr__(self) -> str:
@@ -116,6 +126,7 @@ class ActorTagModel(BaseModel):
     tag_id: Mapped[int] = mapped_column(primary_key=True)
     tag_name: Mapped[str] = mapped_column(String(30))
     tag_priority: Mapped[int] = mapped_column(default=0)
+    tag_color: Mapped[str] = mapped_column(String(30), default="#FFFFFF")
 
     rel_actors: Mapped[list["ActorTagRelationship"]] = relationship(
         back_populates="tag"
@@ -185,7 +196,7 @@ class ResModel(BaseModel):
         """
         return f"{Configs.formatTmpFolderPath()}/{self.tmpFileName()}"
 
-    def shouldDownload(self) -> bool:
+    def shouldDownload(self, max_file_size: int) -> bool:
         """
         check whether resources should be downloaded
         :return:
@@ -194,7 +205,7 @@ class ResModel(BaseModel):
             return True
         if self.res_state != ResState.Skip:
             return False
-        if self.res_size > Configs.MaxFileSize:
+        if self.res_size > max_file_size:
             # LogUtil.info(f"({self.res_id} of {self.post_id} of {self.post.actor_name}) too big: {self.res_size}")
             return False
         return True

@@ -3,7 +3,6 @@
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
-from Ctrls import ResCtrl
 from Models.BaseModel import PostModel, ResState
 
 
@@ -24,7 +23,7 @@ def addPost(session: Session, actor_name: str, post_id: int):
     session.add(post)
 
 
-def deleteAllFilesOfActor(session: Session, actor_name: str):
+def BatchSetResStates(session: Session, actor_name: str, state: ResState):
     stmt = (
         select(PostModel)
             .where(PostModel.actor_name == actor_name)
@@ -32,6 +31,5 @@ def deleteAllFilesOfActor(session: Session, actor_name: str):
     post_list: ScalarResult[PostModel] = session.scalars(stmt)
     for post in post_list:
         for res in post.res_list:
-            if res.res_state == ResState.Down:
-                res.res_state = ResState.Del
+            res.res_state = state
 

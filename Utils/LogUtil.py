@@ -64,9 +64,10 @@ def printAll():
     print all cached logs and clear the log cache
     :return:
     """
-    for log in __LogList:
-        __realPrint(*log)
+    tmp = __LogList.copy()
     __LogList.clear()
+    for log in tmp:
+        __realPrint(*log)
 
 
 def __print(lv: LogLv, o: any):

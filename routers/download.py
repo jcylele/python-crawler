@@ -4,6 +4,7 @@ from fastapi.params import Query
 from Ctrls import DbCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.DownloadTask import DownloadTask
+from Download.TaskManager import NewTask, GetAllTask, StopTask
 from Models.BaseModel import ActorCategory
 from routers.web_data import DownloadLimitForm
 
@@ -28,7 +29,7 @@ def restoreRecord():
 @router.post("/new")
 def download_new_actors(form: DownloadLimitForm):
     limit = ConvertDownloadLimit(form)
-    task = DownloadTask()
+    task = NewTask()
     task.setLimit(limit)
     task.downloadNewActors()
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
@@ -37,7 +38,7 @@ def download_new_actors(form: DownloadLimitForm):
 @router.post("/category/{actor_category}")
 def download_by_category(actor_category: int, form: DownloadLimitForm):
     limit = ConvertDownloadLimit(form)
-    task = DownloadTask()
+    task = NewTask()
     task.setLimit(limit)
     task.downloadByActorCategory(ActorCategory(actor_category))
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
@@ -46,7 +47,21 @@ def download_by_category(actor_category: int, form: DownloadLimitForm):
 @router.post("/specific")
 def download_by_category(form: DownloadLimitForm, names: list[str] = Query(alias='name')):
     limit = ConvertDownloadLimit(form)
-    task = DownloadTask()
+    task = NewTask()
     task.setLimit(limit)
     task.downloadSpecificActors(names)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
+@router.get("/list")
+def get_tasks():
+    tasks = GetAllTask()
+    return DbCtrl.CustomJsonResponse(tasks)
+
+
+@router.delete("/{task_uid}")
+def stop_task(task_uid: int):
+    StopTask(task_uid)
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+

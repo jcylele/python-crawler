@@ -10,12 +10,14 @@ import Configs
 from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship, ResState
+from Utils import LogUtil
 from routers.web_data import ActorConditionForm
 
 
 def getActorInfo(session: Session, actor_name: str) -> ActorInfo:
     actor = getActor(session, actor_name)
     if actor is None:
+        LogUtil.error(f"get actorInfo failed, actor {actor_name} not exist")
         return None
     return ActorInfo(actor)
 
@@ -81,7 +83,9 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
         _query = _query.where(~ActorModel.rel_tags.any())
     elif len(form.tag_list) > 0:
         _query = _query.where(ActorModel.rel_tags.any(ActorTagRelationship.tag_id.in_(form.tag_list)))
-
+    #star
+    if form.star:
+        _query = _query.where(ActorModel.star == True)
     return _query
 
 
@@ -157,7 +161,7 @@ def changeActorCategory(session: Session, actor_name: str, new_category: ActorCa
     if actor.actor_category == new_category:
         return actor
     oldHas = __HasFiles.get(actor.actor_category)
-    newHas = __HasFiles.get(actor.new_category)
+    newHas = __HasFiles.get(new_category)
     if oldHas != newHas:
         if oldHas:
             actor_folder = Configs.formatActorFolderPath(actor.actor_name)
@@ -166,7 +170,7 @@ def changeActorCategory(session: Session, actor_name: str, new_category: ActorCa
                 FileInfoCacheCtrl.OnActorFileChanged(actor.actor_name)
                 FileInfoCacheCtrl.RemoveDownloadingFiles(actor.actor_name)
 
-            PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Deleted)
+            PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Del)
         else:
             createActorFolder(actor.actor_name)
             PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Init)

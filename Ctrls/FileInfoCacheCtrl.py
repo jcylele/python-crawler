@@ -6,11 +6,14 @@ _file_info_cache = {}
 
 
 def RemoveDownloadingFiles(actor_name: str):
-    actor_folder = Configs.formatTmpFolderPath()
-    for root, _, files in os.walk(actor_folder):
-        for file in files:
-            if file.startswith(f'{actor_name}_'):
-                os.remove(os.path.join(root, file))
+    download_folder = Configs.formatTmpFolderPath()
+    try:
+        for root, _, files in os.walk(download_folder):
+            for file in files:
+                if file.startswith(f'{actor_name}_'):
+                    os.remove(os.path.join(root, file))
+    except Exception as e:
+        pass
 
 
 def GetFileInfo(actor_name: str):

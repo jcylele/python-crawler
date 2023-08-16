@@ -19,3 +19,10 @@ class DownloadLimit(object):
     def __repr__(self) -> str:
         return f"({self.actor_count}/{self.post_count}/{self.file_size})"
 
+    def toJson(self):
+        return {
+            "actor_count": self.actor_count,
+            "post_count": self.post_count,
+            "file_size": self.file_size
+        }
+

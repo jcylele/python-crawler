@@ -4,6 +4,7 @@ from time import sleep
 from typing import List
 
 from Utils import LogUtil
+from Workers import WorkerMgr
 from Workers.BaseWorker import BaseWorker
 
 ReportQueueInterval = 10
@@ -29,9 +30,10 @@ class Guarder(threading.Thread):
         # maybe it can boost the speed of threads
         LogUtil.useList(True)
         # loop
-        while True:
+        while not self.done:
             sleep(0.0333)  # 30fps
             LogUtil.printAll()  # print cached logs
+            self.checkWorkerTimeout()
             self.reportRunningStatus()
             if self.isJobDone():
                 self.done = True
@@ -39,7 +41,11 @@ class Guarder(threading.Thread):
                 for worker in self.workers:
                     worker.Stop()
                 LogUtil.printAll()  # print cached logs
-                break
+
+    def Stop(self):
+        for worker in self.workers:
+            worker.Stop()
+        self.done = True
 
     def isJobDone(self) -> bool:
         """
@@ -52,6 +58,17 @@ class Guarder(threading.Thread):
             if not worker.isWaiting():  # all workers are waiting for job
                 return False
         return True
+
+    def checkWorkerTimeout(self):
+        new_workers = []
+        for worker in self.workers:
+            timeout = worker.getTimeout()
+            if 0 < timeout < time.time():
+                new_workers.append(WorkerMgr.createWorker(worker.workerType(), worker.task))
+                worker.setTimeout(-1)
+        for worker in new_workers:
+            worker.start()
+        self.workers.extend(new_workers)
 
     def reportRunningStatus(self):
         """

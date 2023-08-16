@@ -52,8 +52,8 @@ class FetchActorsWorker(BaseFetchWorker):
             for actor_node in actor_list:
                 actor_info = ActorInfo()
                 href_list = actor_node.get_attribute("href").split("/")
-                actor_info.actor_platform = href_list[1]
-                actor_info.actor_link = href_list[3]
+                actor_info.actor_platform = href_list[-3]
+                actor_info.actor_link = href_list[-1]
 
                 actor_name_node = actor_node.find_element(By.CLASS_NAME, "user-card__name")
                 if actor_name_node is None:

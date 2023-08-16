@@ -49,6 +49,12 @@ class FetchActorWorker(BaseFetchWorker):
     def _process(self, item: FetchActorQueueItem) -> bool:
         post_count = 0
         self.actor_info = self.getActorInfo(item.actor_name)
+        if self.actor_info is None:
+            return False
+        # fetch icon
+        QueueUtil.enqueueActorIcon(self.QueueMgr(), self.actor_info)
+        # create folder
+        ActorCtrl.createActorFolder(item.actor_name)
 
         url = RequestCtrl.formatActorUrl(self.actor_info)
         self.driver.get(url)
@@ -95,12 +101,15 @@ class FetchActorWorker(BaseFetchWorker):
             post_count += len(post_list)
 
             # next page
+            next_btn = None
             if page_menu is not None:
-                next_btn = page_menu.find_element(By.CSS_SELECTOR, '.pagination-button-after-current')
-            else:
-                next_btn = None
+                try:
+                    next_btn = page_menu.find_element(By.CSS_SELECTOR, '.next')
+                except:
+                    pass
+
             if next_btn is None:
-                self.onActorCompleted(item.actor_name)
+                FetchActorWorker.onActorCompleted(item.actor_name)
                 break
 
             # download no more

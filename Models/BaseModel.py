@@ -40,8 +40,9 @@ class BaseModelEncoder(json.JSONEncoder):
     json encoder for BaseModel
     """
     def default(self, obj):
-        if isinstance(obj, BaseModel):
-            return obj.toJson()
+        method = getattr(obj, 'toJson', None)
+        if callable(method):
+            return method()
         # Let the base class default method raise the TypeError
         return json.JSONEncoder.default(self, obj)
 

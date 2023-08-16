@@ -30,12 +30,21 @@ def get_actor_tag(tag_id: int):
         return DbCtrl.CustomJsonResponse(tag)
 
 
+# 必须在/list之后,同方法(get)按顺序匹配
+@router.delete("/{tag_id}")
+def get_actor_tag(tag_id: int):
+    with DbCtrl.getSession() as session, session.begin():
+        ActorTagCtrl.deleteActorTag(session, tag_id)
+        return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
 @router.post("/add")
 def add_actor_tag(form: ActorTagForm):
     with DbCtrl.getSession() as session, session.begin():
         tag = ActorTagModel()
         tag.tag_name = form.tag_name
         tag.tag_priority = form.tag_priority
+        tag.tag_color = form.tag_color
         ActorTagCtrl.addActorTag(session, tag)
         return DbCtrl.CustomJsonResponse(tag)
 
@@ -49,5 +58,3 @@ def put_actor_tag(tag_id: int, tag_form: ActorTagForm):
         tag.tag_color = tag_form.tag_color
         session.flush()
         return DbCtrl.CustomJsonResponse(tag)
-
-

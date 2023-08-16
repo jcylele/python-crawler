@@ -13,7 +13,8 @@ from Workers import WorkerMgr
 
 
 class DownloadTask(object):
-    def __init__(self):
+    def __init__(self, task_uid):
+        self.uid = task_uid
         self.guarder = Guarder(self)
         self.queueMgr = QueueMgr()
         self.downloadLimit: DownloadLimit = None
@@ -30,6 +31,12 @@ class DownloadTask(object):
                 worker = WorkerMgr.createWorker(work_type, self)
                 self.guarder.addWorker(worker)
         self.guarder.start()
+
+    def Stop(self):
+        self.guarder.Stop()
+
+    def isDone(self) -> bool:
+        return self.guarder.done
 
     def setLimit(self, limit: DownloadLimit):
         """
@@ -92,4 +99,5 @@ class DownloadTask(object):
     def __repr__(self):
         return f"({self.desc}\tdownloadLimit={self.downloadLimit}"
 
-
+    def toJson(self):
+        return {'uid': self.uid, 'desc': self.desc, 'downloadLimit': self.downloadLimit.toJson()}

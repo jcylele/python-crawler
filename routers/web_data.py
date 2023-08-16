@@ -8,6 +8,7 @@ class ActorConditionForm(BaseModel):
     category_list: list[int]
     tag_list: list[int]
     no_tag: bool
+    star: bool
 
     # _actor_category_list: list[ActorCategory] = None
 

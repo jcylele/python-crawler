@@ -1,4 +1,6 @@
 import threading
+import time
+import traceback
 
 from Consts import WorkerType, QueueType
 from Download.DownloadLimit import DownloadLimit
@@ -18,6 +20,7 @@ class BaseWorker(threading.Thread):
         self.__stop = False
         self.__workerType = worker_type
         self.task = task
+        self._timeout = -1
 
     def QueueMgr(self) -> QueueMgr:
         return self.task.queueMgr
@@ -49,6 +52,7 @@ class BaseWorker(threading.Thread):
                 self._onException(item, e)
                 # break
             finally:
+                self.setTimeout(-1)
                 if not processed:
                     item.onFailed()
                     if item.shouldRetry():
@@ -63,7 +67,17 @@ class BaseWorker(threading.Thread):
         raise NotImplementedError("subclasses of BaseWorker must implement method _process")
 
     def _onException(self, item, e: BaseException):
-        LogUtil.error(f"{self} process {item} and encounter {type(e)}({e})")
+        msg = ''.join(traceback.format_exception(etype=type(e), value=e, tb=e.__traceback__))
+        LogUtil.error(f"{self} process {item} and encounter \n {msg}")
+
+    def setTimeout(self, delta) -> int:
+        if delta > 0:
+            self._timeout = delta + time.time()
+        else:
+            self._timeout = -1
+
+    def getTimeout(self) -> int:
+        return self._timeout
 
     def isWaiting(self) -> bool:
         return self.__waiting

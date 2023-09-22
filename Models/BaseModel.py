@@ -91,6 +91,7 @@ class ActorModel(BaseModel):
     actor_category: Mapped[ActorCategory] = mapped_column(IntEnum(ActorCategory), default=ActorCategory.Init)
     actor_platform: Mapped[str] = mapped_column(String(30))
     actor_link: Mapped[str] = mapped_column(String(30))
+    total_post_count: Mapped[int] = mapped_column(default=0)
     completed: Mapped[bool] = mapped_column(default=False)
     star: Mapped[bool] = mapped_column(default=False)
 
@@ -114,6 +115,8 @@ class ActorModel(BaseModel):
         info = FileInfoCacheCtrl.GetFileInfo(self.actor_name)
         json_data['file_info'] = info
 
+        json_data['post_info'] = [len(self.post_list), self.total_post_count]
+
         json_data['href'] = RequestCtrl.formatActorHref(self.actor_platform, self.actor_link)
 
         return json_data
@@ -127,7 +130,6 @@ class ActorTagModel(BaseModel):
     tag_id: Mapped[int] = mapped_column(primary_key=True)
     tag_name: Mapped[str] = mapped_column(String(30))
     tag_priority: Mapped[int] = mapped_column(default=0)
-    tag_color: Mapped[str] = mapped_column(String(30), default="#FFFFFF")
 
     rel_actors: Mapped[list["ActorTagRelationship"]] = relationship(
         back_populates="tag"

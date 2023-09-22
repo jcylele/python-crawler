@@ -19,6 +19,12 @@ class DownloadTask(object):
         self.queueMgr = QueueMgr()
         self.downloadLimit: DownloadLimit = None
         self.desc = ""
+        self.worker_count = {}
+
+    def getWorkerCount(self, work_type: Consts.WorkerType) -> int:
+        if work_type in self.worker_count:
+            return self.worker_count[work_type]
+        return WorkerMgr.getWorkerCount(work_type)
 
     def startDownload(self):
         """
@@ -26,7 +32,7 @@ class DownloadTask(object):
         :return:
         """
         for work_type in Consts.WorkerType:
-            count = WorkerMgr.getWorkerCount(work_type)
+            count = self.getWorkerCount(work_type)
             for i in range(count):
                 worker = WorkerMgr.createWorker(work_type, self)
                 self.guarder.addWorker(worker)
@@ -57,6 +63,7 @@ class DownloadTask(object):
         download actors in corresponding category
         """
         self.desc = f"Actors in {actor_category}."
+        self.worker_count[Consts.WorkerType.FetchActors] = 0
         with DbCtrl.getSession() as session, session.begin():
             actors = ActorCtrl.getActorsByCategory(session, actor_category)
             for actor in actors:
@@ -68,6 +75,10 @@ class DownloadTask(object):
         download specific actors
         """
         self.desc = f"Specific Actors {','.join(actor_names)}."
+        self.worker_count[Consts.WorkerType.FetchActors] = 0
+        val = WorkerMgr.getWorkerCount(Consts.WorkerType.FetchActor)
+        val = min(val, len(actor_names))
+        self.worker_count[Consts.WorkerType.FetchActor] = val
         for actor_name in actor_names:
             QueueUtil.enqueueFetchActor(self.queueMgr, actor_name)
         self.startDownload()

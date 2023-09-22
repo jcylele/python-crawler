@@ -1,3 +1,4 @@
+import re
 import time
 
 from selenium.webdriver.common.by import By
@@ -11,6 +12,11 @@ from Utils import LogUtil
 from WorkQueue import QueueUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
+
+
+def getActorInfo(actor_name: str) -> ActorInfo:
+    with DbCtrl.getSession() as session, session.begin():
+        return ActorCtrl.getActorInfo(session, actor_name)
 
 
 class FetchActorWorker(BaseFetchWorker):
@@ -42,13 +48,16 @@ class FetchActorWorker(BaseFetchWorker):
             actor = ActorCtrl.getActor(session, actor_name)
             actor.completed = True
 
-    def getActorInfo(self, actor_name: str) -> ActorInfo:
+    @staticmethod
+    def updateActorPostCount(actor_name: str, post_count: int):
         with DbCtrl.getSession() as session, session.begin():
-            return ActorCtrl.getActorInfo(session, actor_name)
+            actor = ActorCtrl.getActor(session, actor_name)
+            if actor.total_post_count != post_count:
+                actor.total_post_count = post_count
 
     def _process(self, item: FetchActorQueueItem) -> bool:
         post_count = 0
-        self.actor_info = self.getActorInfo(item.actor_name)
+        self.actor_info = getActorInfo(item.actor_name)
         if self.actor_info is None:
             return False
         # fetch icon
@@ -63,10 +72,26 @@ class FetchActorWorker(BaseFetchWorker):
             LogUtil.error(f"actor {self.actor_info.actor_name} not found")
             return True
 
+        post_count_updated = False
+
         # webpage is new in every iteration, so keep elements inside the loop
         for i in range(1, 1000000):
             try:
-                page_menu = self.driver.find_element(By.CSS_SELECTOR, "#paginator-top menu")
+                paginator_top = self.driver.find_element(By.CSS_SELECTOR, "#paginator-top")
+            except:
+                paginator_top = None
+
+            if paginator_top is not None and not post_count_updated:
+                try:
+                    ele_count = paginator_top.find_element(By.CSS_SELECTOR, 'small')
+                    nums = re.findall(r"\d+", ele_count.text)
+                    FetchActorWorker.updateActorPostCount(item.actor_name, int(nums[-1]))
+                    post_count_updated = True
+                except:
+                    pass
+
+            try:
+                page_menu = paginator_top.find_element(By.CSS_SELECTOR, 'menu')
             except:
                 page_menu = None
 
@@ -99,6 +124,11 @@ class FetchActorWorker(BaseFetchWorker):
 
             self.processPosts(post_list, real_url)
             post_count += len(post_list)
+
+            # only one page
+            if not post_count_updated:
+                FetchActorWorker.updateActorPostCount(item.actor_name, len(post_list))
+                post_count_updated = True
 
             # next page
             next_btn = None

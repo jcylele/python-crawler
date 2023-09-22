@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
+from Ctrls import RequestCtrl
 from Download.DownloadTask import DownloadTask
 from routers import actor, actor_tag, download, file, vue
 

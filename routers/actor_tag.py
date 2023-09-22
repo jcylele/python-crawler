@@ -55,6 +55,5 @@ def put_actor_tag(tag_id: int, tag_form: ActorTagForm):
         tag = ActorTagCtrl.getActorTag(session, tag_id)
         tag.tag_name = tag_form.tag_name
         tag.tag_priority = tag_form.tag_priority
-        tag.tag_color = tag_form.tag_color
         session.flush()
         return DbCtrl.CustomJsonResponse(tag)

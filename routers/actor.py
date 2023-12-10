@@ -57,6 +57,13 @@ def change_actor_category(actor_name: str, star: bool = Query(alias='val')):
         return DbCtrl.CustomJsonResponse(actor)
 
 
+@router.patch("/{actor_name}/remark")
+def set_actor_remark(actor_name: str, remark: str = Query(alias='val')):
+    with DbCtrl.getSession() as session, session.begin():
+        actor = ActorCtrl.changeActorRemark(session, actor_name, remark)
+        return DbCtrl.CustomJsonResponse(actor)
+
+
 @router.get("/{actor_name}/open")
 def get_actor(actor_name: str):
     subprocess.Popen(f'explorer "{Configs.formatActorFolderPath(actor_name)}"')

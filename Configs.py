@@ -1,11 +1,14 @@
-
 # connection string
-DbConnectString = "mysql+pymysql://jcylele:123456@localhost:3306/onlyfans"
+DbConnectString = "mysql+pymysql://jcylele:123456@localhost:3406/onlyfans"
 # Root Folder for all downloaded resources(files)
 RootFolder = "D:\\OnlyFans"
 # tmp file inside RootFolder for downloading files which will be  moved to other locations when completed
 TmpFolder = "_downloading"
 IconFolder = "_icon"
+
+MIN_DOWN_SPEED = 100 * 1024
+MAX_DOWN_WORKER_COUNT = 10
+SHOW_BROWSER = False
 
 
 def formatTmpFolderPath() -> str:

@@ -33,8 +33,7 @@ __headers = {
     "user-agent": ""
 }
 
-__RootUrl = "https://coomer.party"
-__Platform = "onlyfans"
+__RootUrl = "https://coomer.su"
 
 
 def initProxy():
@@ -89,6 +88,3 @@ def formatFullUrl(relative_url: str) -> str:
     else:
         return relative_url
 
-
-def platform() -> str:
-    return __Platform

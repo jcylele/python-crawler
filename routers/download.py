@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.params import Query
 
-from Ctrls import DbCtrl
+from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.DownloadTask import DownloadTask
 from Download.TaskManager import NewTask, GetAllTask, StopTask
@@ -22,8 +22,9 @@ def ConvertDownloadLimit(form: DownloadLimitForm) -> DownloadLimit:
 
 @router.get("/restore")
 def restoreRecord():
-    DownloadTask.repairRecords()
-    return DbCtrl.CustomJsonResponse({'value': 'ok'})
+    with DbCtrl.getSession() as session, session.begin():
+        ActorCtrl.removeDownloadingFiles(session)
+        return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
 @router.post("/new")
@@ -53,6 +54,15 @@ def download_by_category(form: DownloadLimitForm, names: list[str] = Query(alias
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
+@router.post("/all_posts/{actor_name}")
+def download_all_post(form: DownloadLimitForm, actor_name: str):
+    limit = ConvertDownloadLimit(form)
+    task = NewTask()
+    task.setLimit(limit)
+    task.downloadAllPosts(actor_name)
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
 @router.get("/list")
 def get_tasks():
     tasks = GetAllTask()
@@ -63,5 +73,3 @@ def get_tasks():
 def stop_task(task_uid: int):
     StopTask(task_uid)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
-
-

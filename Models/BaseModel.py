@@ -39,6 +39,7 @@ class BaseModelEncoder(json.JSONEncoder):
     """
     json encoder for BaseModel
     """
+
     def default(self, obj):
         method = getattr(obj, 'toJson', None)
         if callable(method):
@@ -94,6 +95,7 @@ class ActorModel(BaseModel):
     total_post_count: Mapped[int] = mapped_column(default=0)
     completed: Mapped[bool] = mapped_column(default=False)
     star: Mapped[bool] = mapped_column(default=False)
+    remark: Mapped[str] = mapped_column(String(100))
 
     post_list: Mapped[list["PostModel"]] = relationship(
         back_populates="actor",
@@ -112,14 +114,27 @@ class ActorModel(BaseModel):
             tag_list.append(tag.tag_id)
         json_data['rel_tags'] = tag_list
 
-        info = FileInfoCacheCtrl.GetFileInfo(self.actor_name)
-        json_data['file_info'] = info
+        # info = FileInfoCacheCtrl.GetFileInfo(self.actor_name)
+        # json_data['file_info'] = info
 
         json_data['post_info'] = [len(self.post_list), self.total_post_count]
+
+        size_list = FileInfoCacheCtrl.GetCachedFileSizes(self.actor_name)
+        if size_list is None:
+            size_list = self.calc_res_size_list()
+            FileInfoCacheCtrl.CacheFileSizes(self.actor_name, size_list)
+        json_data['res_info'] = size_list
 
         json_data['href'] = RequestCtrl.formatActorHref(self.actor_platform, self.actor_link)
 
         return json_data
+
+    def calc_res_size_list(self) -> [int]:
+        size_list = [0, 0, 0, 0]
+        for post in self.post_list:
+            for res in post.res_list:
+                size_list[res.res_state.value - 1] += res.res_size
+        return size_list
 
     def __repr__(self) -> str:
         return f"Actor(name={self.actor_name!r}, category={self.actor_category!r})"
@@ -208,10 +223,16 @@ class ResModel(BaseModel):
             return True
         if self.res_state != ResState.Skip:
             return False
-        if self.res_size > max_file_size:
+        if self.res_size > max_file_size > 0:
             # LogUtil.info(f"({self.res_id} of {self.post_id} of {self.post.actor_name}) too big: {self.res_size}")
             return False
         return True
+
+    def setState(self, state: ResState):
+        if self.res_state == state:
+            return
+        FileInfoCacheCtrl.OnFileStateChanged(self.post.actor_name, self.res_state.value, state.value, self.res_size)
+        self.res_state = state
 
     def __repr__(self) -> str:
         return f"Res(id={self.res_id!r}, " \

@@ -47,8 +47,7 @@ class ResValidWorker(BaseWorker):
                 shutil.move(tmp_file_path, true_file_path)
             except:
                 return False
-            res2.res_state = ResState.Down
-            FileInfoCacheCtrl.OnActorFileChanged(res2.post.actor_name)
+            res2.setState(ResState.Down)
 
             LogUtil.info(f"{true_file_path} saved")
             return True

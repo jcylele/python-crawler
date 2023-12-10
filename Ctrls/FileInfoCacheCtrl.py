@@ -16,6 +16,28 @@ def RemoveDownloadingFiles(actor_name: str):
         pass
 
 
+def CacheFileSizes(actor_name: str, file_sizes: dict):
+    _file_info_cache[actor_name] = file_sizes
+
+
+def GetCachedFileSizes(actor_name: str):
+    if actor_name not in _file_info_cache:
+        return None
+    return _file_info_cache[actor_name]
+
+
+def OnFileStateChanged(actor_name: str, old_state: int, new_state: int, file_size: int):
+    if actor_name in _file_info_cache:
+        size_list = _file_info_cache[actor_name]
+        size_list[new_state - 1] += file_size
+        size_list[old_state - 1] -= file_size
+
+
+def OnActorFileChanged(actor_name: str):
+    if actor_name in _file_info_cache:
+        del _file_info_cache[actor_name]
+
+
 def GetFileInfo(actor_name: str):
     if actor_name in _file_info_cache:
         return _file_info_cache[actor_name]
@@ -45,8 +67,3 @@ def GetFileInfo(actor_name: str):
     _file_info_cache[actor_name] = info
 
     return info
-
-
-def OnActorFileChanged(actor_name: str):
-    if actor_name in _file_info_cache:
-        del _file_info_cache[actor_name]

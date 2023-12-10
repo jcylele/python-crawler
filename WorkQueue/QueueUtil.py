@@ -44,9 +44,9 @@ def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, ma
                 LogUtil.warn(
                     f"{file_path} deleted because of incorrect size, expect {res.res_size:,d} get {real_size:,d}")
                 os.remove(file_path)
-                res.res_state = ResState.Init
+                res.setState(ResState.Init)
             else:
-                res.res_state = ResState.Down
+                res.setState(ResState.Down)
                 continue
 
         # 不需要下载

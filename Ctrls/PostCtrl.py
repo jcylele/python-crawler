@@ -31,5 +31,5 @@ def BatchSetResStates(session: Session, actor_name: str, state: ResState):
     post_list: ScalarResult[PostModel] = session.scalars(stmt)
     for post in post_list:
         for res in post.res_list:
-            res.res_state = state
+            res.setState(state)
 

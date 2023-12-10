@@ -1,6 +1,7 @@
 import os.path
 import time
 
+import Configs
 from Consts import WorkerType, QueueType
 from Download import FileManager
 from Utils import LogUtil
@@ -49,7 +50,7 @@ class FileDownWorker(BaseRequestWorker):
                 # for test, change to debug after that
                 LogUtil.warn(f"resume {file_path} from {file_size:,d}")
 
-        self.setTimeout(5 + extra_info.file_size / (100 * 1024))
+        self.setTimeout(3 + extra_info.file_size / Configs.MIN_DOWN_SPEED)
         self._downloadStream(item.url, file_path, file_mode)
 
         # remove the range attribute in header

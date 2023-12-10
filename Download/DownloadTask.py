@@ -5,6 +5,7 @@ import Consts
 from Ctrls import DbCtrl, ActorCtrl, ResCtrl
 from Download.DownloadLimit import DownloadLimit
 from Guarder import Guarder
+from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ActorCategory
 from Utils import LogUtil
 from WorkQueue import QueueUtil
@@ -31,6 +32,7 @@ class DownloadTask(object):
         new all threads and start running
         :return:
         """
+        LogUtil.setMinLogLv(LogUtil.LogLv.Info)
         for work_type in Consts.WorkerType:
             count = self.getWorkerCount(work_type)
             for i in range(count):
@@ -40,6 +42,7 @@ class DownloadTask(object):
 
     def Stop(self):
         self.guarder.Stop()
+        self.queueMgr.clear()
 
     def isDone(self) -> bool:
         return self.guarder.done
@@ -66,8 +69,11 @@ class DownloadTask(object):
         self.worker_count[Consts.WorkerType.FetchActors] = 0
         with DbCtrl.getSession() as session, session.begin():
             actors = ActorCtrl.getActorsByCategory(session, actor_category)
+            actor_count = 0
             for actor in actors:
                 QueueUtil.enqueueFetchActor(self.queueMgr, actor.actor_name)
+                actor_count += 1
+            self.worker_count[Consts.WorkerType.FetchActor] = min(actor_count, Configs.MAX_DOWN_WORKER_COUNT)
         self.startDownload()
 
     def downloadSpecificActors(self, actor_names: list[str]):
@@ -77,10 +83,28 @@ class DownloadTask(object):
         self.desc = f"Specific Actors {','.join(actor_names)}."
         self.worker_count[Consts.WorkerType.FetchActors] = 0
         val = WorkerMgr.getWorkerCount(Consts.WorkerType.FetchActor)
-        val = min(val, len(actor_names))
+        val = min(val, len(actor_names), Configs.MAX_DOWN_WORKER_COUNT)
         self.worker_count[Consts.WorkerType.FetchActor] = val
         for actor_name in actor_names:
             QueueUtil.enqueueFetchActor(self.queueMgr, actor_name)
+        self.startDownload()
+
+    def downloadAllPosts(self, actor_name: str):
+        """
+        download all posts of an actor
+        """
+        self.desc = f"All posts of {actor_name}."
+        self.worker_count[Consts.WorkerType.FetchActors] = 0
+        self.worker_count[Consts.WorkerType.FetchActor] = 0
+        with DbCtrl.getSession() as session, session.begin():
+            actor = ActorCtrl.getActor(session, actor_name)
+            actor_info = ActorInfo(actor)
+            for post in actor.post_list:
+                if not post.completed:  # the post is not analysed yet
+                    QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id)
+                else:  # all resources of the post are already added
+                    QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit.file_size)
+
         self.startDownload()
 
     @staticmethod
@@ -94,21 +118,16 @@ class DownloadTask(object):
         os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
         os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
         DbCtrl.init()
-        # repairRecords()
-
-    @staticmethod
-    def repairRecords():
-        """
-        refresh database according to the existence of files and folders
-        :return:
-        """
-        with DbCtrl.getSession() as session, session.begin():
-            ActorCtrl.repairRecords(session)
-        with DbCtrl.getSession() as session, session.begin():
-            ResCtrl.repairRecords(session)
 
     def __repr__(self):
         return f"({self.desc}\tdownloadLimit={self.downloadLimit}"
 
     def toJson(self):
-        return {'uid': self.uid, 'desc': self.desc, 'downloadLimit': self.downloadLimit.toJson()}
+        worker_count_map = self.guarder.getWorkerCountMap()
+        queue_count_map = self.queueMgr.getQueueCountMap()
+        return {'uid': self.uid,
+                'desc': self.desc,
+                'downloadLimit': self.downloadLimit.toJson(),
+                'worker_count': worker_count_map,
+                'queue_count': queue_count_map,
+                }

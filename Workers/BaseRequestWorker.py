@@ -48,7 +48,7 @@ class BaseRequestWorker(BaseWorker):
             if content_length is None:
                 return True, 0
             return True, int(content_length)
-        elif res.status_code == 302:  # redirect
+        elif res.status_code == 302 or res.status_code == 308:  # redirect
             item.from_url = item.url
             url = res.headers['Location']
             item.url = RequestCtrl.formatFullUrl(url)

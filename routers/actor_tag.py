@@ -44,7 +44,6 @@ def add_actor_tag(form: ActorTagForm):
         tag = ActorTagModel()
         tag.tag_name = form.tag_name
         tag.tag_priority = form.tag_priority
-        tag.tag_color = form.tag_color
         ActorTagCtrl.addActorTag(session, tag)
         return DbCtrl.CustomJsonResponse(tag)
 

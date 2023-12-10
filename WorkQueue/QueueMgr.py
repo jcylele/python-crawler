@@ -19,6 +19,13 @@ class QueueMgr(object):
             else:
                 self.__all_queues[queue_type] = queue.Queue()
 
+    def clear(self):
+        """
+        clear all queues
+        """
+        for queue_type, q in self.__all_queues.items():
+            q.queue.clear()
+
     def empty(self) -> bool:
         """
         is all queues empty
@@ -29,12 +36,12 @@ class QueueMgr(object):
                 return False
         return True
 
-    def runningReport(self) -> str:
-        str_list = []
+    def getQueueCountMap(self) -> dict[str, int]:
+        size_map = {}
         for queue_type, q in self.__all_queues.items():
             if q.qsize() > 0:
-                str_list.append(f"{queue_type.name}:{q.qsize()}")
-        return f"Queues: {','.join(str_list)}"
+                size_map[queue_type.name] = q.qsize()
+        return size_map
 
     def put(self, queue_type: QueueType, item: BaseQueueItem):
         """

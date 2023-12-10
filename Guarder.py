@@ -18,7 +18,6 @@ class Guarder(threading.Thread):
     def __init__(self, task: 'DownloadTask'):
         super().__init__()
         self.workers: List[BaseWorker] = []
-        self.next_report_time = 0
         self.task = task
         self.done = False
 
@@ -34,10 +33,9 @@ class Guarder(threading.Thread):
             sleep(0.0333)  # 30fps
             LogUtil.printAll()  # print cached logs
             self.checkWorkerTimeout()
-            self.reportRunningStatus()
             if self.isJobDone():
                 self.done = True
-                LogUtil.info("Done!!!")
+                LogUtil.info(f"{self.task} Done!!!")
                 for worker in self.workers:
                     worker.Stop()
                 LogUtil.printAll()  # print cached logs
@@ -70,18 +68,7 @@ class Guarder(threading.Thread):
             worker.start()
         self.workers.extend(new_workers)
 
-    def reportRunningStatus(self):
-        """
-        report queues' size and running worker count
-        :return:
-        """
-        if self.next_report_time > time.time():
-            return
-        # Task
-        LogUtil.info(self.task)
-        # Queue
-        LogUtil.info(self.task.queueMgr.runningReport())
-        # Worker
+    def getWorkerCountMap(self) -> dict[str, int]:
         worker_count_dict = {}
         for worker in self.workers:
             if worker.is_alive() and not worker.isWaiting():
@@ -90,9 +77,8 @@ class Guarder(threading.Thread):
                     worker_count_dict[wt] += 1
                 else:
                     worker_count_dict[wt] = 1
-        LogUtil.info(f"working: {worker_count_dict}")
 
-        self.next_report_time = time.time() + ReportQueueInterval
+        return worker_count_dict
 
     def addWorker(self, worker: BaseWorker):
         self.workers.append(worker)

@@ -5,8 +5,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from Consts import WorkerType, QueueType
-from Ctrls import ActorCtrl, DbCtrl
+from Ctrls import ActorCtrl, DbCtrl, RequestCtrl
 from Models.ActorInfo import ActorInfo
+from Utils import LogUtil
 from WorkQueue import QueueUtil
 from WorkQueue.BaseQueueItem import BaseQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
@@ -35,8 +36,15 @@ class FetchActorsWorker(BaseFetchWorker):
                     QueueUtil.enqueueFetchActor(self.QueueMgr(), actor_info.actor_name)
 
     def _process(self, item: BaseQueueItem) -> bool:
-        self.driver.get("https://coomer.party/artists")
+        url = RequestCtrl.formatActorsUrl(0)
+        self.driver.get(url)
         for i in range(1, 1000000):
+            try:
+                search_form = self.driver.find_element(By.CSS_SELECTOR, "form.search-form")
+            except:
+                LogUtil.info(f"failed to load artists page {i}, get {self.driver.title} instead")
+                break
+
             # wait for page load
             WebDriverWait(self.driver, 10).until(
                 EC.text_to_be_present_in_element((By.CSS_SELECTOR, "li.pagination-button-current b"), f"{i}")

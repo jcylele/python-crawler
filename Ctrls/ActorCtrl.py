@@ -1,6 +1,7 @@
 # ActorModel related operations
 
 import os
+import re
 import shutil
 
 from sqlalchemy import ScalarResult
@@ -83,7 +84,7 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
         _query = _query.where(~ActorModel.rel_tags.any())
     elif len(form.tag_list) > 0:
         _query = _query.where(ActorModel.rel_tags.any(ActorTagRelationship.tag_id.in_(form.tag_list)))
-    #star
+    # star
     if form.star:
         _query = _query.where(ActorModel.star == True)
     return _query
@@ -155,6 +156,22 @@ __HasFiles = {
 }
 
 
+def removeDownloadingFiles(session: Session):
+    download_folder = Configs.formatTmpFolderPath()
+    try:
+        for root, _, files in os.walk(download_folder):
+            for file in files:
+                matchObj = re.match(r'^(.+)_\d+_\d+\.\w+$', file)
+                if matchObj:
+                    actor_name = matchObj.group(1)
+                    actor = getActor(session, actor_name)
+                    if actor and not __HasFiles[actor.actor_category]:
+                        LogUtil.info(f"remove downloading file {file}")
+                        os.remove(os.path.join(root, file))
+    except Exception as e:
+        pass
+
+
 def changeActorCategory(session: Session, actor_name: str, new_category: ActorCategory) -> ActorModel:
     actor = getActor(session, actor_name)
     # no change
@@ -193,5 +210,12 @@ def changeActorStar(session: Session, actor_name: str, star: bool) -> ActorModel
     return actor
 
 
-def repairRecords(session: Session):
-    pass
+def changeActorRemark(session: Session, actor_name: str, remark: str) -> ActorModel:
+    actor = getActor(session, actor_name)
+    # no change
+    if actor.remark == remark:
+        return actor
+    # set field
+    actor.remark = remark
+    session.flush()
+    return actor

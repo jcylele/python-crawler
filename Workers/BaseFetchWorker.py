@@ -1,3 +1,4 @@
+import Configs
 from Consts import WorkerType
 from Workers.BaseWorker import BaseWorker
 from selenium import webdriver
@@ -21,4 +22,4 @@ class BaseFetchWorker(BaseWorker):
 
     def __init__(self, worker_type: WorkerType, task: 'DownloadTask'):
         super().__init__(worker_type, task)
-        self.driver = self.createDriver(False)
+        self.driver = self.createDriver(Configs.SHOW_BROWSER)

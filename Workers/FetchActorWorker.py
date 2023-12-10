@@ -77,6 +77,12 @@ class FetchActorWorker(BaseFetchWorker):
         # webpage is new in every iteration, so keep elements inside the loop
         for i in range(1, 1000000):
             try:
+                user_header = self.driver.find_element(By.CSS_SELECTOR, "header.user-header")
+            except:
+                LogUtil.info(f"failed to load {item.actor_name} page {i}, get {self.driver.title} instead")
+                break
+
+            try:
                 paginator_top = self.driver.find_element(By.CSS_SELECTOR, "#paginator-top")
             except:
                 paginator_top = None

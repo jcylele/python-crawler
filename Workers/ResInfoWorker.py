@@ -35,9 +35,10 @@ class ResInfoWorker(BaseRequestWorker):
                 return False
 
             res1.res_size = size
+            max_file_size = self.DownloadLimit().file_size
             # skip files which are too large for now
-            if size > self.DownloadLimit().file_size:
-                res1.res_state = ResState.Skip
+            if size > max_file_size > 0:
+                res1.setState(ResState.Skip)
                 LogUtil.info(f"{extra_info} too big: {size:,d}")
                 return True
 

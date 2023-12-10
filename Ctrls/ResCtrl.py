@@ -5,7 +5,7 @@ from typing import List, Tuple
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
-from Models.BaseModel import ResModel, ResType
+from Models.BaseModel import ResModel, ResType, PostModel
 
 
 def getRes(session: Session, res_id: int) -> ResModel:

@@ -184,7 +184,6 @@ def changeActorCategory(session: Session, actor_name: str, new_category: ActorCa
             actor_folder = Configs.formatActorFolderPath(actor.actor_name)
             if os.path.exists(actor_folder):
                 shutil.rmtree(actor_folder)
-                FileInfoCacheCtrl.OnActorFileChanged(actor.actor_name)
                 FileInfoCacheCtrl.RemoveDownloadingFiles(actor.actor_name)
 
             PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Del)

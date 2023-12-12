@@ -1,8 +1,82 @@
 import os
 
 import Configs
+from Consts import ResState, ResType
 
-_file_info_cache = {}
+
+class ResFileInfo(object):
+    def __init__(self, res_state: ResState):
+        self.res_state = res_state
+        self.res_size = 0
+        self.img_count = 0
+        self.video_count = 0
+
+    def addRes(self, res: "ResModel"):
+        self.res_size += res.res_size
+        if res.res_type == ResType.Image:
+            self.img_count += 1
+        elif res.res_type == ResType.Video:
+            self.video_count += 1
+
+    def removeRes(self, res: "ResModel"):
+        self.res_size -= res.res_size
+        if res.res_type == ResType.Image:
+            self.img_count -= 1
+        elif res.res_type == ResType.Video:
+            self.video_count -= 1
+
+    def toJson(self):
+        return {
+            "res_state": self.res_state.value,
+            "res_size": self.res_size,
+            "img_count": self.img_count,
+            "video_count": self.video_count
+        }
+
+
+class ActorFileInfo(object):
+    def __init__(self):
+        self.file_info_dict: dict[ResState, ResFileInfo] = {
+        }
+
+    def addRes(self, res: "ResModel"):
+        if res.res_state not in self.file_info_dict:
+            self.file_info_dict[res.res_state] = ResFileInfo(res.res_state)
+        self.file_info_dict[res.res_state].addRes(res)
+
+    def onResStateChanged(self, res: "ResModel", new_state: ResState):
+        old_res_file_info = self.file_info_dict.get(res.res_state)
+        old_res_file_info.removeRes(res)
+        new_res_file_info = self.file_info_dict.get(new_state)
+        new_res_file_info.addRes(res)
+
+    def toJson(self):
+        res_file_list = []
+        for res_file_info in self.file_info_dict.values():
+            if res_file_info.res_size == 0:
+                continue
+            res_file_list.append(res_file_info)
+        res_file_list.sort(key=lambda x: x.res_state.value)
+        return [res_file_info.toJson() for res_file_info in res_file_list]
+
+
+_file_info_cache: dict[str, ActorFileInfo] = {}
+
+
+def CacheFileSizes(actor_name: str, actor_file_info: ActorFileInfo):
+    _file_info_cache[actor_name] = actor_file_info
+
+
+def GetCachedFileSizes(actor_name: str) -> ActorFileInfo:
+    if actor_name not in _file_info_cache:
+        return None
+    return _file_info_cache[actor_name]
+
+
+def OnFileStateChanged(actor_name: str, res: "ResModel", new_state: ResState):
+    if actor_name not in _file_info_cache:
+        return
+    _file_info_cache[actor_name].onResStateChanged(res, new_state)
 
 
 def RemoveDownloadingFiles(actor_name: str):
@@ -14,56 +88,3 @@ def RemoveDownloadingFiles(actor_name: str):
                     os.remove(os.path.join(root, file))
     except Exception as e:
         pass
-
-
-def CacheFileSizes(actor_name: str, file_sizes: dict):
-    _file_info_cache[actor_name] = file_sizes
-
-
-def GetCachedFileSizes(actor_name: str):
-    if actor_name not in _file_info_cache:
-        return None
-    return _file_info_cache[actor_name]
-
-
-def OnFileStateChanged(actor_name: str, old_state: int, new_state: int, file_size: int):
-    if actor_name in _file_info_cache:
-        size_list = _file_info_cache[actor_name]
-        size_list[new_state - 1] += file_size
-        size_list[old_state - 1] -= file_size
-
-
-def OnActorFileChanged(actor_name: str):
-    if actor_name in _file_info_cache:
-        del _file_info_cache[actor_name]
-
-
-def GetFileInfo(actor_name: str):
-    if actor_name in _file_info_cache:
-        return _file_info_cache[actor_name]
-    actor_folder = Configs.formatActorFolderPath(actor_name)
-    # get file count,size and type
-    file_total_size = 0
-    file_count_map = {}
-
-    if not os.path.exists(actor_folder):
-        info = {}
-        _file_info_cache[actor_name] = info
-        return info
-
-    for root, _, files in os.walk(actor_folder):
-        for file in files:
-            file_total_size += os.path.getsize(os.path.join(root, file))
-            ext = os.path.splitext(file)[1]
-            if ext not in file_count_map:
-                file_count_map[ext] = 0
-            file_count_map[ext] += 1
-
-    info = {
-        'size': file_total_size,
-        'count': file_count_map
-    }
-
-    _file_info_cache[actor_name] = info
-
-    return info

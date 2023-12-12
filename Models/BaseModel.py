@@ -7,7 +7,9 @@ from sqlalchemy import String, ForeignKey, BigInteger
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
+from Consts import ResState, ResType, ActorCategory
 from Ctrls import FileInfoCacheCtrl, RequestCtrl
+from Ctrls.FileInfoCacheCtrl import ResFileInfo, ActorFileInfo
 
 
 class IntEnum(sa.types.TypeDecorator):
@@ -78,13 +80,6 @@ class ActorTagRelationship(BaseModel):
     actor: Mapped["ActorModel"] = relationship(back_populates="rel_tags")
 
 
-class ActorCategory(Enum):
-    Init = 1  # initial state of an actor
-    Liked = 2  # mark as liked
-    Dislike = 3  # dislike and remove the folder
-    Enough = 4  # once liked, then remove the folder
-
-
 class ActorModel(BaseModel):
     __tablename__ = "tab_actor"
 
@@ -119,22 +114,22 @@ class ActorModel(BaseModel):
 
         json_data['post_info'] = [len(self.post_list), self.total_post_count]
 
-        size_list = FileInfoCacheCtrl.GetCachedFileSizes(self.actor_name)
-        if size_list is None:
-            size_list = self.calc_res_size_list()
-            FileInfoCacheCtrl.CacheFileSizes(self.actor_name, size_list)
-        json_data['res_info'] = size_list
+        actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(self.actor_name)
+        if actor_file_info is None:
+            actor_file_info = self.calc_res_file_info()
+            FileInfoCacheCtrl.CacheFileSizes(self.actor_name, actor_file_info)
+        json_data['res_info'] = actor_file_info.toJson()
 
         json_data['href'] = RequestCtrl.formatActorHref(self.actor_platform, self.actor_link)
 
         return json_data
 
-    def calc_res_size_list(self) -> [int]:
-        size_list = [0, 0, 0, 0]
+    def calc_res_file_info(self) -> ActorFileInfo:
+        actor_file_info = ActorFileInfo()
         for post in self.post_list:
             for res in post.res_list:
-                size_list[res.res_state.value - 1] += res.res_size
-        return size_list
+                actor_file_info.addRes(res)
+        return actor_file_info
 
     def __repr__(self) -> str:
         return f"Actor(name={self.actor_name!r}, category={self.actor_category!r})"
@@ -166,18 +161,6 @@ class PostModel(BaseModel):
 
     def __repr__(self) -> str:
         return f"Post(post_id={self.post_id!r}, actor_name={self.actor_name})"
-
-
-class ResType(Enum):
-    Image = 1
-    Video = 2
-
-
-class ResState(Enum):
-    Init = 1
-    Down = 2
-    Skip = 3
-    Del = 4
 
 
 class ResModel(BaseModel):
@@ -231,7 +214,7 @@ class ResModel(BaseModel):
     def setState(self, state: ResState):
         if self.res_state == state:
             return
-        FileInfoCacheCtrl.OnFileStateChanged(self.post.actor_name, self.res_state.value, state.value, self.res_size)
+        FileInfoCacheCtrl.OnFileStateChanged(self.post.actor_name, self, state)
         self.res_state = state
 
     def __repr__(self) -> str:

@@ -149,7 +149,7 @@ class FetchActorWorker(BaseFetchWorker):
                 break
 
             # download no more
-            if post_count >= self.DownloadLimit().post_count:
+            if post_count >= self.DownloadLimit().post_count > 0:
                 break
 
             # js click

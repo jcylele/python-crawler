@@ -45,9 +45,14 @@ class ActorFileInfo(object):
         self.file_info_dict[res.res_state].addRes(res)
 
     def onResStateChanged(self, res: "ResModel", new_state: ResState):
+        # old state must exist
         old_res_file_info = self.file_info_dict.get(res.res_state)
         old_res_file_info.removeRes(res)
+        # new state may not exist
         new_res_file_info = self.file_info_dict.get(new_state)
+        if new_res_file_info is None:
+            new_res_file_info = ResFileInfo(new_state)
+            self.file_info_dict[new_state] = new_res_file_info
         new_res_file_info.addRes(res)
 
     def toJson(self):
@@ -71,6 +76,11 @@ def GetCachedFileSizes(actor_name: str) -> ActorFileInfo:
     if actor_name not in _file_info_cache:
         return None
     return _file_info_cache[actor_name]
+
+
+def RemoveCachedFileSizes(actor_name: str):
+    if actor_name in _file_info_cache:
+        del _file_info_cache[actor_name]
 
 
 def OnFileStateChanged(actor_name: str, res: "ResModel", new_state: ResState):

@@ -32,3 +32,9 @@ def StopTask(task_uid: int):
     if task:
         task.Stop()
         del task_dict[task_uid]
+
+
+def StopAllTasks():
+    for task in task_dict.values():
+        task.Stop()
+    task_dict.clear()

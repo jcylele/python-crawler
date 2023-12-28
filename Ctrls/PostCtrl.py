@@ -3,6 +3,7 @@
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
+from Ctrls import FileInfoCacheCtrl
 from Models.BaseModel import PostModel, ResState
 
 
@@ -24,6 +25,7 @@ def addPost(session: Session, actor_name: str, post_id: int):
 
 
 def BatchSetResStates(session: Session, actor_name: str, state: ResState):
+    FileInfoCacheCtrl.RemoveCachedFileSizes(actor_name)
     stmt = (
         select(PostModel)
             .where(PostModel.actor_name == actor_name)
@@ -32,4 +34,3 @@ def BatchSetResStates(session: Session, actor_name: str, state: ResState):
     for post in post_list:
         for res in post.res_list:
             res.setState(state)
-

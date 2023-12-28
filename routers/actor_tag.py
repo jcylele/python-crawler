@@ -16,9 +16,12 @@ router = APIRouter(
 def get_actor_tag_list():
     with DbCtrl.getSession() as session, session.begin():
         tags = ActorTagCtrl.getAllActorTags(session)
+        count_map = ActorTagCtrl.getTagUsedCount(session)
         response = []
         for tag in tags:
-            response.append(tag)
+            json = tag.toJson()
+            json['used_count'] = count_map.get(tag.tag_id, 0)
+            response.append(json)
         return DbCtrl.CustomJsonResponse(response)
 
 

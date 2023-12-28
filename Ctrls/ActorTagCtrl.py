@@ -8,10 +8,18 @@ def getAllActorTags(session: Session) -> ScalarResult[ActorTagModel]:
     stmt = select(ActorTagModel).order_by(ActorTagModel.tag_priority)
     return session.scalars(stmt)
 
-def getActorCountWithTag(session: Session) -> int:
-    session.query(
-        func.count(ActorTagRelationship.actor_name).label('actor_count')
-        , ActorTagRelationship.tag_id).group_by(ActorTagRelationship.tag_id)
+
+def getTagUsedCount(session: Session) -> dict[int, int]:
+    _query = session.query(
+        ActorTagRelationship.tag_id,
+        func.count(ActorTagRelationship.actor_name)
+    ).group_by(ActorTagRelationship.tag_id)
+    result = session.execute(_query).fetchall()
+    count_map = {}
+    for data in result:
+        count_map[data[0]] = data[1]
+    return count_map
+
 
 def getActorTag(session: Session, tag_id: int) -> ActorTagModel:
     return session.get(ActorTagModel, tag_id)

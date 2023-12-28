@@ -3,8 +3,7 @@ from fastapi.params import Query
 
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
-from Download.DownloadTask import DownloadTask
-from Download.TaskManager import NewTask, GetAllTask, StopTask
+from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks
 from Models.BaseModel import ActorCategory
 from routers.web_data import DownloadLimitForm
 
@@ -67,6 +66,13 @@ def download_all_post(form: DownloadLimitForm, actor_name: str):
 def get_tasks():
     tasks = GetAllTask()
     return DbCtrl.CustomJsonResponse(tasks)
+
+
+# must before stop_task
+@router.delete("/all")
+def stop_all_task():
+    StopAllTasks()
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
 @router.delete("/{task_uid}")

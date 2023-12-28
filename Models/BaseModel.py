@@ -91,6 +91,7 @@ class ActorModel(BaseModel):
     completed: Mapped[bool] = mapped_column(default=False)
     star: Mapped[bool] = mapped_column(default=False)
     remark: Mapped[str] = mapped_column(String(100))
+    main_actor: Mapped[str] = mapped_column(String(30))
 
     post_list: Mapped[list["PostModel"]] = relationship(
         back_populates="actor",
@@ -113,12 +114,6 @@ class ActorModel(BaseModel):
         # json_data['file_info'] = info
 
         json_data['post_info'] = [len(self.post_list), self.total_post_count]
-
-        actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(self.actor_name)
-        if actor_file_info is None:
-            actor_file_info = self.calc_res_file_info()
-            FileInfoCacheCtrl.CacheFileSizes(self.actor_name, actor_file_info)
-        json_data['res_info'] = actor_file_info.toJson()
 
         json_data['href'] = RequestCtrl.formatActorHref(self.actor_platform, self.actor_link)
 
@@ -210,6 +205,14 @@ class ResModel(BaseModel):
             # LogUtil.info(f"({self.res_id} of {self.post_id} of {self.post.actor_name}) too big: {self.res_size}")
             return False
         return True
+
+    def setSize(self, size: int):
+        self.res_size = size
+        # update actor file info
+        actor_name = self.post.actor_name
+        actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_name)
+        if actor_file_info is not None:
+            actor_file_info.addRes(self)
 
     def setState(self, state: ResState):
         if self.res_state == state:

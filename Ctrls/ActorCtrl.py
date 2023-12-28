@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 
-from sqlalchemy import ScalarResult
+from sqlalchemy import ScalarResult, select
 from sqlalchemy.orm import Session, Query
 
 import Configs
@@ -218,3 +218,46 @@ def changeActorRemark(session: Session, actor_name: str, remark: str) -> ActorMo
     actor.remark = remark
     session.flush()
     return actor
+
+
+def linkActors(session: Session, actor_names: [str]):
+    # merge all tags
+    all_tags = set()
+    for actor_name in actor_names:
+        actor = getActor(session, actor_name)
+        for tag in actor.rel_tags:
+            all_tags.add(tag.tag_id)
+    # apply tags to all actors
+    main_actor_name = actor_names[0]
+    for actor_name in actor_names:
+        actor = getActor(session, actor_name)
+        actor.main_actor = main_actor_name
+        new_tags = all_tags.copy()
+        for tag in actor.rel_tags:
+            new_tags.remove(tag.tag_id)
+        for tag_id in new_tags:
+            relation = ActorTagRelationship()
+            relation.tag_id = tag_id
+            relation.actor_name = actor_name
+            actor.rel_tags.append(relation)
+    # flush
+    session.flush()
+    # get updated actors
+    actor_list = []
+    for actor_name in actor_names:
+        actor = getActor(session, actor_name)
+        actor_list.append(actor)
+    return actor_list
+
+
+def getLinkedActors(session: Session, actor_name: str):
+    actor = getActor(session, actor_name)
+    if actor.main_actor is None:
+        return [actor]
+
+    stmt = (
+        select(ActorModel)
+            .where(ActorModel.main_actor == actor.main_actor)
+    )
+    actor_list: ScalarResult[ActorModel] = session.scalars(stmt)
+    return [a for a in actor_list]

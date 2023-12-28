@@ -35,7 +35,15 @@ def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
         return DbCtrl.CustomJsonResponse(response)
 
 
-# 必须在/list和/count之后,同方法(get)按顺序匹配
+@router.post("/link")
+def link_actors(actor_names: List[str]):
+    with DbCtrl.getSession() as session, session.begin():
+        actors = ActorCtrl.linkActors(session, actor_names)
+        return DbCtrl.CustomJsonResponse(actors)
+
+
+# 同方法(get)按顺序匹配, 固定前缀在前，{actor_name}在后
+
 @router.get("/{actor_name}")
 def get_actor(actor_name: str):
     with DbCtrl.getSession() as session, session.begin():
@@ -74,3 +82,21 @@ def change_actor_tag(actor_name: str, tag_list: List[int] = Query(alias='id')):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.changeActorTags(session, actor_name, tag_list)
         return DbCtrl.CustomJsonResponse(actor)
+
+
+@router.get("/{actor_name}/file_info")
+def get_actor_file_info(actor_name: str):
+    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_name)
+    if actor_file_info is None:
+        with DbCtrl.getSession() as session, session.begin():
+            actor = ActorCtrl.getActor(session, actor_name)
+            actor_file_info = actor.calc_res_file_info()
+            FileInfoCacheCtrl.CacheFileSizes(actor_name, actor_file_info)
+    return DbCtrl.CustomJsonResponse(actor_file_info)
+
+
+@router.get("/{actor_name}/link")
+def get_linked_actors(actor_name: str):
+    with DbCtrl.getSession() as session, session.begin():
+        actors = ActorCtrl.getLinkedActors(session, actor_name)
+        return DbCtrl.CustomJsonResponse(actors)

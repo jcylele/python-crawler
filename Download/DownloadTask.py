@@ -101,7 +101,7 @@ class DownloadTask(object):
             actor_info = ActorInfo(actor)
             for post in actor.post_list:
                 if not post.completed:  # the post is not analysed yet
-                    QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id)
+                    QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, None)
                 else:  # all resources of the post are already added
                     QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit.file_size)
 
@@ -127,7 +127,7 @@ class DownloadTask(object):
         queue_count_map = self.queueMgr.getQueueCountMap()
         return {'uid': self.uid,
                 'desc': self.desc,
-                'downloadLimit': self.downloadLimit.toJson(),
+                'download_limit': self.downloadLimit.toJson(),
                 'worker_count': worker_count_map,
                 'queue_count': queue_count_map,
                 }

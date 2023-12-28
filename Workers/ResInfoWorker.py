@@ -34,7 +34,7 @@ class ResInfoWorker(BaseRequestWorker):
                 LogUtil.warn(f"res not found {extra_info}")
                 return False
 
-            res1.res_size = size
+            res1.setSize(size)
             max_file_size = self.DownloadLimit().file_size
             # skip files which are too large for now
             if size > max_file_size > 0:

@@ -1,10 +1,5 @@
+import os
 import time
-
-from sqlalchemy import select
-
-from Ctrls import DbCtrl
-from Download.DownloadTask import DownloadTask
-from Models.BaseModel import ActorModel
 
 
 def printTime():
@@ -48,20 +43,12 @@ def lcs(x: str, y: str):
     return c[m][n]
 
 
-if __name__ == '__main__':
-    DownloadTask.initEnv()
-    names = []
-    with DbCtrl.getSession() as session, session.begin():
-        actors = session.scalars(select(ActorModel))
-        for actor in actors:
-            names.append(actor.actor_name)
+def mergeImages(directory):
+    items = os.listdir(directory)
+    sorted_items = sorted(items)
+    return sorted_items
 
-    # groups = []
-    for i in range(len(names)):
-        group = [names[i]]
-        for j in range(i + 1, len(names)):
-            lcs_len = lcs(names[i], names[j])
-            if lcs_len >= min(len(names[i]), len(names[j])):
-                group.append(names[j])
-        if len(group) > 1:
-            print(group)
+
+if __name__ == '__main__':
+    print(a)
+    pass

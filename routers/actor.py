@@ -1,3 +1,4 @@
+import base64
 import subprocess
 from typing import List
 
@@ -65,10 +66,18 @@ def change_actor_category(actor_name: str, star: bool = Query(alias='val')):
         return DbCtrl.CustomJsonResponse(actor)
 
 
+@router.patch("/{actor_name}/score")
+def change_actor_category(actor_name: str, score: int = Query(alias='val')):
+    with DbCtrl.getSession() as session, session.begin():
+        actor = ActorCtrl.changeActorScore(session, actor_name, score)
+        return DbCtrl.CustomJsonResponse(actor)
+
+
 @router.patch("/{actor_name}/remark")
 def set_actor_remark(actor_name: str, remark: str = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.changeActorRemark(session, actor_name, remark)
+        real_remark = base64.b64decode(remark).decode('utf-8')
+        actor = ActorCtrl.changeActorRemark(session, actor_name, real_remark)
         return DbCtrl.CustomJsonResponse(actor)
 
 

@@ -27,7 +27,7 @@ WorkerCount = {
     WorkerType.PageDown: 3,
     WorkerType.FileDown: 5,
     WorkerType.ResInfo: 5,
-    WorkerType.FetchActor: 3,
+    # WorkerType.FetchActor: 3,
 }
 
 

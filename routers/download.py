@@ -15,10 +15,6 @@ router = APIRouter(
 )
 
 
-def ConvertDownloadLimit(form: DownloadLimitForm) -> DownloadLimit:
-    return DownloadLimit(form.actor_count, form.post_count, 1024 * 1024 * form.file_size)
-
-
 @router.get("/restore")
 def restoreRecord():
     with DbCtrl.getSession() as session, session.begin():
@@ -28,7 +24,7 @@ def restoreRecord():
 
 @router.post("/new")
 def download_new_actors(form: DownloadLimitForm):
-    limit = ConvertDownloadLimit(form)
+    limit = DownloadLimit(form)
     task = NewTask()
     task.setLimit(limit)
     task.downloadNewActors()
@@ -37,7 +33,7 @@ def download_new_actors(form: DownloadLimitForm):
 
 @router.post("/category/{actor_category}")
 def download_by_category(actor_category: int, form: DownloadLimitForm):
-    limit = ConvertDownloadLimit(form)
+    limit = DownloadLimit(form)
     task = NewTask()
     task.setLimit(limit)
     task.downloadByActorCategory(ActorCategory(actor_category))
@@ -46,19 +42,10 @@ def download_by_category(actor_category: int, form: DownloadLimitForm):
 
 @router.post("/specific")
 def download_by_category(form: DownloadLimitForm, names: list[str] = Query(alias='name')):
-    limit = ConvertDownloadLimit(form)
+    limit = DownloadLimit(form)
     task = NewTask()
     task.setLimit(limit)
     task.downloadSpecificActors(names)
-    return DbCtrl.CustomJsonResponse({'value': 'ok'})
-
-
-@router.post("/all_posts/{actor_name}")
-def download_all_post(form: DownloadLimitForm, actor_name: str):
-    limit = ConvertDownloadLimit(form)
-    task = NewTask()
-    task.setLimit(limit)
-    task.downloadAllPosts(actor_name)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 

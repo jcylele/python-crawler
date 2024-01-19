@@ -57,6 +57,14 @@ class BaseWorker(threading.Thread):
                     item.onFailed()
                     if item.shouldRetry():
                         self.QueueMgr().put(self._queueType(), item)
+        self._onStop()
+
+    def _onStop(self):
+        """
+        called when the worker is stopped
+        :return:
+        """
+        pass
 
     def _process(self, item: BaseQueueItem) -> bool:
         """

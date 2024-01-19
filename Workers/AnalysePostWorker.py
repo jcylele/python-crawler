@@ -62,6 +62,6 @@ class AnalysePostWorker(BaseWorker):
             ResCtrl.addAllRes(session, extra_info.post_id, url_list)
             session.flush()
             # enqueue all resources of the post
-            QueueUtil.enqueueAllRes(self.QueueMgr(), extra_info.actor_info, post, self.DownloadLimit().file_size)
+            QueueUtil.enqueueAllRes(self.QueueMgr(), extra_info.actor_info, post, self.DownloadLimit())
 
             return True

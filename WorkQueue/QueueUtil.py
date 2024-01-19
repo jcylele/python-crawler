@@ -3,8 +3,10 @@
 import os
 
 import Configs
+import Consts
 from Consts import QueueType
 from Ctrls import RequestCtrl
+from Download.DownloadLimit import DownloadLimit
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ResState, PostModel
 from Utils import LogUtil
@@ -32,7 +34,7 @@ def enqueuePost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, from_ur
     queueMgr.put(QueueType.PageDownload, out_item)
 
 
-def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, max_file_size: int):
+def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, downloadLimit: DownloadLimit):
     # post = PostCtrl.getPost(session, post_id)
     post_url = RequestCtrl.formatPostUrl(actor_info, post.post_id)
     for res in post.res_list:
@@ -50,8 +52,16 @@ def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, ma
                 continue
 
         # 不需要下载
-        if not res.shouldDownload(max_file_size):
+        if not res.shouldDownload(downloadLimit.file_size):
             continue
+
+        # 检查类型
+        if res.res_type == Consts.ResType.Video:
+            if not downloadLimit.allow_video:
+                continue
+        elif res.res_type == Consts.ResType.Image:
+            if not downloadLimit.allow_img:
+                continue
 
         out_extra = ResInfoExtraInfo(actor_info, post.post_id, res.res_id)
         out_item = UrlQueueItem(res.res_url, post_url, out_extra)

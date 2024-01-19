@@ -8,7 +8,8 @@ class ActorConditionForm(BaseModel):
     category_list: list[int]
     tag_list: list[int]
     no_tag: bool
-    star: bool
+    min_score: int
+    max_score: int
 
     # _actor_category_list: list[ActorCategory] = None
 
@@ -24,4 +25,7 @@ class ActorTagForm(BaseModel):
 class DownloadLimitForm(BaseModel):
     actor_count: int
     post_count: int
+    post_filter: int
     file_size: int
+    allow_video: bool
+    allow_img: bool

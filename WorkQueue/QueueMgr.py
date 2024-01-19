@@ -12,6 +12,7 @@ class QueueMgr(object):
     """
 
     def __init__(self):
+        self._cleared = False
         self.__all_queues: dict[QueueType, queue.Queue] = {}
         for queue_type in QueueType:
             if queue_type > QueueType.MinPriorityQueue:
@@ -25,6 +26,7 @@ class QueueMgr(object):
         """
         for queue_type, q in self.__all_queues.items():
             q.queue.clear()
+        self._cleared = True
 
     def empty(self) -> bool:
         """
@@ -50,6 +52,8 @@ class QueueMgr(object):
         # thread will wait if the queue is full
         # but waiting for put inside a session causes db conflicts
         # so all queues are infinite in size
+        if self._cleared:
+            return
         self.__all_queues[queue_type].put(item)
 
     def get(self, queue_type: QueueType) -> BaseQueueItem:

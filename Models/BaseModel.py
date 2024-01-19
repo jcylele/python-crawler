@@ -1,4 +1,5 @@
 # Data Models consistent with table structs in database
+import base64
 import json
 from enum import Enum
 
@@ -92,6 +93,7 @@ class ActorModel(BaseModel):
     star: Mapped[bool] = mapped_column(default=False)
     remark: Mapped[str] = mapped_column(String(100))
     main_actor: Mapped[str] = mapped_column(String(30))
+    score: Mapped[int] = mapped_column(default=0)
 
     post_list: Mapped[list["PostModel"]] = relationship(
         back_populates="actor",
@@ -105,6 +107,11 @@ class ActorModel(BaseModel):
     def toJson(self):
         json_data = super().toJson()
         tag_list = []
+
+        if 'remark' in json_data and json_data['remark'] is not None:
+            print(json_data['remark'])
+            json_data['remark'] = base64.b64encode(json_data['remark'].encode('utf-8')).decode('utf-8')
+            print(json_data['remark'])
 
         for tag in self.rel_tags:
             tag_list.append(tag.tag_id)
@@ -122,6 +129,8 @@ class ActorModel(BaseModel):
     def calc_res_file_info(self) -> ActorFileInfo:
         actor_file_info = ActorFileInfo()
         for post in self.post_list:
+            if not post.completed:
+                actor_file_info.unfinished_post_count += 1
             for res in post.res_list:
                 actor_file_info.addRes(res)
         return actor_file_info

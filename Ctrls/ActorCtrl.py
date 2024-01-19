@@ -84,9 +84,11 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
         _query = _query.where(~ActorModel.rel_tags.any())
     elif len(form.tag_list) > 0:
         _query = _query.where(ActorModel.rel_tags.any(ActorTagRelationship.tag_id.in_(form.tag_list)))
-    # star
-    if form.star:
-        _query = _query.where(ActorModel.star == True)
+    # score
+    if form.min_score > 0:
+        _query = _query.where(ActorModel.score >= form.min_score)
+    if 0 < form.max_score < 10:
+        _query = _query.where(ActorModel.score <= form.max_score)
     return _query
 
 
@@ -205,6 +207,17 @@ def changeActorStar(session: Session, actor_name: str, star: bool) -> ActorModel
         return actor
     # set field
     actor.star = star
+    session.flush()
+    return actor
+
+
+def changeActorScore(session: Session, actor_name: str, score: int) -> ActorModel:
+    actor = getActor(session, actor_name)
+    # no change
+    if actor.score == score:
+        return actor
+    # set field
+    actor.score = score
     session.flush()
     return actor
 

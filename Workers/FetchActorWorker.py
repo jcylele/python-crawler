@@ -7,6 +7,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from Consts import WorkerType, QueueType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl
+from Download.DownloadLimit import PostFilter
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from WorkQueue import QueueUtil
@@ -30,23 +31,20 @@ class FetchActorWorker(BaseFetchWorker):
     def _queueType(self) -> QueueType:
         return QueueType.FetchActor
 
-    def processPosts(self, post_list: list[int], from_url: str):
+    def processPosts(self, post_list: list[int], from_url: str) -> bool:
         with DbCtrl.getSession() as session, session.begin():
             for post_id in post_list:
                 post = PostCtrl.getPost(session, post_id)
                 if post is None:
                     PostCtrl.addPost(session, self.actor_info.actor_name, post_id)
                     QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
+                elif self.DownloadLimit().post_filter == PostFilter.New:
+                    return False
                 elif not post.completed:  # the post is not analysed yet
                     QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
                 else:  # all resources of the post are already added
-                    QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit().file_size)
-
-    @staticmethod
-    def onActorCompleted(actor_name: str):
-        with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_name)
-            actor.completed = True
+                    QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit())
+            return True
 
     @staticmethod
     def updateActorPostCount(actor_name: str, post_count: int):
@@ -128,13 +126,17 @@ class FetchActorWorker(BaseFetchWorker):
                     LogUtil.error(f"actor {item.actor_name} page {i} post {post_id} invalid")
                     continue
 
-            self.processPosts(post_list, real_url)
+            continue_posts = self.processPosts(post_list, real_url)
             post_count += len(post_list)
 
             # only one page
             if not post_count_updated:
                 FetchActorWorker.updateActorPostCount(item.actor_name, len(post_list))
                 post_count_updated = True
+
+            # download no more
+            if not continue_posts or (post_count >= self.DownloadLimit().post_count > 0):
+                break
 
             # next page
             next_btn = None
@@ -145,11 +147,6 @@ class FetchActorWorker(BaseFetchWorker):
                     pass
 
             if next_btn is None:
-                FetchActorWorker.onActorCompleted(item.actor_name)
-                break
-
-            # download no more
-            if post_count >= self.DownloadLimit().post_count > 0:
                 break
 
             # js click

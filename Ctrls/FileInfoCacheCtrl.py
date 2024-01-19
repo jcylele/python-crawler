@@ -36,8 +36,8 @@ class ResFileInfo(object):
 
 class ActorFileInfo(object):
     def __init__(self):
-        self.file_info_dict: dict[ResState, ResFileInfo] = {
-        }
+        self.file_info_dict: dict[ResState, ResFileInfo] = {}
+        self.unfinished_post_count = 0
 
     def addRes(self, res: "ResModel"):
         if res.res_state not in self.file_info_dict:

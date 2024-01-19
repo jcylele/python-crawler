@@ -3,7 +3,7 @@ import os
 import Configs
 import Consts
 from Ctrls import DbCtrl, ActorCtrl, ResCtrl
-from Download.DownloadLimit import DownloadLimit
+from Download.DownloadLimit import DownloadLimit, PostFilter
 from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ActorCategory
@@ -73,8 +73,28 @@ class DownloadTask(object):
             for actor in actors:
                 QueueUtil.enqueueFetchActor(self.queueMgr, actor.actor_name)
                 actor_count += 1
-            self.worker_count[Consts.WorkerType.FetchActor] = min(actor_count, Configs.MAX_DOWN_WORKER_COUNT)
+            self.worker_count[Consts.WorkerType.FetchActor] = min(actor_count, Configs.MAX_FETCH_ACTOR_COUNT)
         self.startDownload()
+
+    def normalPosts(self, actor_names: list[str]):
+        val = min(len(actor_names), Configs.MAX_FETCH_ACTOR_COUNT)
+        self.worker_count[Consts.WorkerType.FetchActor] = val
+
+        for actor_name in actor_names:
+            QueueUtil.enqueueFetchActor(self.queueMgr, actor_name)
+
+    def oldPosts(self, actor_names: list[str]):
+        self.worker_count[Consts.WorkerType.FetchActor] = 0
+
+        with DbCtrl.getSession() as session, session.begin():
+            for actor_name in actor_names:
+                actor = ActorCtrl.getActor(session, actor_name)
+                actor_info = ActorInfo(actor)
+                for post in actor.post_list:
+                    if not post.completed:  # the post is not analysed yet
+                        QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, None)
+                    else:  # all resources of the post are already added
+                        QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit)
 
     def downloadSpecificActors(self, actor_names: list[str]):
         """
@@ -82,28 +102,10 @@ class DownloadTask(object):
         """
         self.desc = f"Specific Actors {','.join(actor_names)}."
         self.worker_count[Consts.WorkerType.FetchActors] = 0
-        val = WorkerMgr.getWorkerCount(Consts.WorkerType.FetchActor)
-        val = min(val, len(actor_names), Configs.MAX_DOWN_WORKER_COUNT)
-        self.worker_count[Consts.WorkerType.FetchActor] = val
-        for actor_name in actor_names:
-            QueueUtil.enqueueFetchActor(self.queueMgr, actor_name)
-        self.startDownload()
-
-    def downloadAllPosts(self, actor_name: str):
-        """
-        download all posts of an actor
-        """
-        self.desc = f"All posts of {actor_name}."
-        self.worker_count[Consts.WorkerType.FetchActors] = 0
-        self.worker_count[Consts.WorkerType.FetchActor] = 0
-        with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_name)
-            actor_info = ActorInfo(actor)
-            for post in actor.post_list:
-                if not post.completed:  # the post is not analysed yet
-                    QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, None)
-                else:  # all resources of the post are already added
-                    QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit.file_size)
+        if self.downloadLimit.post_filter == PostFilter.Old:
+            self.oldPosts(actor_names)
+        else:
+            self.normalPosts(actor_names)
 
         self.startDownload()
 

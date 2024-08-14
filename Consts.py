@@ -1,13 +1,6 @@
 from enum import Enum, auto, IntEnum
 
 
-class ActorCategory(Enum):
-    Init = 1  # initial state of an actor
-    Liked = 2  # mark as liked
-    Dislike = 3  # dislike and remove the folder
-    Enough = 4  # once liked, then remove the folder
-
-
 class ResType(Enum):
     Image = 1
     Video = 2
@@ -44,6 +37,7 @@ class QueueType(IntEnum):
     FetchActors = 11
     FetchActor = 12
 
+    # above queues are FIFO queues, below are priority queues
     MinPriorityQueue = 100
 
     PageDownload = 101

@@ -32,18 +32,24 @@ class FetchActorWorker(BaseFetchWorker):
         return QueueType.FetchActor
 
     def processPosts(self, post_list: list[int], from_url: str) -> bool:
+        # print("processPosts " +",".join([str(i) for i in post_list]))
         with DbCtrl.getSession() as session, session.begin():
             for post_id in post_list:
                 post = PostCtrl.getPost(session, post_id)
                 if post is None:
                     PostCtrl.addPost(session, self.actor_info.actor_name, post_id)
                     QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
-                elif self.DownloadLimit().post_filter == PostFilter.New:
-                    return False
-                elif not post.completed:  # the post is not analysed yet
-                    QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
-                else:  # all resources of the post are already added
-                    QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit())
+                else:
+                    if post.actor_name != self.actor_info.actor_name:
+                        LogUtil.error(
+                            f"same post {post.post_id} for {post.actor_name} and {self.actor_info.actor_name}")
+                        pass
+                    if self.DownloadLimit().post_filter == PostFilter.New:
+                        return False
+                    elif not post.completed:  # the post is not analysed yet
+                        QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
+                    else:  # all resources of the post are already added
+                        QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit())
             return True
 
     @staticmethod

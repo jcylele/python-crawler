@@ -25,6 +25,9 @@ class ResFileInfo(object):
         elif res.res_type == ResType.Video:
             self.video_count -= 1
 
+    def onResSized(self, res_size: int):
+        self.res_size += res_size
+
     def toJson(self):
         return {
             "res_state": self.res_state.value,
@@ -37,12 +40,16 @@ class ResFileInfo(object):
 class ActorFileInfo(object):
     def __init__(self):
         self.file_info_dict: dict[ResState, ResFileInfo] = {}
-        self.unfinished_post_count = 0
 
     def addRes(self, res: "ResModel"):
         if res.res_state not in self.file_info_dict:
             self.file_info_dict[res.res_state] = ResFileInfo(res.res_state)
         self.file_info_dict[res.res_state].addRes(res)
+
+    def onResSizeChanged(self, res: "ResModel"):
+        new_res_file_info = self.file_info_dict.get(res.res_state)
+        if new_res_file_info is not None:
+            new_res_file_info.onResSized(res.res_size)
 
     def onResStateChanged(self, res: "ResModel", new_state: ResState):
         # old state must exist

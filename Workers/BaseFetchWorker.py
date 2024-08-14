@@ -25,4 +25,5 @@ class BaseFetchWorker(BaseWorker):
         self.driver = self.createDriver(Configs.SHOW_BROWSER)
 
     def _onStop(self):
+        self.driver.close()
         self.driver.quit()

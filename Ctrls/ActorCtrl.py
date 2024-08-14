@@ -4,15 +4,15 @@ import os
 import re
 import shutil
 
-from sqlalchemy import ScalarResult, select
+from sqlalchemy import ScalarResult, select, desc
 from sqlalchemy.orm import Session, Query
 
 import Configs
-from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl
+from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl, ActorGroupCtrl
 from Models.ActorInfo import ActorInfo
-from Models.BaseModel import ActorModel, ActorCategory, ActorTagRelationship, ResState
+from Models.BaseModel import ActorModel, ActorTagRelationship, ResState
 from Utils import LogUtil
-from routers.web_data import ActorConditionForm
+from routers.web_data import ActorConditionForm, SortType
 
 
 def getActorInfo(session: Session, actor_name: str) -> ActorInfo:
@@ -40,7 +40,7 @@ def createActorFolder(actor_name: str):
     os.makedirs(Configs.formatActorFolderPath(actor_name), exist_ok=True)
 
 
-def addActor(session: Session, actor_info: ActorInfo) -> ActorModel:
+def addActor(session: Session, actor_info: ActorInfo, category: int) -> ActorModel:
     """
     create a record for the actor, skip if already exist
     :return: actor record
@@ -54,8 +54,10 @@ def addActor(session: Session, actor_info: ActorInfo) -> ActorModel:
 
     actor = ActorModel(actor_name=actor_info.actor_name,
                        actor_platform=actor_info.actor_platform,
-                       actor_link=actor_info.actor_link)
+                       actor_link=actor_info.actor_link,
+                       actor_category=category)
     session.add(actor)
+    session.flush()
 
     return actor
 
@@ -77,8 +79,8 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
     if form.name is not None and len(form.name) > 0:
         _query = _query.where(ActorModel.actor_name.like(f'%{form.name}%'))
     # category
-    actor_category_list = form.get_category_list()
-    _query = _query.where(ActorModel.actor_category.in_(actor_category_list))
+    if len(form.category_list) > 0:
+        _query = _query.where(ActorModel.actor_category.in_(form.category_list))
     # tag
     if form.no_tag:
         _query = _query.where(~ActorModel.rel_tags.any())
@@ -89,6 +91,11 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
         _query = _query.where(ActorModel.score >= form.min_score)
     if 0 < form.max_score < 10:
         _query = _query.where(ActorModel.score <= form.max_score)
+    # remark
+    if form.remark_str is not None and len(form.remark_str) > 0:
+        _query = _query.where(ActorModel.remark.like(f'%{form.remark_str}%'))
+    elif form.remark_any:
+        _query = _query.where(ActorModel.remark != "")
     return _query
 
 
@@ -97,9 +104,29 @@ def getActorCount(session: Session, form: ActorConditionForm) -> int:
     return DbCtrl.queryCount(_query)
 
 
+def _sortQuery(_query: Query, form: ActorConditionForm) -> Query:
+    if form.sort_type == SortType.Default:
+        pass
+    elif form.sort_type == SortType.Score:
+        if form.sort_asc:
+            _query = _query.order_by(ActorModel.score)
+        else:
+            _query = _query.order_by(desc(ActorModel.score))
+    elif form.sort_type == SortType.TotalPostCount:
+        if form.sort_asc:
+            _query = _query.order_by(ActorModel.total_post_count)
+        else:
+            _query = _query.order_by(desc(ActorModel.total_post_count))
+    else:
+        raise SystemError(f"invalid sort type {form.sort_type}")
+
+    return _query
+
+
 def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> ScalarResult[
     ActorModel]:
     _query = _buildQuery(session, form)
+    _query = _sortQuery(_query, form)
     if start != 0:
         _query = _query.offset(start)
     if limit != 0:
@@ -107,7 +134,7 @@ def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, sta
     return session.scalars(_query)
 
 
-def getActorsByCategory(session: Session, category: ActorCategory) -> ScalarResult[
+def getActorsByCategory(session: Session, category: int) -> ScalarResult[
     ActorModel]:
     """
     search actors by category
@@ -150,15 +177,7 @@ def changeActorTags(session: Session, actor_name: str, tag_list: list[int]) -> A
     return actor
 
 
-__HasFiles = {
-    ActorCategory.Init: True,
-    ActorCategory.Liked: True,
-    ActorCategory.Dislike: False,
-    ActorCategory.Enough: False,
-}
-
-
-def removeDownloadingFiles(session: Session):
+def removeOutdatedFiles(session: Session):
     download_folder = Configs.formatTmpFolderPath()
     try:
         for root, _, files in os.walk(download_folder):
@@ -167,20 +186,21 @@ def removeDownloadingFiles(session: Session):
                 if matchObj:
                     actor_name = matchObj.group(1)
                     actor = getActor(session, actor_name)
-                    if actor and not __HasFiles[actor.actor_category]:
+                    if actor and not actor.actor_group.has_folder:
                         LogUtil.info(f"remove downloading file {file}")
                         os.remove(os.path.join(root, file))
     except Exception as e:
         pass
 
 
-def changeActorCategory(session: Session, actor_name: str, new_category: ActorCategory) -> ActorModel:
+def changeActorCategory(session: Session, actor_name: str, new_category: int) -> ActorModel:
     actor = getActor(session, actor_name)
     # no change
     if actor.actor_category == new_category:
         return actor
-    oldHas = __HasFiles.get(actor.actor_category)
-    newHas = __HasFiles.get(new_category)
+    oldHas = actor.actor_group.has_folder
+    new_group = ActorGroupCtrl.getActorGroup(session, new_category)
+    newHas = new_group.has_folder
     if oldHas != newHas:
         if oldHas:
             actor_folder = Configs.formatActorFolderPath(actor.actor_name)
@@ -188,10 +208,10 @@ def changeActorCategory(session: Session, actor_name: str, new_category: ActorCa
                 shutil.rmtree(actor_folder)
                 FileInfoCacheCtrl.RemoveDownloadingFiles(actor.actor_name)
 
-            PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Del)
+            PostCtrl.batchSetResStates(session, actor.actor_name, ResState.Del)
         else:
             createActorFolder(actor.actor_name)
-            PostCtrl.BatchSetResStates(session, actor.actor_name, ResState.Init)
+            PostCtrl.batchSetResStates(session, actor.actor_name, ResState.Init)
 
     # set field
     actor.actor_category = new_category

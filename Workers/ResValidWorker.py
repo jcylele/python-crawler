@@ -48,6 +48,8 @@ class ResValidWorker(BaseWorker):
             except:
                 return False
             res2.setState(ResState.Down)
+            # refresh downloaded file size
+            self.DownloadLimit().onDownloaded(res2.res_size)
 
             LogUtil.info(f"{true_file_path} saved")
             return True

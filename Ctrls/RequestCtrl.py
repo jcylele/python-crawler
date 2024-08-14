@@ -4,6 +4,7 @@ import socks
 import requests
 from requests import Session
 
+import Configs
 from Models.ActorInfo import ActorInfo
 
 __user_agents = [

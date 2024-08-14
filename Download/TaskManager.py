@@ -1,3 +1,5 @@
+import os
+
 from Download.DownloadTask import DownloadTask
 
 next_task_id = 0
@@ -38,3 +40,5 @@ def StopAllTasks():
     for task in task_dict.values():
         task.Stop()
     task_dict.clear()
+    # kill all web browser
+    os.system("taskkill /f /t /im chrome.exe")

@@ -2,15 +2,15 @@ import os
 
 import Configs
 import Consts
-from Ctrls import DbCtrl, ActorCtrl, ResCtrl
+from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit, PostFilter
 from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
-from Models.BaseModel import ActorCategory
 from Utils import LogUtil
 from WorkQueue import QueueUtil
 from WorkQueue.QueueMgr import QueueMgr
 from Workers import WorkerMgr
+from routers.web_data import ActorUrl
 
 
 class DownloadTask(object):
@@ -19,6 +19,7 @@ class DownloadTask(object):
         self.guarder = Guarder(self)
         self.queueMgr = QueueMgr()
         self.downloadLimit: DownloadLimit = None
+        self.init_category = 0
         self.desc = ""
         self.worker_count = {}
 
@@ -53,28 +54,12 @@ class DownloadTask(object):
         """
         self.downloadLimit = limit
 
-    def downloadNewActors(self):
+    def setInitCategory(self, category: int):
         """
-        download new actors
+        set initial category for new actors
+        :return:
         """
-        self.desc = "New Actors."
-        QueueUtil.enqueueFetchActors(self.queueMgr)
-        self.startDownload()
-
-    def downloadByActorCategory(self, actor_category: ActorCategory):
-        """
-        download actors in corresponding category
-        """
-        self.desc = f"Actors in {actor_category}."
-        self.worker_count[Consts.WorkerType.FetchActors] = 0
-        with DbCtrl.getSession() as session, session.begin():
-            actors = ActorCtrl.getActorsByCategory(session, actor_category)
-            actor_count = 0
-            for actor in actors:
-                QueueUtil.enqueueFetchActor(self.queueMgr, actor.actor_name)
-                actor_count += 1
-            self.worker_count[Consts.WorkerType.FetchActor] = min(actor_count, Configs.MAX_FETCH_ACTOR_COUNT)
-        self.startDownload()
+        self.init_category = category
 
     def normalPosts(self, actor_names: list[str]):
         val = min(len(actor_names), Configs.MAX_FETCH_ACTOR_COUNT)
@@ -96,11 +81,7 @@ class DownloadTask(object):
                     else:  # all resources of the post are already added
                         QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit)
 
-    def downloadSpecificActors(self, actor_names: list[str]):
-        """
-        download specific actors
-        """
-        self.desc = f"Specific Actors {','.join(actor_names)}."
+    def downloadActors(self, actor_names: list[str]):
         self.worker_count[Consts.WorkerType.FetchActors] = 0
         if self.downloadLimit.post_filter == PostFilter.Old:
             self.oldPosts(actor_names)
@@ -108,6 +89,53 @@ class DownloadTask(object):
             self.normalPosts(actor_names)
 
         self.startDownload()
+
+    def downloadByUrls(self, actor_urls: list[ActorUrl]):
+        self.desc = "Specific Urls"
+        actor_names = []
+        with DbCtrl.getSession() as session, session.begin():
+            for actor_url in actor_urls:
+                href_list = actor_url.full_url.split("/")
+
+                actor_info = ActorInfo()
+                actor_info.actor_platform = href_list[-3]
+                actor_info.actor_link = href_list[-1]
+                actor_info.actor_name = actor_url.actor_name
+
+                QueueUtil.enqueueActorIcon(self.queueMgr, actor_info)
+                # enqueue actor if not exists
+                if not ActorCtrl.hasActor(session, actor_info.actor_name):
+                    ActorCtrl.addActor(session, actor_info, self.init_category)
+                actor_names.append(actor_info.actor_name)
+            session.flush()
+        self.downloadActors(actor_names)
+
+    def downloadSpecificActor(self, actor_name: str):
+        """
+        download specific actors
+        """
+        self.desc = f"Specific Actor {actor_name}"
+        self.downloadActors([actor_name])
+
+    def downloadNewActors(self):
+        """
+        download new actors
+        """
+        self.desc = "New Actors."
+        QueueUtil.enqueueFetchActors(self.queueMgr)
+        self.startDownload()
+
+    def downloadByActorCategory(self, actor_category: int):
+        """
+        download actors in corresponding category
+        """
+        self.desc = f"Actors in group {actor_category}."
+        actor_names = []
+        with DbCtrl.getSession() as session, session.begin():
+            actors = ActorCtrl.getActorsByCategory(session, actor_category)
+            for actor in actors:
+                actor_names.append(actor.actor_name)
+        self.downloadActors(actor_names)
 
     @staticmethod
     def initEnv():

@@ -30,8 +30,13 @@ class FileDownWorker(BaseRequestWorker):
         extra_info: ResFileExtraInfo = item.extra_info
         self.requestSession.headers["referer"] = item.from_url
 
+        # protection
         while not FileManager.useFile(extra_info.file_path, self.native_id):
             self._sleep()
+
+        # check for total file size, skip if not enough
+        if not self.DownloadLimit().canDownload(extra_info.file_size):
+            return True
 
         file_mode = "wb"
         file_path = extra_info.file_path
@@ -50,7 +55,9 @@ class FileDownWorker(BaseRequestWorker):
                 # for test, change to debug after that
                 LogUtil.warn(f"resume {file_path} from {file_size:,d}")
 
-        self.setTimeout(3 + extra_info.file_size / Configs.MIN_DOWN_SPEED)
+        # if timeout, start a new thread to download other files
+        self.setTimeout(Configs.BASE_TIME_OUT + extra_info.file_size / Configs.MIN_DOWN_SPEED)
+
         self._downloadStream(item.url, file_path, file_mode)
 
         # remove the range attribute in header

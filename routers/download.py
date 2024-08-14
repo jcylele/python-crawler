@@ -1,11 +1,9 @@
 from fastapi import APIRouter
-from fastapi.params import Query
 
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks
-from Models.BaseModel import ActorCategory
-from routers.web_data import DownloadLimitForm
+from routers.web_data import CategoryDownloadForm, NameDownloadForm, UrlDownloadForm
 
 router = APIRouter(
     prefix="/api/download",
@@ -15,37 +13,49 @@ router = APIRouter(
 )
 
 
-@router.get("/restore")
-def restoreRecord():
+@router.get("/clean")
+def cleanFiles():
     with DbCtrl.getSession() as session, session.begin():
-        ActorCtrl.removeDownloadingFiles(session)
+        ActorCtrl.removeOutdatedFiles(session)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
 @router.post("/new")
-def download_new_actors(form: DownloadLimitForm):
-    limit = DownloadLimit(form)
+def download_new_actors(form: CategoryDownloadForm):
+    limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
+    task.setInitCategory(form.actor_category)
     task.downloadNewActors()
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
-@router.post("/category/{actor_category}")
-def download_by_category(actor_category: int, form: DownloadLimitForm):
-    limit = DownloadLimit(form)
+@router.post("/category")
+def download_by_category(form: CategoryDownloadForm):
+    limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
-    task.downloadByActorCategory(ActorCategory(actor_category))
+    task.downloadByActorCategory(form.actor_category)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
 @router.post("/specific")
-def download_by_category(form: DownloadLimitForm, names: list[str] = Query(alias='name')):
-    limit = DownloadLimit(form)
+def download_specific(form: NameDownloadForm):
+    for actor_name in form.actor_names:
+        limit = DownloadLimit(form.download_limit)
+        task = NewTask()
+        task.setLimit(limit)
+        task.downloadSpecificActor(actor_name)
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
+@router.post("/urls")
+def download_by_urls(form: UrlDownloadForm):
+    limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
-    task.downloadSpecificActors(names)
+    task.setInitCategory(form.actor_category)
+    task.downloadByUrls(form.urls)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
@@ -55,7 +65,7 @@ def get_tasks():
     return DbCtrl.CustomJsonResponse(tasks)
 
 
-# must before stop_task
+# must before @router.delete("/{task_uid}")
 @router.delete("/all")
 def stop_all_task():
     StopAllTasks()

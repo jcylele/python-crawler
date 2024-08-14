@@ -25,6 +25,7 @@ class FetchActorsWorker(BaseFetchWorker):
         return QueueType.FetchActors
 
     def processActors(self, actor_infos: list[ActorInfo]):
+        actor_names = []
         with DbCtrl.getSession() as session, session.begin():
             for actor_info in actor_infos:
                 # it's not the best place, but okay
@@ -32,8 +33,11 @@ class FetchActorsWorker(BaseFetchWorker):
                 # enqueue actor if not exists
                 if not ActorCtrl.hasActor(session, actor_info.actor_name) \
                         and self.DownloadLimit().moreActor(True):
-                    ActorCtrl.addActor(session, actor_info)
-                    QueueUtil.enqueueFetchActor(self.QueueMgr(), actor_info.actor_name)
+                    ActorCtrl.addActor(session, actor_info, self.init_category())
+                    actor_names.append(actor_info.actor_name)
+
+        for actor_name in actor_names:
+            QueueUtil.enqueueFetchActor(self.QueueMgr(), actor_name)
 
     def _process(self, item: BaseQueueItem) -> bool:
         url = RequestCtrl.formatActorsUrl(0)
@@ -58,8 +62,9 @@ class FetchActorsWorker(BaseFetchWorker):
             actor_list = self.driver.find_elements(By.CSS_SELECTOR, 'a.user-card')
             actor_infos = []
             for actor_node in actor_list:
-                actor_info = ActorInfo()
                 href_list = actor_node.get_attribute("href").split("/")
+
+                actor_info = ActorInfo()
                 actor_info.actor_platform = href_list[-3]
                 actor_info.actor_link = href_list[-1]
 

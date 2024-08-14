@@ -8,9 +8,10 @@ from sqlalchemy import String, ForeignKey, BigInteger
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
-from Consts import ResState, ResType, ActorCategory
+from Consts import ResState, ResType
 from Ctrls import FileInfoCacheCtrl, RequestCtrl
-from Ctrls.FileInfoCacheCtrl import ResFileInfo, ActorFileInfo
+from Ctrls.FileInfoCacheCtrl import ActorFileInfo
+from Utils import LogUtil
 
 
 class IntEnum(sa.types.TypeDecorator):
@@ -85,7 +86,7 @@ class ActorModel(BaseModel):
     __tablename__ = "tab_actor"
 
     actor_name: Mapped[str] = mapped_column(String(30), primary_key=True)
-    actor_category: Mapped[ActorCategory] = mapped_column(IntEnum(ActorCategory), default=ActorCategory.Init)
+    actor_category: Mapped[int] = mapped_column(ForeignKey("tab_actor_group.group_id"))
     actor_platform: Mapped[str] = mapped_column(String(30))
     actor_link: Mapped[str] = mapped_column(String(30))
     total_post_count: Mapped[int] = mapped_column(default=0)
@@ -95,6 +96,7 @@ class ActorModel(BaseModel):
     main_actor: Mapped[str] = mapped_column(String(30))
     score: Mapped[int] = mapped_column(default=0)
 
+    actor_group: Mapped["ActorGroupModel"] = relationship()
     post_list: Mapped[list["PostModel"]] = relationship(
         back_populates="actor",
         cascade="all, delete-orphan"
@@ -109,9 +111,9 @@ class ActorModel(BaseModel):
         tag_list = []
 
         if 'remark' in json_data and json_data['remark'] is not None:
-            print(json_data['remark'])
+            # print(json_data['remark'])
             json_data['remark'] = base64.b64encode(json_data['remark'].encode('utf-8')).decode('utf-8')
-            print(json_data['remark'])
+            # print(json_data['remark'])
 
         for tag in self.rel_tags:
             tag_list.append(tag.tag_id)
@@ -129,8 +131,6 @@ class ActorModel(BaseModel):
     def calc_res_file_info(self) -> ActorFileInfo:
         actor_file_info = ActorFileInfo()
         for post in self.post_list:
-            if not post.completed:
-                actor_file_info.unfinished_post_count += 1
             for res in post.res_list:
                 actor_file_info.addRes(res)
         return actor_file_info
@@ -150,6 +150,17 @@ class ActorTagModel(BaseModel):
     )
 
 
+class ActorGroupModel(BaseModel):
+    __tablename__ = "tab_actor_group"
+
+    group_id: Mapped[int] = mapped_column(primary_key=True)
+    group_name: Mapped[str] = mapped_column(String(30))
+    group_desc: Mapped[str] = mapped_column(String(100))
+    group_color: Mapped[str] = mapped_column(String(20))
+    has_folder: Mapped[bool] = mapped_column(default=False)
+    group_priority: Mapped[int] = mapped_column(default=0)
+
+
 class PostModel(BaseModel):
     __tablename__ = "tab_post"
 
@@ -157,6 +168,7 @@ class PostModel(BaseModel):
     actor_name: Mapped[str] = mapped_column(ForeignKey("tab_actor.actor_name"))
     actor: Mapped["ActorModel"] = relationship(back_populates="post_list")
     completed: Mapped[bool] = mapped_column(default=False)
+    comment: Mapped[str] = mapped_column(String(100))
     res_list: Mapped[list["ResModel"]] = relationship(
         back_populates="post",
         cascade="all, delete-orphan",
@@ -216,12 +228,20 @@ class ResModel(BaseModel):
         return True
 
     def setSize(self, size: int):
+        if self.res_size > 0:
+            if self.res_size == size:
+                LogUtil.warn(
+                    f"({self.res_id} of {self.post_id} of {self.post.actor_name}) size already set: {self.res_size}")
+            else:
+                LogUtil.error(
+                    f"({self.res_id} of {self.post_id} of {self.post.actor_name}) size error, old {self.res_size}, new {size}")
+            return
         self.res_size = size
         # update actor file info
         actor_name = self.post.actor_name
         actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_name)
         if actor_file_info is not None:
-            actor_file_info.addRes(self)
+            actor_file_info.onResSizeChanged(self)
 
     def setState(self, state: ResState):
         if self.res_state == state:

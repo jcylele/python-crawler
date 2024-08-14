@@ -25,7 +25,7 @@ WorkerClasses = {
 # specify worker count for types, count is 1 if not specified
 WorkerCount = {
     WorkerType.PageDown: 3,
-    WorkerType.FileDown: 5,
+    WorkerType.FileDown: 7,
     WorkerType.ResInfo: 5,
     # WorkerType.FetchActor: 3,
 }

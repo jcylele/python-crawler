@@ -16,9 +16,19 @@ class DownloadLimit(object):
         self.__left_actor_count = form.actor_count
         self.post_count = form.post_count
         self.file_size = form.file_size
+        self.total_file_size = form.total_file_size
+        self.downloaded_file_size = 0
         self.post_filter = PostFilter(form.post_filter)
         self.allow_video = form.allow_video
         self.allow_img = form.allow_img
+
+    def canDownload(self, file_size: int) -> bool:
+        if self.total_file_size == 0:
+            return True
+        return file_size <= self.total_file_size - self.downloaded_file_size
+
+    def onDownloaded(self, file_size: int):
+        self.downloaded_file_size += file_size
 
     def moreActor(self, use: bool) -> bool:
         """
@@ -39,6 +49,7 @@ class DownloadLimit(object):
             "actor_count": self.actor_count,
             "post_count": self.post_count,
             "file_size": self.file_size,
+            "total_file_size": self.total_file_size,
             "post_filter": self.post_filter.value,
             "allow_video": self.allow_video,
             "allow_img": self.allow_img,

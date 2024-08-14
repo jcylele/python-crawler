@@ -7,8 +7,9 @@ TmpFolder = "_downloading"
 IconFolder = "_icon"
 
 MIN_DOWN_SPEED = 100 * 1024
+BASE_TIME_OUT = 30
 MAX_FETCH_ACTOR_COUNT = 3
-SHOW_BROWSER = True
+SHOW_BROWSER = False
 
 
 def formatTmpFolderPath() -> str:

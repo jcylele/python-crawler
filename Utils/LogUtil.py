@@ -1,98 +1,42 @@
 # utility function for logging
 
-import datetime
-from enum import Enum, auto
+import logging
+from time import strftime
 
-from colorama import Fore
+# Create a logger
+logger = logging.getLogger('my_logger')
+logger.setLevel(logging.DEBUG)
 
+# Create a formatter to define the log format
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-class LogLv(Enum):
-    """
-    log levels, order is important because values will be compared
-    """
-    Debug = auto()
-    Info = auto()
-    Warn = auto()
-    Error = auto()
+# Create a file handler to write logs to a file
+log_file_name = strftime("%Y_%m_%d_%H_%M_%S.log")
+file_handler = logging.FileHandler(log_file_name)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
 
+# Create a stream handler to print logs to the console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)  # You can set the desired log level for console output
+console_handler.setFormatter(formatter)
 
-__UseList = False
-__LogList = []
-__CurLogLv = LogLv.Debug
-
-__LogColors = {
-    LogLv.Debug: Fore.BLUE,
-    LogLv.Info: Fore.LIGHTWHITE_EX,
-    LogLv.Warn: Fore.YELLOW,
-    LogLv.Error: Fore.RED,
-}
-
-
-def useList(use: bool):
-    """
-    set whether to use a list to print log in batch
-    :param use:
-    :return:
-    """
-    global __UseList
-    __UseList = use
-
-
-def setMinLogLv(lv: LogLv):
-    """
-    skip log levels which are less than lv
-    :param lv:
-    :return:
-    """
-    global __CurLogLv
-    __CurLogLv = lv
-
-
-def __realPrint(lv: LogLv, str_time: str, str_o: str):
-    """
-    actual print function
-    :param lv: log level which is used to change the color
-    :param str_time: time stamp
-    :param str_o: print content
-    :return:
-    """
-    print(f"{__LogColors[lv]}[{str_time}] {str_o}")
-
-
-def printAll():
-    """
-    print all cached logs and clear the log cache
-    :return:
-    """
-    tmp = __LogList.copy()
-    __LogList.clear()
-    for log in tmp:
-        __realPrint(*log)
-
-
-def __print(lv: LogLv, o: any):
-    # filter log level
-    if lv.value < __CurLogLv.value:
-        return
-    # add time stamp
-    str_time = datetime.datetime.now().strftime('%H:%M:%S')
-    if __UseList:
-        __LogList.append((lv, str_time, str(o)))
-    else:
-        __realPrint(lv, str_time, str(o))
+# Add the handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 
 def debug(o: any):
-    __print(LogLv.Debug, o)
+    logger.debug(o)
 
 
 def info(o: any):
-    __print(LogLv.Info, o)
+    logger.info(o)
 
 
 def warn(o: any):
-    __print(LogLv.Warn, o)
+    logger.warning(o)
 
 
 def error(o: any):
-    __print(LogLv.Error, o)
+    logger.error(o)

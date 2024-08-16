@@ -27,18 +27,15 @@ class Guarder(threading.Thread):
             worker.start()
         # thread put log messages in a list instead of printing them out
         # maybe it can boost the speed of threads
-        LogUtil.useList(True)
         # loop
         while not self.done:
             sleep(0.0333)  # 30fps
-            LogUtil.printAll()  # print cached logs
             self.checkWorkerTimeout()
             if self.isJobDone():
                 self.done = True
                 LogUtil.info(f"{self.task} Done!!!")
                 for worker in self.workers:
                     worker.Stop()
-                LogUtil.printAll()  # print cached logs
 
     def Stop(self):
         for worker in self.workers:

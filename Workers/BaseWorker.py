@@ -2,7 +2,6 @@ import threading
 import time
 import traceback
 
-from Configs import BASE_TIME_OUT
 from Consts import WorkerType, QueueType
 from Download.DownloadLimit import DownloadLimit
 from Utils import LogUtil

@@ -33,7 +33,6 @@ class DownloadTask(object):
         new all threads and start running
         :return:
         """
-        LogUtil.setMinLogLv(LogUtil.LogLv.Info)
         for work_type in Consts.WorkerType:
             count = self.getWorkerCount(work_type)
             for i in range(count):

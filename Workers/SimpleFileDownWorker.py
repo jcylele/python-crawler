@@ -21,6 +21,7 @@ class SimpleFileDownWorker(BaseRequestWorker):
     def _process(self, item: UrlQueueItem) -> bool:
         extra_info: FilePathExtraInfo = item.extra_info
         file_path = extra_info.file_path
+        # double check file exists
         if os.path.exists(file_path):
             return True
         succeed, size = self._head(item)

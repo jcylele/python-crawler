@@ -3,6 +3,20 @@ from sqlalchemy.orm import Session
 from Models.BaseModel import ActorTagRelationship, ActorModel
 
 
+def getTagRelative(session: Session, tag_id: int) -> dict[int, int]:
+    _query = session.query(ActorTagRelationship) \
+        .where(ActorTagRelationship.tag_id == tag_id)
+    tag_rels = session.scalars(_query)
+    count_map = {}
+    for tag_rel in tag_rels:
+        for actor_rel in tag_rel.actor.rel_tags:
+            if actor_rel.tag_id not in count_map:
+                count_map[actor_rel.tag_id] = 1
+            else:
+                count_map[actor_rel.tag_id] += 1
+    return count_map
+
+
 def getScoresByTag(session: Session, tag_id: int) -> list[int]:
     _query = session.query(ActorTagRelationship) \
         .where(ActorTagRelationship.tag_id == tag_id)

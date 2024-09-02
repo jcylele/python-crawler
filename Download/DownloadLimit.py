@@ -5,8 +5,7 @@ from routers.web_data import DownloadLimitForm
 
 class PostFilter(IntEnum):
     Normal = 0
-    Old = 1
-    New = 2
+    Current = 1
 
 
 class DownloadLimit(object):

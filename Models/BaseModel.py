@@ -4,7 +4,7 @@ import json
 from enum import Enum
 
 import sqlalchemy as sa
-from sqlalchemy import String, ForeignKey, BigInteger
+from sqlalchemy import String, ForeignKey, BigInteger, DateTime, func
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
@@ -12,6 +12,10 @@ from Consts import ResState, ResType
 from Ctrls import FileInfoCacheCtrl, RequestCtrl
 from Ctrls.FileInfoCacheCtrl import ActorFileInfo
 from Utils import LogUtil
+
+
+def IsStringEmpty(s: str):
+    return s is None or len(s) == 0
 
 
 class IntEnum(sa.types.TypeDecorator):
@@ -90,11 +94,11 @@ class ActorModel(BaseModel):
     actor_platform: Mapped[str] = mapped_column(String(30))
     actor_link: Mapped[str] = mapped_column(String(30))
     total_post_count: Mapped[int] = mapped_column(default=0)
-    completed: Mapped[bool] = mapped_column(default=False)
-    star: Mapped[bool] = mapped_column(default=False)
     remark: Mapped[str] = mapped_column(String(100))
     main_actor: Mapped[str] = mapped_column(String(30))
     score: Mapped[int] = mapped_column(default=0)
+    last_post_id: Mapped[int] = mapped_column(BigInteger, default=0)
+    category_time: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     actor_group: Mapped["ActorGroupModel"] = relationship()
     post_list: Mapped[list["PostModel"]] = relationship(
@@ -106,25 +110,31 @@ class ActorModel(BaseModel):
         # order_by="ActorTagRelationship.tag.tag_priority"
     )
 
+    def setCategory(self, new_category):
+        if self.actor_category == new_category:
+            return
+        self.actor_category = new_category
+        self.category_time = func.now()
+
     def toJson(self):
-        json_data = super().toJson()
+        json_data = {
+            'actor_name': self.actor_name,
+            'actor_category': self.actor_category,
+            'score': self.score,
+            'href': RequestCtrl.formatActorHref(self.actor_platform, self.actor_link),
+            'has_main_actor': not IsStringEmpty(self.main_actor)
+        }
+        # remark encode for url
+        remark = self.remark
+        if IsStringEmpty(remark):
+            json_data['remark'] = ""
+        else:
+            json_data['remark'] = base64.b64encode(remark.encode('utf-8')).decode('utf-8')
+        # tag ids
         tag_list = []
-
-        if 'remark' in json_data and json_data['remark'] is not None:
-            # print(json_data['remark'])
-            json_data['remark'] = base64.b64encode(json_data['remark'].encode('utf-8')).decode('utf-8')
-            # print(json_data['remark'])
-
         for tag in self.rel_tags:
             tag_list.append(tag.tag_id)
-        json_data['rel_tags'] = tag_list
-
-        # info = FileInfoCacheCtrl.GetFileInfo(self.actor_name)
-        # json_data['file_info'] = info
-
-        json_data['post_info'] = [len(self.post_list), self.total_post_count]
-
-        json_data['href'] = RequestCtrl.formatActorHref(self.actor_platform, self.actor_link)
+        json_data['tag_ids'] = tag_list
 
         return json_data
 

@@ -1,3 +1,5 @@
+import threading
+
 from fastapi import APIRouter
 
 from Ctrls import DbCtrl, ActorCtrl
@@ -39,13 +41,18 @@ def download_by_category(form: CategoryDownloadForm):
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
+def add_task(actor_name: str, download_limit: DownloadLimit):
+    limit = DownloadLimit(download_limit)
+    task = NewTask()
+    task.setLimit(limit)
+    task.downloadSpecificActor(actor_name)
+
+
 @router.post("/specific")
 def download_specific(form: NameDownloadForm):
     for actor_name in form.actor_names:
-        limit = DownloadLimit(form.download_limit)
-        task = NewTask()
-        task.setLimit(limit)
-        task.downloadSpecificActor(actor_name)
+        x = threading.Thread(target=add_task, args=(actor_name, form.download_limit,))
+        x.start()
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 

@@ -89,6 +89,9 @@ def enqueueResValid(queueMgr: QueueMgr, item: UrlQueueItem):
 
 def enqueueActorIcon(queueMgr: QueueMgr, actor_info: ActorInfo):
     file_path = f"{Configs.formatIconFolderPath()}/{actor_info.actor_name}.jfif"
+    # skip is exist
+    if os.path.exists(file_path):
+        return
     out_extra = FilePathExtraInfo(file_path)
     url = RequestCtrl.formatActorIconUrl(actor_info.actor_platform, actor_info.actor_link)
     out_item = UrlQueueItem(url, None, out_extra)

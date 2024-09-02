@@ -34,23 +34,26 @@ class FetchActorWorker(BaseFetchWorker):
     def processPosts(self, post_list: list[int], from_url: str) -> bool:
         # print("processPosts " +",".join([str(i) for i in post_list]))
         with DbCtrl.getSession() as session, session.begin():
+            actor_name = self.actor_info.actor_name
+            actor = ActorCtrl.getActor(session, actor_name)
+            last_post_id = actor.last_post_id
+            reach_last = False
             for post_id in post_list:
+                if post_id <= last_post_id:
+                    reach_last = True
                 post = PostCtrl.getPost(session, post_id)
                 if post is None:
-                    PostCtrl.addPost(session, self.actor_info.actor_name, post_id)
+                    PostCtrl.addPost(session, actor_name, post_id)
                     QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
                 else:
-                    if post.actor_name != self.actor_info.actor_name:
+                    if post.actor_name != actor_name:
                         LogUtil.error(
-                            f"same post {post.post_id} for {post.actor_name} and {self.actor_info.actor_name}")
-                        pass
-                    if self.DownloadLimit().post_filter == PostFilter.New:
-                        return False
+                            f"same post {post.post_id} for {post.actor_name} and {actor_name}")
                     elif not post.completed:  # the post is not analysed yet
                         QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
                     else:  # all resources of the post are already added
                         QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit())
-            return True
+            return reach_last
 
     @staticmethod
     def updateActorPostCount(actor_name: str, post_count: int):
@@ -132,7 +135,7 @@ class FetchActorWorker(BaseFetchWorker):
                     LogUtil.error(f"actor {item.actor_name} page {i} post {post_id} invalid")
                     continue
 
-            continue_posts = self.processPosts(post_list, real_url)
+            reach_last_post = self.processPosts(post_list, real_url)
             post_count += len(post_list)
 
             # only one page
@@ -141,7 +144,7 @@ class FetchActorWorker(BaseFetchWorker):
                 post_count_updated = True
 
             # download no more
-            if not continue_posts or (post_count >= self.DownloadLimit().post_count > 0):
+            if reach_last_post or (post_count >= self.DownloadLimit().post_count > 0):
                 break
 
             # next page

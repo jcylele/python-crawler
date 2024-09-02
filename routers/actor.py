@@ -68,13 +68,6 @@ def change_actor_category(actor_name: str, actor_category: int = Query(alias='va
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.patch("/{actor_name}/star")
-def change_actor_category(actor_name: str, star: bool = Query(alias='val')):
-    with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.changeActorStar(session, actor_name, star)
-        return DbCtrl.CustomJsonResponse(actor)
-
-
 @router.patch("/{actor_name}/score")
 def change_actor_category(actor_name: str, score: int = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
@@ -92,8 +85,26 @@ def set_actor_remark(actor_name: str, remark: str = Query(alias='val')):
 
 
 @router.get("/{actor_name}/open")
-def get_actor(actor_name: str):
+def open_actor_folder(actor_name: str):
     subprocess.Popen(f'explorer "{Configs.formatActorFolderPath(actor_name)}"')
+
+
+@router.get("/{actor_name}/reset_posts")
+def reset_actor_posts(actor_name: str):
+    with DbCtrl.getSession() as session, session.begin():
+        ActorCtrl.ResetActorPosts(session, actor_name)
+        session.flush()
+        ret = ActorCtrl.getActorFileInfo(session, actor_name)
+        return DbCtrl.CustomJsonResponse(ret)
+
+
+@router.get("/{actor_name}/clear")
+def clear_actor_folder(actor_name: str):
+    with DbCtrl.getSession() as session, session.begin():
+        ActorCtrl.clearActorFolder(session, actor_name);
+        session.flush()
+        ret = ActorCtrl.getActorFileInfo(session, actor_name)
+        return DbCtrl.CustomJsonResponse(ret)
 
 
 @router.post("/{actor_name}/tag")
@@ -106,17 +117,8 @@ def change_actor_tag(actor_name: str, tag_list: List[int] = Query(alias='id')):
 @router.get("/{actor_name}/file_info")
 def get_actor_file_info(actor_name: str):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.getActor(session, actor_name)
-        actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_name)
-        if actor_file_info is None:
-            actor_file_info = actor.calc_res_file_info()
-            FileInfoCacheCtrl.CacheFileSizes(actor_name, actor_file_info)
-
-        ret = {'res_info': actor_file_info,
-               'total_post_count': actor.total_post_count,
-               'unfinished_post_count': PostCtrl.getPostCount(session, actor_name, False),
-               'finished_post_count': PostCtrl.getPostCount(session, actor_name, True)}
-    return DbCtrl.CustomJsonResponse(ret)
+        ret = ActorCtrl.getActorFileInfo(session, actor_name)
+        return DbCtrl.CustomJsonResponse(ret)
 
 
 @router.get("/{actor_name}/link")

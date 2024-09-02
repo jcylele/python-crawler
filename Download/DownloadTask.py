@@ -2,7 +2,7 @@ import os
 
 import Configs
 import Consts
-from Ctrls import DbCtrl, ActorCtrl
+from Ctrls import DbCtrl, ActorCtrl, PostCtrl
 from Download.DownloadLimit import DownloadLimit, PostFilter
 from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
@@ -67,14 +67,15 @@ class DownloadTask(object):
         for actor_name in actor_names:
             QueueUtil.enqueueFetchActor(self.queueMgr, actor_name)
 
-    def oldPosts(self, actor_names: list[str]):
+    def currentPosts(self, actor_names: list[str]):
         self.worker_count[Consts.WorkerType.FetchActor] = 0
 
         with DbCtrl.getSession() as session, session.begin():
             for actor_name in actor_names:
                 actor = ActorCtrl.getActor(session, actor_name)
                 actor_info = ActorInfo(actor)
-                for post in actor.post_list:
+                posts = PostCtrl.getNewPosts(session, actor_name, actor.last_post_id)
+                for post in posts:
                     if not post.completed:  # the post is not analysed yet
                         QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, None)
                     else:  # all resources of the post are already added
@@ -82,8 +83,8 @@ class DownloadTask(object):
 
     def downloadActors(self, actor_names: list[str]):
         self.worker_count[Consts.WorkerType.FetchActors] = 0
-        if self.downloadLimit.post_filter == PostFilter.Old:
-            self.oldPosts(actor_names)
+        if self.downloadLimit.post_filter == PostFilter.Current:
+            self.currentPosts(actor_names)
         else:
             self.normalPosts(actor_names)
 

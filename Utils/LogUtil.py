@@ -1,6 +1,7 @@
 # utility function for logging
 
 import logging
+import os
 from time import strftime
 
 # Create a logger
@@ -11,7 +12,8 @@ logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
 # Create a file handler to write logs to a file
-log_file_name = strftime("%Y_%m_%d_%H_%M_%S.log")
+os.makedirs("logs", exist_ok=True)
+log_file_name = strftime("logs/%Y_%m_%d_%H_%M_%S.log")
 file_handler = logging.FileHandler(log_file_name)
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)

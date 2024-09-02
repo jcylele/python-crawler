@@ -54,6 +54,3 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
     session.flush()
     onResAdded(session, post_id)
 
-
-def repairRecords(session: Session):
-    pass

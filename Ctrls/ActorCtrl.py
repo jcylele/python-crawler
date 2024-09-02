@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 
-from sqlalchemy import ScalarResult, select, desc
+from sqlalchemy import ScalarResult, select
 from sqlalchemy.orm import Session, Query
 
 import Configs
@@ -105,22 +105,23 @@ def getActorCount(session: Session, form: ActorConditionForm) -> int:
 
 
 def _sortQuery(_query: Query, form: ActorConditionForm) -> Query:
+    # order_by(ActorModel.score.desc(), User.date_created.desc())
     if form.sort_type == SortType.Default:
-        pass
-    elif form.sort_type == SortType.Score:
-        if form.sort_asc:
-            _query = _query.order_by(ActorModel.score)
-        else:
-            _query = _query.order_by(desc(ActorModel.score))
+        return _query
+
+    mainClause = None
+    if form.sort_type == SortType.Score:
+        mainClause = ActorModel.score
     elif form.sort_type == SortType.TotalPostCount:
-        if form.sort_asc:
-            _query = _query.order_by(ActorModel.total_post_count)
-        else:
-            _query = _query.order_by(desc(ActorModel.total_post_count))
+        mainClause = ActorModel.total_post_count
+    elif form.sort_type == SortType.CategoryTime:
+        mainClause = ActorModel.category_time
     else:
         raise SystemError(f"invalid sort type {form.sort_type}")
 
-    return _query
+    if not form.sort_asc:
+        mainClause = mainClause.desc()
+    return _query.order_by(mainClause, ActorModel.actor_name)
 
 
 def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> ScalarResult[
@@ -203,32 +204,45 @@ def changeActorCategory(session: Session, actor_name: str, new_category: int) ->
     newHas = new_group.has_folder
     if oldHas != newHas:
         if oldHas:
-            actor_folder = Configs.formatActorFolderPath(actor.actor_name)
-            if os.path.exists(actor_folder):
-                shutil.rmtree(actor_folder)
-                FileInfoCacheCtrl.RemoveDownloadingFiles(actor.actor_name)
-
-            PostCtrl.batchSetResStates(session, actor.actor_name, ResState.Del)
+            deleteAllRes(session, actor_name)
+            last_post_id = PostCtrl.getMaxPostId(session, actor_name)
+            actor.last_post_id = last_post_id
         else:
             createActorFolder(actor.actor_name)
-            PostCtrl.batchSetResStates(session, actor.actor_name, ResState.Init)
 
     # set field
-    actor.actor_category = new_category
-
+    actor.setCategory(new_category)
     session.flush()
     return actor
 
 
-def changeActorStar(session: Session, actor_name: str, star: bool) -> ActorModel:
+def ResetActorPosts(session: Session, actor_name: str):
     actor = getActor(session, actor_name)
-    # no change
-    if actor.star == star:
-        return actor
-    # set field
-    actor.star = star
-    session.flush()
-    return actor
+    actor.last_post_id = 0
+
+    PostCtrl.batchSetResStates(session, actor_name, ResState.Init)
+
+
+def deleteAllRes(session: Session, actor_name: str):
+    actor_folder = Configs.formatActorFolderPath(actor_name)
+    if os.path.exists(actor_folder):
+        shutil.rmtree(actor_folder)
+        FileInfoCacheCtrl.RemoveDownloadingFiles(actor_name)
+
+    PostCtrl.batchSetResStates(session, actor_name, ResState.Del)
+
+
+def clearActorFolder(session: Session, actor_name: str):
+    actor_folder = Configs.formatActorFolderPath(actor_name)
+    if not os.path.exists(actor_folder):
+        return
+    # remove cache first, prevent update to cache
+    FileInfoCacheCtrl.RemoveCachedFileSizes(actor_name)
+    # set res state according to file existence
+    PostCtrl.removeCurrentResFiles(session, actor_name)
+    # remove files
+    shutil.rmtree(actor_folder)
+    createActorFolder(actor_name)
 
 
 def changeActorScore(session: Session, actor_name: str, score: int) -> ActorModel:
@@ -294,3 +308,18 @@ def getLinkedActors(session: Session, actor_name: str):
     )
     actor_list: ScalarResult[ActorModel] = session.scalars(stmt)
     return [a for a in actor_list]
+
+
+def getActorFileInfo(session: Session, actor_name: str):
+    actor = getActor(session, actor_name)
+    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_name)
+    if actor_file_info is None:
+        actor_file_info = actor.calc_res_file_info()
+        FileInfoCacheCtrl.CacheFileSizes(actor_name, actor_file_info)
+
+    return {
+        'res_info': actor_file_info,
+        'total_post_count': actor.total_post_count,
+        'unfinished_post_count': PostCtrl.getPostCount(session, actor_name, False),
+        'finished_post_count': PostCtrl.getPostCount(session, actor_name, True)
+    }

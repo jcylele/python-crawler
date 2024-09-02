@@ -1,4 +1,6 @@
 # PostModel related operations
+import os
+
 from sqlalchemy import select, ScalarResult, func
 from sqlalchemy.orm import Session, Query
 
@@ -21,6 +23,13 @@ def getPostCount(session: Session, actor_name: str, completed: bool) -> int:
     return DbCtrl.queryCount(_query)
 
 
+def getMaxPostId(session: Session, actor_name: str) -> int:
+    _query = session.query(func.max(PostModel.post_id)) \
+        .where(PostModel.actor_name == actor_name)
+    result = session.execute(_query).fetchone()
+    return result[0] or 0
+
+
 def addPost(session: Session, actor_name: str, post_id: int):
     """
     add a post record
@@ -34,14 +43,32 @@ def addPost(session: Session, actor_name: str, post_id: int):
 
 def batchSetResStates(session: Session, actor_name: str, state: ResState):
     FileInfoCacheCtrl.RemoveCachedFileSizes(actor_name)
+    # uncompleted post has no res in db
     stmt = (
         select(PostModel)
             .where(PostModel.actor_name == actor_name)
+            .where(PostModel.completed == True)
     )
     post_list: ScalarResult[PostModel] = session.scalars(stmt)
     for post in post_list:
         for res in post.res_list:
             res.setState(state)
+
+
+# set current downloaded res(file exists) to del
+def removeCurrentResFiles(session: Session, actor_name: str):
+    FileInfoCacheCtrl.RemoveCachedFileSizes(actor_name)
+    # uncompleted post has no res in db
+    stmt = (
+        select(PostModel)
+            .where(PostModel.actor_name == actor_name)
+            .where(PostModel.completed == True)
+    )
+    post_list: ScalarResult[PostModel] = session.scalars(stmt)
+    for post in post_list:
+        for res in post.res_list:
+            if os.path.exists(res.filePath()):
+                res.setState(ResState.Del)
 
 
 def filterQuery(_query: Query, form: PostConditionForm) -> Query:
@@ -86,3 +113,10 @@ def setPostComment(session: Session, form: PostCommentForm):
     if post is None:
         return
     post.comment = form.comment
+
+
+def getNewPosts(session: Session, actor_name: str, last_post_id: int) -> ScalarResult[PostModel]:
+    _query = session.query(PostModel) \
+        .where(PostModel.actor_name == actor_name) \
+        .where(PostModel.post_id > last_post_id)
+    return session.scalars(_query)

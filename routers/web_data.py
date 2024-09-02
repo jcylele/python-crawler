@@ -7,6 +7,7 @@ class SortType(Enum):
     Default = 0
     Score = 1
     TotalPostCount = 2
+    CategoryTime = 3
 
 
 class ActorConditionForm(BaseModel):

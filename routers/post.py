@@ -12,28 +12,23 @@ router = APIRouter(
 )
 
 
-@router.post("/actor_list")
-def get_actors(form: PostConditionForm):
+@router.post("/post_count_list")
+def get_post_count_list(form: PostConditionForm):
     with DbCtrl.getSession() as session, session.begin():
-        actor_list = PostCtrl.getFilteredActors(session, form)
-        print(actor_list)
-        return DbCtrl.CustomJsonResponse(actor_list)
+        count_list = PostCtrl.getPostCountList(session, form)
+        return DbCtrl.CustomJsonResponse(count_list)
 
 
 @router.post("/post_list")
 def get_posts(form: PostConditionForm):
     with DbCtrl.getSession() as session, session.begin():
         posts = PostCtrl.getFilteredPosts(session, form)
-        response = []
-        for post in posts:
-            json = post.toJson()
-            response.append(json)
-        LogUtil.info(f"{form} get {len(response)} posts")
+        response = [post for post in posts]
         return DbCtrl.CustomJsonResponse(response)
 
 
 @router.post("/set_comment")
 def set_comment(form: PostCommentForm):
     with DbCtrl.getSession() as session, session.begin():
-        PostCtrl.setPostComment(session, form)
+        PostCtrl.setPostComment(session, int(form.post_id), form.comment)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})

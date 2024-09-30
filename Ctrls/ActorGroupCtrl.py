@@ -40,7 +40,7 @@ def updateActorGroup(session: Session, group: ActorGroupForm):
 
 def deleteActorGroup(session: Session, group_id: int) -> bool:
     _query = session.query(ActorModel) \
-        .where(ActorModel.actor_category == group_id)
+        .where(ActorModel.actor_group_id == group_id)
     actor_count = DbCtrl.queryCount(_query)
     if actor_count > 0:
         return False

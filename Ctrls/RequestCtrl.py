@@ -64,7 +64,7 @@ def createRequestSession() -> Session:
 
 
 def formatActorsUrl(start_index: int) -> str:
-    return f"{__RootUrl}/artists#o={start_index}"
+    return f"{__RootUrl}/artists/updated#o={start_index}"
 
 
 def formatActorIconUrl(actor_platform: str, actor_link: str) -> str:
@@ -88,4 +88,3 @@ def formatFullUrl(relative_url: str) -> str:
         return __RootUrl + relative_url
     else:
         return relative_url
-

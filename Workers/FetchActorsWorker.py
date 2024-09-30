@@ -25,7 +25,7 @@ class FetchActorsWorker(BaseFetchWorker):
         return QueueType.FetchActors
 
     def processActors(self, actor_infos: list[ActorInfo]):
-        actor_names = []
+        actor_ids = []
         with DbCtrl.getSession() as session, session.begin():
             for actor_info in actor_infos:
                 # it's not the best place, but okay
@@ -33,31 +33,29 @@ class FetchActorsWorker(BaseFetchWorker):
                 # enqueue actor if not exists
                 if not ActorCtrl.hasActor(session, actor_info.actor_name) \
                         and self.DownloadLimit().moreActor(True):
-                    ActorCtrl.addActor(session, actor_info, self.init_category())
-                    actor_names.append(actor_info.actor_name)
+                    actor = ActorCtrl.addActor(session, actor_info, self.init_category())
+                    actor_ids.append(actor.actor_id)
 
-        for actor_name in actor_names:
-            QueueUtil.enqueueFetchActor(self.QueueMgr(), actor_name)
+        for actor_id in actor_ids:
+            QueueUtil.enqueueFetchActor(self.QueueMgr(), actor_id)
 
     def _process(self, item: BaseQueueItem) -> bool:
         url = RequestCtrl.formatActorsUrl(0)
         self.driver.get(url)
         for i in range(1, 1000000):
             try:
-                search_form = self.driver.find_element(By.CSS_SELECTOR, "form.search-form")
+                self.driver.find_element(By.ID, "display-status")
             except:
                 LogUtil.info(f"failed to load artists page {i}, get {self.driver.title} instead")
                 break
-
-            # wait for page load
-            WebDriverWait(self.driver, 10).until(
-                EC.text_to_be_present_in_element((By.CSS_SELECTOR, "li.pagination-button-current b"), f"{i}")
-            )
             # wait for status
             WebDriverWait(self.driver, 10).until(
                 EC.text_to_be_present_in_element((By.ID, "display-status"), "Displaying search results")
             )
-
+            # wait for page load
+            WebDriverWait(self.driver, 10).until(
+                EC.text_to_be_present_in_element((By.CSS_SELECTOR, "li.pagination-button-current b"), f"{i}")
+            )
             # analyze content
             actor_list = self.driver.find_elements(By.CSS_SELECTOR, 'a.user-card')
             actor_infos = []

@@ -72,28 +72,34 @@ class ActorFileInfo(object):
         return [res_file_info.toJson() for res_file_info in res_file_list]
 
 
-_file_info_cache: dict[str, ActorFileInfo] = {}
+_file_info_cache: dict[int, ActorFileInfo] = {}
 
 
-def CacheFileSizes(actor_name: str, actor_file_info: ActorFileInfo):
-    _file_info_cache[actor_name] = actor_file_info
+def CacheFileSizes(actor_id: int, actor_file_info: ActorFileInfo):
+    _file_info_cache[actor_id] = actor_file_info
 
 
-def GetCachedFileSizes(actor_name: str) -> ActorFileInfo:
-    if actor_name not in _file_info_cache:
+def GetCachedFileSizes(actor_id: int) -> ActorFileInfo:
+    if actor_id not in _file_info_cache:
         return None
-    return _file_info_cache[actor_name]
+    return _file_info_cache[actor_id]
 
 
-def RemoveCachedFileSizes(actor_name: str):
-    if actor_name in _file_info_cache:
-        del _file_info_cache[actor_name]
+def RemoveCachedFileSizes(actor_id: int):
+    if actor_id in _file_info_cache:
+        del _file_info_cache[actor_id]
 
 
-def OnFileStateChanged(actor_name: str, res: "ResModel", new_state: ResState):
-    if actor_name not in _file_info_cache:
+def OnFileStateChanged(actor_id: int, res: "ResModel", new_state: ResState):
+    if actor_id not in _file_info_cache:
         return
-    _file_info_cache[actor_name].onResStateChanged(res, new_state)
+    _file_info_cache[actor_id].onResStateChanged(res, new_state)
+
+
+def OnFileSizeChanged(actor_id: int, res: "ResModel"):
+    if actor_id not in _file_info_cache:
+        return
+    _file_info_cache[actor_id].onResSizeChanged(res)
 
 
 def RemoveDownloadingFiles(actor_name: str):

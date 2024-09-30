@@ -29,7 +29,7 @@ class BaseWorker(threading.Thread):
         return self.task.downloadLimit
 
     def init_category(self) -> int:
-        return self.task.init_category
+        return self.task.init_group_id
 
     def workerType(self) -> WorkerType:
         return self.__workerType

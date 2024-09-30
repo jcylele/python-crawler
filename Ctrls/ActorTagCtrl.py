@@ -13,7 +13,7 @@ def getAllActorTags(session: Session) -> ScalarResult[ActorTagModel]:
 def getAllTagsUsedCount(session: Session) -> dict[int, int]:
     _query = session.query(
         ActorTagRelationship.tag_id,
-        func.count(ActorTagRelationship.actor_name)
+        func.count(ActorTagRelationship.actor_id)
     ).group_by(ActorTagRelationship.tag_id)
     result = session.execute(_query).fetchall()
     count_map = {}

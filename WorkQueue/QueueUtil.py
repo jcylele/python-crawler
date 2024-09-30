@@ -22,8 +22,8 @@ def enqueueFetchActors(queueMgr: QueueMgr):
     queueMgr.put(QueueType.FetchActors, item)
 
 
-def enqueueFetchActor(queueMgr: QueueMgr, actor_name: str):
-    item = FetchActorQueueItem(actor_name)
+def enqueueFetchActor(queueMgr: QueueMgr, actor_id: int):
+    item = FetchActorQueueItem(actor_id)
     queueMgr.put(QueueType.FetchActor, item)
 
 

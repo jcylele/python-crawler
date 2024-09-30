@@ -5,7 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
 from Download.DownloadTask import DownloadTask
-from routers import actor, actor_tag, download, file, vue, actor_group, chart, post
+from routers import actor, actor_tag, download, file, vue, actor_group, chart, post, notice
 
 app = FastAPI()
 
@@ -27,6 +27,7 @@ app.include_router(actor_group.router)
 app.include_router(chart.router)
 app.include_router(download.router)
 app.include_router(post.router)
+app.include_router(notice.router)
 app.include_router(vue.router)
 
 # start file server

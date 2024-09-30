@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks
-from routers.web_data import CategoryDownloadForm, NameDownloadForm, UrlDownloadForm
+from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm
 
 router = APIRouter(
     prefix="/api/download",
@@ -15,43 +15,36 @@ router = APIRouter(
 )
 
 
-@router.get("/clean")
-def cleanFiles():
-    with DbCtrl.getSession() as session, session.begin():
-        ActorCtrl.removeOutdatedFiles(session)
-        return DbCtrl.CustomJsonResponse({'value': 'ok'})
-
-
 @router.post("/new")
-def download_new_actors(form: CategoryDownloadForm):
+def download_new_actors(form: GroupDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
-    task.setInitCategory(form.actor_category)
+    task.setInitGroup(form.actor_group_id)
     task.downloadNewActors()
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
-@router.post("/category")
-def download_by_category(form: CategoryDownloadForm):
+@router.post("/group")
+def download_by_group(form: GroupDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
-    task.downloadByActorCategory(form.actor_category)
+    task.downloadByActorGroup(form.actor_group_id)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
-def add_task(actor_name: str, download_limit: DownloadLimit):
+def add_task(actor_id: str, download_limit: DownloadLimit):
     limit = DownloadLimit(download_limit)
     task = NewTask()
     task.setLimit(limit)
-    task.downloadSpecificActor(actor_name)
+    task.downloadSpecificActor(actor_id)
 
 
 @router.post("/specific")
-def download_specific(form: NameDownloadForm):
-    for actor_name in form.actor_names:
-        x = threading.Thread(target=add_task, args=(actor_name, form.download_limit,))
+def download_specific(form: ActorIdDownloadForm):
+    for actor_id in form.actor_ids:
+        x = threading.Thread(target=add_task, args=(actor_id, form.download_limit,))
         x.start()
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
@@ -61,7 +54,7 @@ def download_by_urls(form: UrlDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
-    task.setInitCategory(form.actor_category)
+    task.setInitGroup(form.actor_group_id)
     task.downloadByUrls(form.urls)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
@@ -83,3 +76,10 @@ def stop_all_task():
 def stop_task(task_uid: int):
     StopTask(task_uid)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
+@router.get("/clean")
+def cleanFiles():
+    with DbCtrl.getSession() as session, session.begin():
+        ActorCtrl.removeOutdatedFiles(session)
+        return DbCtrl.CustomJsonResponse({'value': 'ok'})

@@ -1,3 +1,4 @@
+import json
 from enum import Enum
 
 from pydantic import BaseModel
@@ -12,7 +13,7 @@ class SortType(Enum):
 
 class ActorConditionForm(BaseModel):
     name: str
-    category_list: list[int]
+    group_id_list: list[int]
     tag_list: list[int]
     no_tag: bool
     min_score: int
@@ -24,13 +25,25 @@ class ActorConditionForm(BaseModel):
 
 
 class PostConditionForm(BaseModel):
-    actor_name: str
+    actor_id: int
     post_id_prefix: str
     has_comment: bool
 
 
+class ServerData:
+    def toJson(self):
+        return self.__dict__
+
+
+class ActorPostInfo(ServerData):
+    actor_id: int
+    actor_name: str
+    post_count: int
+
+
 class PostCommentForm(BaseModel):
-    post_id: int
+    # large number may be corrupted in js, so use string instead
+    post_id: str
     comment: str
 
 
@@ -40,11 +53,11 @@ class ActorTagForm(BaseModel):
 
 
 class BatchActorOperation(BaseModel):
-    actor_names: list[str]
+    actor_ids: list[str]
 
 
-class BatchActorCategory(BatchActorOperation):
-    category: int
+class BatchActorGroup(BatchActorOperation):
+    group_id: int
 
 
 class ActorTagPriority(BaseModel):
@@ -79,12 +92,12 @@ class BaseDownloadForm(BaseModel):
     download_limit: DownloadLimitForm
 
 
-class NameDownloadForm(BaseDownloadForm):
-    actor_names: list[str]
+class ActorIdDownloadForm(BaseDownloadForm):
+    actor_ids: list[int]
 
 
-class CategoryDownloadForm(BaseDownloadForm):
-    actor_category: int
+class GroupDownloadForm(BaseDownloadForm):
+    actor_group_id: int
 
 
 class ActorUrl(BaseModel):
@@ -92,5 +105,5 @@ class ActorUrl(BaseModel):
     full_url: str
 
 
-class UrlDownloadForm(CategoryDownloadForm):
+class UrlDownloadForm(GroupDownloadForm):
     urls: list[ActorUrl]

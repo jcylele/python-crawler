@@ -15,20 +15,28 @@ from Utils import LogUtil
 from routers.web_data import ActorConditionForm, SortType
 
 
-def getActorInfo(session: Session, actor_name: str) -> ActorInfo:
-    actor = getActor(session, actor_name)
+def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
+    actor = getActor(session, actor_id)
     if actor is None:
-        LogUtil.error(f"get actorInfo failed, actor {actor_name} not exist")
+        LogUtil.error(f"get actorInfo failed, actor {actor_id} not exist")
         return None
     return ActorInfo(actor)
 
 
-def getActor(session: Session, actor_name: str) -> ActorModel:
+def getActor(session: Session, actor_id: int) -> ActorModel:
     """
     get record of the actor
     :return:
     """
-    return session.get(ActorModel, actor_name)
+    return session.get(ActorModel, actor_id)
+
+
+def getActorByName(session: Session, actor_name: str) -> ActorModel:
+    """
+    get record of the actor
+    :return:
+    """
+    return session.query(ActorModel).where(ActorModel.actor_name == actor_name).first()
 
 
 def createActorFolder(actor_name: str):
@@ -40,7 +48,7 @@ def createActorFolder(actor_name: str):
     os.makedirs(Configs.formatActorFolderPath(actor_name), exist_ok=True)
 
 
-def addActor(session: Session, actor_info: ActorInfo, category: int) -> ActorModel:
+def addActor(session: Session, actor_info: ActorInfo, group_id: int) -> ActorModel:
     """
     create a record for the actor, skip if already exist
     :return: actor record
@@ -48,14 +56,10 @@ def addActor(session: Session, actor_info: ActorInfo, category: int) -> ActorMod
 
     createActorFolder(actor_info.actor_name)
 
-    actor = getActor(session, actor_info.actor_name)
-    if actor is not None:
-        return actor
-
     actor = ActorModel(actor_name=actor_info.actor_name,
                        actor_platform=actor_info.actor_platform,
                        actor_link=actor_info.actor_link,
-                       actor_category=category)
+                       actor_group_id=group_id)
     session.add(actor)
     session.flush()
 
@@ -69,7 +73,8 @@ def hasActor(session: Session, actor_name: str) -> bool:
     :param actor_name:
     :return: exist or not
     """
-    actor = getActor(session, actor_name)
+    _query = session.query(ActorModel).where(ActorModel.actor_name == actor_name)
+    actor = session.execute(_query).fetchone()
     return actor is not None
 
 
@@ -79,8 +84,8 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
     if form.name is not None and len(form.name) > 0:
         _query = _query.where(ActorModel.actor_name.like(f'%{form.name}%'))
     # category
-    if len(form.category_list) > 0:
-        _query = _query.where(ActorModel.actor_category.in_(form.category_list))
+    if len(form.group_id_list) > 0:
+        _query = _query.where(ActorModel.actor_group_id.in_(form.group_id_list))
     # tag
     if form.no_tag:
         _query = _query.where(~ActorModel.rel_tags.any())
@@ -89,7 +94,7 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
     # score
     if form.min_score > 0:
         _query = _query.where(ActorModel.score >= form.min_score)
-    if 0 < form.max_score < 10:
+    if 0 < form.max_score < 12:
         _query = _query.where(ActorModel.score <= form.max_score)
     # remark
     if form.remark_str is not None and len(form.remark_str) > 0:
@@ -105,9 +110,9 @@ def getActorCount(session: Session, form: ActorConditionForm) -> int:
 
 
 def _sortQuery(_query: Query, form: ActorConditionForm) -> Query:
-    # order_by(ActorModel.score.desc(), User.date_created.desc())
+    # default sort
     if form.sort_type == SortType.Default:
-        return _query
+        return _query.order_by(ActorModel.actor_name)
 
     mainClause = None
     if form.sort_type == SortType.Score:
@@ -115,7 +120,7 @@ def _sortQuery(_query: Query, form: ActorConditionForm) -> Query:
     elif form.sort_type == SortType.TotalPostCount:
         mainClause = ActorModel.total_post_count
     elif form.sort_type == SortType.CategoryTime:
-        mainClause = ActorModel.category_time
+        mainClause = ActorModel.group_time
     else:
         raise SystemError(f"invalid sort type {form.sort_type}")
 
@@ -135,19 +140,17 @@ def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, sta
     return session.scalars(_query)
 
 
-def getActorsByCategory(session: Session, category: int) -> ScalarResult[
-    ActorModel]:
+def getActorsByGroup(session: Session, group_id: int) -> ScalarResult[ActorModel]:
     """
     search actors by category
     """
     _query = (session.query(ActorModel)
-              .order_by(ActorModel.actor_name)
-              .where(ActorModel.actor_category == category))
+              .where(ActorModel.actor_group_id == group_id))
     return session.scalars(_query)
 
 
-def changeActorTags(session: Session, actor_name: str, tag_list: list[int]) -> ActorModel:
-    actor = getActor(session, actor_name)
+def changeActorTags(session: Session, actor_id: int, tag_list: list[int]) -> ActorModel:
+    actor = getActor(session, actor_id)
 
     tag_dict = {}
     remove_list = []
@@ -171,7 +174,7 @@ def changeActorTags(session: Session, actor_name: str, tag_list: list[int]) -> A
     for tag_id in tag_dict:
         relation = ActorTagRelationship()
         relation.tag_id = tag_id
-        relation.actor_name = actor_name
+        relation.actor_id = actor_id
         actor.rel_tags.append(relation)
 
     session.flush()
@@ -179,74 +182,80 @@ def changeActorTags(session: Session, actor_name: str, tag_list: list[int]) -> A
 
 
 def removeOutdatedFiles(session: Session):
+    folder_dict = {}
     download_folder = Configs.formatTmpFolderPath()
     try:
         for root, _, files in os.walk(download_folder):
             for file in files:
                 matchObj = re.match(r'^(.+)_\d+_\d+\.\w+$', file)
-                if matchObj:
-                    actor_name = matchObj.group(1)
-                    actor = getActor(session, actor_name)
-                    if actor and not actor.actor_group.has_folder:
-                        LogUtil.info(f"remove downloading file {file}")
-                        os.remove(os.path.join(root, file))
+                if matchObj is None:
+                    continue
+                actor_name = matchObj.group(1)
+                # get and cache folder status
+                if actor_name not in folder_dict:
+                    actor = getActorByName(session, actor_name)
+                    if actor is not None:
+                        folder_dict[actor_name] = actor.actor_group.has_folder
+                # remove file if actor not exist or has no folder
+                if actor_name not in folder_dict or not folder_dict[actor_name]:
+                    LogUtil.info(f"remove downloading file {file}")
+                    os.remove(os.path.join(root, file))
     except Exception as e:
         pass
 
 
-def changeActorCategory(session: Session, actor_name: str, new_category: int) -> ActorModel:
-    actor = getActor(session, actor_name)
+def changeActorGroup(session: Session, actor_id: str, new_group_id: int) -> ActorModel:
+    actor = getActor(session, actor_id)
     # no change
-    if actor.actor_category == new_category:
+    if actor.actor_group_id == new_group_id:
         return actor
     oldHas = actor.actor_group.has_folder
-    new_group = ActorGroupCtrl.getActorGroup(session, new_category)
+    new_group = ActorGroupCtrl.getActorGroup(session, new_group_id)
     newHas = new_group.has_folder
     if oldHas != newHas:
         if oldHas:
-            deleteAllRes(session, actor_name)
-            last_post_id = PostCtrl.getMaxPostId(session, actor_name)
+            deleteAllRes(session, actor)
+            last_post_id = PostCtrl.getMaxPostId(session, actor_id)
             actor.last_post_id = last_post_id
         else:
             createActorFolder(actor.actor_name)
 
     # set field
-    actor.setCategory(new_category)
+    actor.setGroup(new_group_id)
     session.flush()
     return actor
 
 
-def ResetActorPosts(session: Session, actor_name: str):
-    actor = getActor(session, actor_name)
+def ResetActorPosts(session: Session, actor_id: int):
+    actor = getActor(session, actor_id)
     actor.last_post_id = 0
 
-    PostCtrl.batchSetResStates(session, actor_name, ResState.Init)
+    PostCtrl.batchSetResStates(session, actor_id, ResState.Init)
 
 
-def deleteAllRes(session: Session, actor_name: str):
-    actor_folder = Configs.formatActorFolderPath(actor_name)
+def deleteAllRes(session: Session, actor: ActorModel):
+    actor_folder = Configs.formatActorFolderPath(actor.actor_name)
     if os.path.exists(actor_folder):
         shutil.rmtree(actor_folder)
-        FileInfoCacheCtrl.RemoveDownloadingFiles(actor_name)
+        FileInfoCacheCtrl.RemoveDownloadingFiles(actor.actor_name)
 
-    PostCtrl.batchSetResStates(session, actor_name, ResState.Del)
+    PostCtrl.batchSetResStates(session, actor.actor_id, ResState.Del)
 
 
-def clearActorFolder(session: Session, actor_name: str):
-    actor_folder = Configs.formatActorFolderPath(actor_name)
+def clearActorFolder(session: Session, actor: ActorModel):
+    actor_folder = Configs.formatActorFolderPath(actor.actor_name)
     if not os.path.exists(actor_folder):
         return
-    # remove cache first, prevent update to cache
-    FileInfoCacheCtrl.RemoveCachedFileSizes(actor_name)
     # set res state according to file existence
-    PostCtrl.removeCurrentResFiles(session, actor_name)
-    # remove files
+    PostCtrl.removeCurrentResFiles(session, actor.actor_id)
+    # remove folder
     shutil.rmtree(actor_folder)
-    createActorFolder(actor_name)
+    # recreate folder
+    createActorFolder(actor.actor_name)
 
 
-def changeActorScore(session: Session, actor_name: str, score: int) -> ActorModel:
-    actor = getActor(session, actor_name)
+def changeActorScore(session: Session, actor_id: int, score: int) -> ActorModel:
+    actor = getActor(session, actor_id)
     # no change
     if actor.score == score:
         return actor
@@ -256,8 +265,8 @@ def changeActorScore(session: Session, actor_name: str, score: int) -> ActorMode
     return actor
 
 
-def changeActorRemark(session: Session, actor_name: str, remark: str) -> ActorModel:
-    actor = getActor(session, actor_name)
+def changeActorRemark(session: Session, actor_id: int, remark: str) -> ActorModel:
+    actor = getActor(session, actor_id)
     # no change
     if actor.remark == remark:
         return actor
@@ -267,59 +276,68 @@ def changeActorRemark(session: Session, actor_name: str, remark: str) -> ActorMo
     return actor
 
 
-def linkActors(session: Session, actor_names: [str]):
+def unlinkActors(session: Session, actor_ids: [str]):
+    actor_list = []
+    for actor_id in actor_ids:
+        actor = getActor(session, actor_id)
+        actor.main_actor_id = 0
+        actor_list.append(actor)
+    return actor_list
+
+
+def linkActors(session: Session, actor_ids: [str]):
     # merge all tags
     all_tags = set()
-    for actor_name in actor_names:
-        actor = getActor(session, actor_name)
+    for actor_id in actor_ids:
+        actor = getActor(session, actor_id)
         for tag in actor.rel_tags:
             all_tags.add(tag.tag_id)
     # apply tags to all actors
-    main_actor_name = actor_names[0]
-    for actor_name in actor_names:
-        actor = getActor(session, actor_name)
-        actor.main_actor = main_actor_name
+    main_actor_id = actor_ids[0]
+    for actor_id in actor_ids:
+        actor = getActor(session, actor_id)
+        actor.main_actor_id = main_actor_id
         new_tags = all_tags.copy()
         for tag in actor.rel_tags:
             new_tags.remove(tag.tag_id)
         for tag_id in new_tags:
             relation = ActorTagRelationship()
             relation.tag_id = tag_id
-            relation.actor_name = actor_name
+            relation.actor_id = actor_id
             actor.rel_tags.append(relation)
     # flush
     session.flush()
     # get updated actors
     actor_list = []
-    for actor_name in actor_names:
-        actor = getActor(session, actor_name)
+    for actor_id in actor_ids:
+        actor = getActor(session, actor_id)
         actor_list.append(actor)
     return actor_list
 
 
-def getLinkedActors(session: Session, actor_name: str):
-    actor = getActor(session, actor_name)
-    if actor.main_actor is None:
+def getLinkedActors(session: Session, actor_id: int):
+    actor = getActor(session, actor_id)
+    if actor.main_actor_id == 0:
         return [actor]
 
     stmt = (
         select(ActorModel)
-            .where(ActorModel.main_actor == actor.main_actor)
+        .where(ActorModel.main_actor_id == actor.main_actor_id)
     )
     actor_list: ScalarResult[ActorModel] = session.scalars(stmt)
     return [a for a in actor_list]
 
 
-def getActorFileInfo(session: Session, actor_name: str):
-    actor = getActor(session, actor_name)
-    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_name)
+def getActorFileInfo(session: Session, actor_id: int):
+    actor = getActor(session, actor_id)
+    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_id)
     if actor_file_info is None:
         actor_file_info = actor.calc_res_file_info()
-        FileInfoCacheCtrl.CacheFileSizes(actor_name, actor_file_info)
+        FileInfoCacheCtrl.CacheFileSizes(actor_id, actor_file_info)
 
     return {
         'res_info': actor_file_info,
         'total_post_count': actor.total_post_count,
-        'unfinished_post_count': PostCtrl.getPostCount(session, actor_name, False),
-        'finished_post_count': PostCtrl.getPostCount(session, actor_name, True)
+        'unfinished_post_count': PostCtrl.getPostCount(session, actor_id, False),
+        'finished_post_count': PostCtrl.getPostCount(session, actor_id, True)
     }

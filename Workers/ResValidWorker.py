@@ -2,7 +2,7 @@ import os.path
 import shutil
 
 from Consts import WorkerType, QueueType
-from Ctrls import DbCtrl, ResCtrl, FileInfoCacheCtrl
+from Ctrls import DbCtrl, ResCtrl
 from Models.BaseModel import ResState
 from Utils import LogUtil
 from WorkQueue import QueueUtil

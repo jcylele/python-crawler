@@ -26,7 +26,7 @@ def getAllRes(session: Session, post_id: int) -> ScalarResult[ResModel]:
 
 def onResAdded(session: Session, post_id: int):
     post = session.get(PostModel, post_id)
-    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(post.actor_name)
+    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(post.actor_id)
     if actor_file_info is None:
         return
     res_list = getAllRes(session, post_id)

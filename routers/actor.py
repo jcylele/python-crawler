@@ -6,8 +6,8 @@ from fastapi import APIRouter
 from fastapi.params import Query
 
 import Configs
-from Ctrls import DbCtrl, ActorCtrl, FileInfoCacheCtrl, PostCtrl
-from routers.web_data import ActorConditionForm, BatchActorCategory
+from Ctrls import DbCtrl, ActorCtrl
+from routers.web_data import ActorConditionForm, BatchActorGroup
 
 router = APIRouter(
     prefix="/api/actor",
@@ -36,93 +36,103 @@ def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
 
 
 @router.post("/link")
-def link_actors(actor_names: List[str]):
+def link_actors(actor_ids: List[int]):
     with DbCtrl.getSession() as session, session.begin():
-        actors = ActorCtrl.linkActors(session, actor_names)
+        actors = ActorCtrl.linkActors(session, actor_ids)
         return DbCtrl.CustomJsonResponse(actors)
 
 
-@router.post("/batch/category")
-def batch_set_category(form: BatchActorCategory):
+@router.post("/unlink")
+def link_actors(actor_ids: List[int]):
+    with DbCtrl.getSession() as session, session.begin():
+        actors = ActorCtrl.unlinkActors(session, actor_ids)
+        return DbCtrl.CustomJsonResponse(actors)
+
+
+@router.post("/batch/group")
+def batch_set_group(form: BatchActorGroup):
     with DbCtrl.getSession() as session, session.begin():
         actors = []
-        for actor_name in form.actor_names:
-            actor = ActorCtrl.changeActorCategory(session, actor_name, form.category)
+        for actor_id in form.actor_ids:
+            actor = ActorCtrl.changeActorGroup(session, actor_id, form.group_id)
             actors.append(actor)
         return DbCtrl.CustomJsonResponse(actors)
 
 
 # 同方法(get)按顺序匹配, 固定前缀在前，{actor_name}在后
 
-@router.get("/{actor_name}")
-def get_actor(actor_name: str):
+@router.get("/{actor_id}")
+def get_actor(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.getActor(session, actor_name)
+        actor = ActorCtrl.getActor(session, actor_id)
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.patch("/{actor_name}/category")
-def change_actor_category(actor_name: str, actor_category: int = Query(alias='val')):
+@router.patch("/{actor_id}/group")
+def change_actor_category(actor_id: int, actor_group_id: int = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.changeActorCategory(session, actor_name, actor_category)
+        actor = ActorCtrl.changeActorGroup(session, actor_id, actor_group_id)
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.patch("/{actor_name}/score")
-def change_actor_category(actor_name: str, score: int = Query(alias='val')):
+@router.patch("/{actor_id}/score")
+def change_actor_category(actor_id: int, score: int = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.changeActorScore(session, actor_name, score)
+        actor = ActorCtrl.changeActorScore(session, actor_id, score)
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.patch("/{actor_name}/remark")
-def set_actor_remark(actor_name: str, remark: str = Query(alias='val')):
+@router.patch("/{actor_id}/remark")
+def set_actor_remark(actor_id: int, remark: str = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
         remark += '=='
         real_remark = base64.urlsafe_b64decode(remark).decode('utf-8')
-        actor = ActorCtrl.changeActorRemark(session, actor_name, real_remark)
+        actor = ActorCtrl.changeActorRemark(session, actor_id, real_remark)
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.get("/{actor_name}/open")
-def open_actor_folder(actor_name: str):
-    subprocess.Popen(f'explorer "{Configs.formatActorFolderPath(actor_name)}"')
-
-
-@router.get("/{actor_name}/reset_posts")
-def reset_actor_posts(actor_name: str):
+@router.get("/{actor_id}/open")
+def open_actor_folder(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        ActorCtrl.ResetActorPosts(session, actor_name)
+        actor = ActorCtrl.getActor(session, actor_id)
+        subprocess.Popen(f'explorer "{Configs.formatActorFolderPath(actor.actor_name)}"')
+
+
+@router.patch("/{actor_id}/reset_posts")
+def reset_actor_posts(actor_id: int):
+    with DbCtrl.getSession() as session, session.begin():
+        ActorCtrl.ResetActorPosts(session, actor_id)
         session.flush()
-        ret = ActorCtrl.getActorFileInfo(session, actor_name)
+        ret = ActorCtrl.getActorFileInfo(session, actor_id)
         return DbCtrl.CustomJsonResponse(ret)
 
 
-@router.get("/{actor_name}/clear")
-def clear_actor_folder(actor_name: str):
+@router.get("/{actor_id}/clear")
+def clear_actor_folder(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        ActorCtrl.clearActorFolder(session, actor_name);
+        actor = ActorCtrl.getActor(session, actor_id)
+        ActorCtrl.clearActorFolder(session, actor)
         session.flush()
-        ret = ActorCtrl.getActorFileInfo(session, actor_name)
+        ret = ActorCtrl.getActorFileInfo(session, actor_id)
         return DbCtrl.CustomJsonResponse(ret)
 
 
-@router.post("/{actor_name}/tag")
-def change_actor_tag(actor_name: str, tag_list: List[int] = Query(alias='id')):
+@router.post("/{actor_id}/tag")
+def change_actor_tag(actor_id: int, tag_list: List[int]):
     with DbCtrl.getSession() as session, session.begin():
-        actor = ActorCtrl.changeActorTags(session, actor_name, tag_list)
+        actor = ActorCtrl.changeActorTags(session, actor_id, tag_list)
         return DbCtrl.CustomJsonResponse(actor)
 
 
-@router.get("/{actor_name}/file_info")
-def get_actor_file_info(actor_name: str):
+@router.get("/{actor_id}/file_info")
+def get_actor_file_info(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        ret = ActorCtrl.getActorFileInfo(session, actor_name)
+        ret = ActorCtrl.getActorFileInfo(session, actor_id)
         return DbCtrl.CustomJsonResponse(ret)
 
 
-@router.get("/{actor_name}/link")
-def get_linked_actors(actor_name: str):
+@router.get("/{actor_id}/linked")
+def get_linked_actors(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        actors = ActorCtrl.getLinkedActors(session, actor_name)
+        actors = ActorCtrl.getLinkedActors(session, actor_id)
         return DbCtrl.CustomJsonResponse(actors)

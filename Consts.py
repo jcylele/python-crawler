@@ -1,6 +1,10 @@
 from enum import Enum, auto, IntEnum
 
 
+class NoticeType(Enum):
+    UnlinkedActor = 1  # 2 actors are not linked, but share the same post
+
+
 class ResType(Enum):
     Image = 1
     Video = 2

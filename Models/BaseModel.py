@@ -4,12 +4,12 @@ import json
 from enum import Enum
 
 import sqlalchemy as sa
-from sqlalchemy import String, ForeignKey, BigInteger, DateTime, func
+from sqlalchemy import String, ForeignKey, BigInteger, DateTime, func, LargeBinary
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
-from Consts import ResState, ResType
-from Ctrls import FileInfoCacheCtrl, RequestCtrl
+from Consts import ResState, ResType, NoticeType
+from Ctrls import FileInfoCacheCtrl, RequestCtrl, CompressCtrl
 from Ctrls.FileInfoCacheCtrl import ActorFileInfo
 from Utils import LogUtil
 
@@ -73,8 +73,8 @@ class BaseModel(DeclarativeBase):
 class ActorTagRelationship(BaseModel):
     __tablename__ = "rel_actor_tag"
 
-    actor_name: Mapped[str] = mapped_column(
-        ForeignKey("tab_actor.actor_name"),
+    actor_id: Mapped[int] = mapped_column(
+        ForeignKey("tab_actor.actor_id"),
         primary_key=True
     )
     tag_id: Mapped[int] = mapped_column(
@@ -89,16 +89,17 @@ class ActorTagRelationship(BaseModel):
 class ActorModel(BaseModel):
     __tablename__ = "tab_actor"
 
-    actor_name: Mapped[str] = mapped_column(String(30), primary_key=True)
-    actor_category: Mapped[int] = mapped_column(ForeignKey("tab_actor_group.group_id"))
+    actor_id: Mapped[int] = mapped_column(primary_key=True)
+    actor_name: Mapped[str] = mapped_column(String(30))
+    actor_group_id: Mapped[int] = mapped_column(ForeignKey("tab_actor_group.group_id"))
     actor_platform: Mapped[str] = mapped_column(String(30))
     actor_link: Mapped[str] = mapped_column(String(30))
     total_post_count: Mapped[int] = mapped_column(default=0)
     remark: Mapped[str] = mapped_column(String(100))
-    main_actor: Mapped[str] = mapped_column(String(30))
+    main_actor_id: Mapped[int] = mapped_column(default=0)
     score: Mapped[int] = mapped_column(default=0)
+    group_time: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=func.now())
     last_post_id: Mapped[int] = mapped_column(BigInteger, default=0)
-    category_time: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     actor_group: Mapped["ActorGroupModel"] = relationship()
     post_list: Mapped[list["PostModel"]] = relationship(
@@ -110,19 +111,20 @@ class ActorModel(BaseModel):
         # order_by="ActorTagRelationship.tag.tag_priority"
     )
 
-    def setCategory(self, new_category):
-        if self.actor_category == new_category:
+    def setGroup(self, group_id):
+        if self.actor_group_id == group_id:
             return
-        self.actor_category = new_category
-        self.category_time = func.now()
+        self.actor_group_id = group_id
+        self.group_time = func.now()
 
     def toJson(self):
         json_data = {
+            'actor_id': self.actor_id,
             'actor_name': self.actor_name,
-            'actor_category': self.actor_category,
+            'actor_group_id': self.actor_group_id,
             'score': self.score,
             'href': RequestCtrl.formatActorHref(self.actor_platform, self.actor_link),
-            'has_main_actor': not IsStringEmpty(self.main_actor)
+            'has_main_actor': self.main_actor_id != 0
         }
         # remark encode for url
         remark = self.remark
@@ -146,7 +148,7 @@ class ActorModel(BaseModel):
         return actor_file_info
 
     def __repr__(self) -> str:
-        return f"Actor(name={self.actor_name!r}, category={self.actor_category!r})"
+        return f"Actor(name={self.actor_name!r}, group={self.actor_group.group_name!r})"
 
 
 class ActorTagModel(BaseModel):
@@ -175,25 +177,34 @@ class PostModel(BaseModel):
     __tablename__ = "tab_post"
 
     post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    actor_name: Mapped[str] = mapped_column(ForeignKey("tab_actor.actor_name"))
-    actor: Mapped["ActorModel"] = relationship(back_populates="post_list")
+    actor_id: Mapped[int] = mapped_column(ForeignKey("tab_actor.actor_id"))
     completed: Mapped[bool] = mapped_column(default=False)
     comment: Mapped[str] = mapped_column(String(100))
+
+    actor: Mapped["ActorModel"] = relationship(back_populates="post_list")
     res_list: Mapped[list["ResModel"]] = relationship(
         back_populates="post",
         cascade="all, delete-orphan",
         order_by="ResModel.res_index"
     )
 
+    def toJson(self):
+        return {
+            # large number may be corrupted in js, so use string instead
+            'post_id': str(self.post_id),
+            'comment': self.comment
+        }
+
     def __repr__(self) -> str:
-        return f"Post(post_id={self.post_id!r}, actor_name={self.actor_name})"
+        return f"Post(post_id={self.post_id!r}, actor_name={self.actor.actor_name})"
 
 
 class ResModel(BaseModel):
     __tablename__ = "tab_res"
 
     res_id: Mapped[int] = mapped_column(primary_key=True)
-    res_url: Mapped[str] = mapped_column(String)
+    # res_url: Mapped[str] = mapped_column(String)
+    res_uri: Mapped[bytes] = mapped_column(LargeBinary)
     res_index: Mapped[int] = mapped_column()
     res_state: Mapped[ResState] = mapped_column(IntEnum(ResState), default=ResState.Init)
     res_type: Mapped[ResType] = mapped_column(IntEnum(ResType))
@@ -201,6 +212,20 @@ class ResModel(BaseModel):
 
     post_id: Mapped[int] = mapped_column(ForeignKey("tab_post.post_id", ondelete="CASCADE"))
     post: Mapped["PostModel"] = relationship(back_populates="res_list")
+
+    @property
+    def res_url(self):
+        return CompressCtrl.decodeResUri(self.res_uri)
+
+    @res_url.setter
+    def res_url(self, value):
+        self.res_uri = CompressCtrl.encodeResUri(value)
+
+    def actor_name(self):
+        return self.post.actor.actor_name
+
+    def actor_id(self):
+        return self.post.actor_id
 
     def fileName(self) -> str:
         ext = self.res_url.split('.')[-1]
@@ -211,10 +236,10 @@ class ResModel(BaseModel):
         real location for valid resources
         :return:
         """
-        return f"{Configs.RootFolder}\\{self.post.actor_name}\\{self.fileName()}"
+        return f"{Configs.RootFolder}\\{self.actor_name()}\\{self.fileName()}"
 
     def tmpFileName(self) -> str:
-        return f"{self.post.actor_name}_{self.fileName()}"
+        return f"{self.actor_name()}_{self.fileName()}"
 
     def tmpFilePath(self) -> str:
         """
@@ -233,30 +258,27 @@ class ResModel(BaseModel):
         if self.res_state != ResState.Skip:
             return False
         if self.res_size > max_file_size > 0:
-            # LogUtil.info(f"({self.res_id} of {self.post_id} of {self.post.actor_name}) too big: {self.res_size}")
             return False
         return True
 
     def setSize(self, size: int):
+        actor_name = self.actor_name()
         if self.res_size > 0:
             if self.res_size == size:
                 LogUtil.warn(
-                    f"({self.res_id} of {self.post_id} of {self.post.actor_name}) size already set: {self.res_size}")
+                    f"({self.res_id} of {self.post_id} of {actor_name}) size already set: {self.res_size}")
             else:
                 LogUtil.error(
-                    f"({self.res_id} of {self.post_id} of {self.post.actor_name}) size error, old {self.res_size}, new {size}")
+                    f"({self.res_id} of {self.post_id} of {actor_name}) size error, old {self.res_size}, new {size}")
             return
         self.res_size = size
         # update actor file info
-        actor_name = self.post.actor_name
-        actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_name)
-        if actor_file_info is not None:
-            actor_file_info.onResSizeChanged(self)
+        FileInfoCacheCtrl.OnFileSizeChanged(self.actor_id(), self)
 
     def setState(self, state: ResState):
         if self.res_state == state:
             return
-        FileInfoCacheCtrl.OnFileStateChanged(self.post.actor_name, self, state)
+        FileInfoCacheCtrl.OnFileStateChanged(self.actor_id(), self, state)
         self.res_state = state
 
     def __repr__(self) -> str:
@@ -265,5 +287,44 @@ class ResModel(BaseModel):
                f"index={self.res_index}, " \
                f"type={self.res_type}, " \
                f"size={self.res_size}, " \
-               f"status={self.res_state}, " \
-               f"url={self.res_url}) "
+               f"status={self.res_state}) "
+
+
+class NoticeModel(BaseModel):
+    __tablename__ = "tab_notice"
+
+    notice_id: Mapped[int] = mapped_column(primary_key=True)
+    notice_type: Mapped[NoticeType] = mapped_column(IntEnum(NoticeType))
+    notice_checksum: Mapped[str] = mapped_column(String(50))
+    notice_param0: Mapped[str] = mapped_column(String(50), default="")
+    notice_param1: Mapped[str] = mapped_column(String(50), default="")
+    notice_param2: Mapped[str] = mapped_column(String(50), default="")
+
+    def __calcChecksum(self):
+        bytes1 = self.notice_param0.encode('utf-8')
+        bytes2 = self.notice_param1.encode('utf-8')
+        bytes3 = self.notice_param2.encode('utf-8')
+        xor_len = len(bytes1) ^ len(bytes2) ^ len(bytes3)
+        max_len = max(len(bytes1), len(bytes2), len(bytes3))
+        bytes1 = bytes1.ljust(max_len, b'\0')
+        bytes2 = bytes2.ljust(max_len, b'\0')
+        bytes3 = bytes3.ljust(max_len, b'\0')
+        xor = bytearray(a ^ b ^ c for a, b, c in zip(bytes1, bytes2, bytes3))
+        checksum = base64.encodebytes(xor).decode('utf-8').replace('\n', '')
+        shift = xor_len % len(checksum)
+        self.notice_checksum = checksum[shift:] + checksum[:shift]
+
+    def sortedParams(self):
+        """
+        get sorted parameters
+        """
+        return sorted([self.notice_param0, self.notice_param1, self.notice_param2])
+
+    def setParams(self, param0: str, param1: str = "", param2: str = ""):
+        """
+        set parameters and calculate checksum
+        """
+        self.notice_param0 = param0
+        self.notice_param1 = param1
+        self.notice_param2 = param2
+        self.__calcChecksum()

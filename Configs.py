@@ -6,8 +6,6 @@ RootFolder = "D:\\OnlyFans"
 TmpFolder = "_downloading"
 IconFolder = "_icon"
 
-ResUriDictFilePath = "configs/res_url_dict.bytes"
-
 MIN_DOWN_SPEED = 100 * 1024
 BASE_TIME_OUT = 30
 MAX_FETCH_ACTOR_COUNT = 3

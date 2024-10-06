@@ -2,7 +2,7 @@ import os
 
 import Configs
 import Consts
-from Ctrls import DbCtrl, ActorCtrl, PostCtrl, CompressCtrl, ActorGroupCtrl
+from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl
 from Download.DownloadLimit import DownloadLimit, PostFilter
 from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
@@ -152,7 +152,6 @@ class DownloadTask(object):
         os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
         os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
         DbCtrl.init()
-        CompressCtrl.init()
 
     def __repr__(self):
         return f"({self.desc}\tdownloadLimit={self.downloadLimit}"

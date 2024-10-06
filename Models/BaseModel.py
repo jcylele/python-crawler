@@ -4,12 +4,12 @@ import json
 from enum import Enum
 
 import sqlalchemy as sa
-from sqlalchemy import String, ForeignKey, BigInteger, DateTime, func, LargeBinary
+from sqlalchemy import String, ForeignKey, BigInteger, DateTime, func
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
 from Consts import ResState, ResType, NoticeType
-from Ctrls import FileInfoCacheCtrl, RequestCtrl, CompressCtrl
+from Ctrls import FileInfoCacheCtrl, RequestCtrl
 from Ctrls.FileInfoCacheCtrl import ActorFileInfo
 from Utils import LogUtil
 
@@ -128,10 +128,16 @@ class ActorModel(BaseModel):
         }
         # remark encode for url
         remark = self.remark
-        if IsStringEmpty(remark):
+        if not remark:
             json_data['remark'] = ""
         else:
             json_data['remark'] = base64.b64encode(remark.encode('utf-8')).decode('utf-8')
+        # posts with comment
+        post_list = []
+        for post in self.post_list:
+            if post.comment:
+                post_list.append(post.toJson())
+        json_data['commented_posts'] = post_list
         # tag ids
         tag_list = []
         for tag in self.rel_tags:
@@ -203,8 +209,7 @@ class ResModel(BaseModel):
     __tablename__ = "tab_res"
 
     res_id: Mapped[int] = mapped_column(primary_key=True)
-    # res_url: Mapped[str] = mapped_column(String)
-    res_uri: Mapped[bytes] = mapped_column(LargeBinary)
+    res_url: Mapped[str] = mapped_column(String(200))
     res_index: Mapped[int] = mapped_column()
     res_state: Mapped[ResState] = mapped_column(IntEnum(ResState), default=ResState.Init)
     res_type: Mapped[ResType] = mapped_column(IntEnum(ResType))
@@ -212,14 +217,6 @@ class ResModel(BaseModel):
 
     post_id: Mapped[int] = mapped_column(ForeignKey("tab_post.post_id", ondelete="CASCADE"))
     post: Mapped["PostModel"] = relationship(back_populates="res_list")
-
-    @property
-    def res_url(self):
-        return CompressCtrl.decodeResUri(self.res_uri)
-
-    @res_url.setter
-    def res_url(self, value):
-        self.res_uri = CompressCtrl.encodeResUri(value)
 
     def actor_name(self):
         return self.post.actor.actor_name

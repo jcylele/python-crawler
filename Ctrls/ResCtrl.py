@@ -47,7 +47,13 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
         res.post_id = post_id
         res.res_index = i + 1
         res.res_type = url_list[i][0]
-        res.res_url = url_list[i][1]
+        # trim query params
+        url = url_list[i][1]
+        index = url.find("?")
+        if index > 0:
+            url = url[:index]
+        res.res_url = url
+
         # keep other attributes as default
 
         session.add(res)

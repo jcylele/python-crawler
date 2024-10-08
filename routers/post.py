@@ -1,7 +1,5 @@
 from fastapi import APIRouter
-
 from Ctrls import DbCtrl, PostCtrl
-from Utils import LogUtil
 from routers.web_data import PostConditionForm, PostCommentForm
 
 router = APIRouter(

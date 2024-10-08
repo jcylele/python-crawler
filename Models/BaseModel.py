@@ -49,9 +49,13 @@ class BaseModelEncoder(json.JSONEncoder):
     """
 
     def default(self, obj):
+        # custom toJson
         method = getattr(obj, 'toJson', None)
         if callable(method):
             return method()
+        # enum value
+        if isinstance(obj, Enum):
+            return obj.value
         # Let the base class default method raise the TypeError
         return json.JSONEncoder.default(self, obj)
 
@@ -277,6 +281,17 @@ class ResModel(BaseModel):
             return
         FileInfoCacheCtrl.OnFileStateChanged(self.actor_id(), self, state)
         self.res_state = state
+
+    def toJson(self):
+        return {
+            'res_id': self.res_id,
+            'res_type': self.res_type,
+            'res_url': self.res_url,
+            'res_size': self.res_size,
+            'post_id': self.post_id,
+            'actor_name': self.actor_name(),
+            'post_url': RequestCtrl.formatPostUrl(self.post.actor, self.post_id)
+        }
 
     def __repr__(self) -> str:
         return f"Res(id={self.res_id!r}, " \

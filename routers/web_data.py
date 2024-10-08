@@ -13,6 +13,7 @@ class SortType(Enum):
 
 class ActorConditionForm(BaseModel):
     name: str
+    linked: bool
     group_id_list: list[int]
     tag_list: list[int]
     no_tag: bool

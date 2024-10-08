@@ -83,6 +83,9 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
     # name
     if form.name is not None and len(form.name) > 0:
         _query = _query.where(ActorModel.actor_name.like(f'%{form.name}%'))
+    # has link
+    if form.linked:
+        _query = _query.where(ActorModel.main_actor_id != 0)
     # category
     if len(form.group_id_list) > 0:
         _query = _query.where(ActorModel.actor_group_id.in_(form.group_id_list))

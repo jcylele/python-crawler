@@ -46,8 +46,8 @@ def batchSetResStates(session: Session, actor_id: int, state: ResState):
     # uncompleted post has no res in db
     stmt = (
         select(PostModel)
-            .where(PostModel.actor_id == actor_id)
-            .where(PostModel.completed == True)
+        .where(PostModel.actor_id == actor_id)
+        .where(PostModel.completed == True)
     )
     post_list: ScalarResult[PostModel] = session.scalars(stmt)
     for post in post_list:
@@ -62,8 +62,8 @@ def removeCurrentResFiles(session: Session, actor_id: int):
     # uncompleted post has no res in db
     stmt = (
         select(PostModel)
-            .where(PostModel.actor_id == actor_id)
-            .where(PostModel.completed == True)
+        .where(PostModel.actor_id == actor_id)
+        .where(PostModel.completed == True)
     )
     post_list: ScalarResult[PostModel] = session.scalars(stmt)
     for post in post_list:

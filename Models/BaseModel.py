@@ -188,6 +188,7 @@ class PostModel(BaseModel):
 
     post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     actor_id: Mapped[int] = mapped_column(ForeignKey("tab_actor.actor_id"))
+    is_dm: Mapped[bool] = mapped_column(default=False)
     completed: Mapped[bool] = mapped_column(default=False)
     comment: Mapped[str] = mapped_column(String(100))
 
@@ -296,10 +297,10 @@ class NoticeModel(BaseModel):
 
     notice_id: Mapped[int] = mapped_column(primary_key=True)
     notice_type: Mapped[NoticeType] = mapped_column(IntEnum(NoticeType))
-    notice_checksum: Mapped[str] = mapped_column(String(50))
-    notice_param0: Mapped[str] = mapped_column(String(50), default="")
-    notice_param1: Mapped[str] = mapped_column(String(50), default="")
-    notice_param2: Mapped[str] = mapped_column(String(50), default="")
+    notice_checksum: Mapped[str] = mapped_column(String(100))
+    notice_param0: Mapped[str] = mapped_column(String(100), default="")
+    notice_param1: Mapped[str] = mapped_column(String(100), default="")
+    notice_param2: Mapped[str] = mapped_column(String(100), default="")
 
     def __calcChecksum(self):
         bytes1 = self.notice_param0.encode('utf-8')
@@ -329,3 +330,13 @@ class NoticeModel(BaseModel):
         self.notice_param1 = param1
         self.notice_param2 = param2
         self.__calcChecksum()
+
+    def toJson(self):
+        json_data = {
+            'notice_id': self.notice_id,
+            'notice_param0': self.notice_param0,
+            'notice_param1': self.notice_param1,
+            'notice_param2': self.notice_param2
+        }
+
+        return json_data

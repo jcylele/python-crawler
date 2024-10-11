@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 
-from sqlalchemy import ScalarResult, select
+from sqlalchemy import ScalarResult, select, delete
 from sqlalchemy.orm import Session, Query
 
 import Configs
@@ -97,7 +97,7 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
     # score
     if form.min_score > 0:
         _query = _query.where(ActorModel.score >= form.min_score)
-    if 0 < form.max_score < 12:
+    if 0 < form.max_score < Configs.MAX_SCORE:
         _query = _query.where(ActorModel.score <= form.max_score)
     # remark
     if form.remark_str is not None and len(form.remark_str) > 0:
@@ -153,38 +153,27 @@ def getActorsByGroup(session: Session, group_id: int) -> ScalarResult[ActorModel
 
 
 def changeActorTags(session: Session, actor_id: int, tag_list: list[int]) -> ActorModel:
-    actor = getActor(session, actor_id)
+    # delete all old tags
+    _query = delete(ActorTagRelationship) \
+        .where(ActorTagRelationship.actor_id == actor_id)
+    session.execute(_query)
 
-    tag_dict = {}
-    remove_list = []
-
+    # add new tags
     for tag_id in tag_list:
-        tag_dict[tag_id] = True
-
-    for tag in actor.rel_tags:
-        if tag.tag_id in tag_dict:
-            tag_dict.pop(tag.tag_id)
-        else:
-            remove_list.append(tag.tag_id)
-
-    for tag_id in remove_list:
-        for rel in actor.rel_tags:
-            if rel.tag_id == tag_id:
-                actor.rel_tags.remove(rel)
-                session.delete(rel)
-                break
-
-    for tag_id in tag_dict:
         relation = ActorTagRelationship()
         relation.tag_id = tag_id
         relation.actor_id = actor_id
-        actor.rel_tags.append(relation)
+        session.add(relation)
 
     session.flush()
+
+    # return updated actor
+    actor = getActor(session, actor_id)
     return actor
 
 
 def removeOutdatedFiles(session: Session):
+    # cache folder status
     folder_dict = {}
     download_folder = Configs.formatTmpFolderPath()
     try:

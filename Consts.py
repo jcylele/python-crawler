@@ -3,6 +3,7 @@ from enum import Enum, auto, IntEnum
 
 class NoticeType(Enum):
     UnlinkedActor = 1  # 2 actors are not linked, but share the same post
+    InvalidPost = 2  # a post is invalid
 
 
 class ResType(Enum):

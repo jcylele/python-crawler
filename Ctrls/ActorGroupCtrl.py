@@ -1,4 +1,4 @@
-from sqlalchemy import ScalarResult, select
+from sqlalchemy import ScalarResult, select, delete
 from sqlalchemy.orm import Session
 
 from Ctrls import DbCtrl
@@ -44,8 +44,9 @@ def deleteActorGroup(session: Session, group_id: int) -> bool:
     actor_count = DbCtrl.queryCount(_query)
     if actor_count > 0:
         return False
-    group = session.get(ActorGroupModel, group_id)
-    if group is None:
-        return True
-    session.delete(group)
+
+    _query = delete(ActorGroupModel) \
+        .where(ActorGroupModel.group_id == group_id)
+    session.execute(_query)
+
     return True

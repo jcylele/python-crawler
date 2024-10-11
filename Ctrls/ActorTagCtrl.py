@@ -1,5 +1,6 @@
 from sqlalchemy import ScalarResult, select, func
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.sync import update
 
 from Ctrls import DbCtrl
 from Models.BaseModel import ActorTagModel, ActorTagRelationship
@@ -30,6 +31,13 @@ def getTagUsedCount(session: Session, tag_id: int) -> int:
 
 def getActorTag(session: Session, tag_id: int) -> ActorTagModel:
     return session.get(ActorTagModel, tag_id)
+
+
+def setTagName(session: Session, tag_id: int, tag_name: str):
+    _query = update(ActorTagModel) \
+        .where(ActorTagModel.tag_id == tag_id) \
+        .values(tag_name=tag_name)
+    session.execute(_query)
 
 
 def addActorTag(session: Session, tag: ActorTagModel) -> ActorTagModel:

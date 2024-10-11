@@ -77,7 +77,7 @@ class DownloadTask(object):
                 posts = PostCtrl.getNewPosts(session, actor_id, actor.last_post_id)
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
-                        QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, None)
+                        QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, post.is_dm, None)
                     else:  # all resources of the post are already added
                         QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit)
 
@@ -148,6 +148,8 @@ class DownloadTask(object):
         :return:
         """
         LogUtil.info("initializing environment...")
+        # should be called before any other operations
+        Configs.init()
         os.makedirs(Configs.RootFolder, exist_ok=True)
         os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
         os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)

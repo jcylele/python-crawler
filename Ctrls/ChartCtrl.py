@@ -1,48 +1,44 @@
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+import Configs
 from Models.BaseModel import ActorTagRelationship, ActorModel
 
 
-def getTagRelative(session: Session, tag_id: int) -> dict[int, int]:
-    _query = session.query(ActorTagRelationship) \
+def getTagRelative(session: Session, tag_id: int, limit: int):
+    _query1 = select(ActorTagRelationship.actor_id) \
         .where(ActorTagRelationship.tag_id == tag_id)
-    tag_rels = session.scalars(_query)
-    count_map = {}
-    for tag_rel in tag_rels:
-        for actor_rel in tag_rel.actor.rel_tags:
-            if actor_rel.tag_id not in count_map:
-                count_map[actor_rel.tag_id] = 1
-            else:
-                count_map[actor_rel.tag_id] += 1
-    return count_map
+    _query2 = select(ActorTagRelationship.tag_id, func.count(ActorTagRelationship.actor_id)) \
+        .where(ActorTagRelationship.actor_id.in_(_query1)) \
+        .group_by(ActorTagRelationship.tag_id) \
+        .order_by(func.count(ActorTagRelationship.actor_id).desc()) \
+        .limit(limit + 1)  # self is included
+    ret = session.execute(_query2).fetchall()
+    return [{'tag_id': tag_id, 'count': count} for tag_id, count in ret]
 
 
 def getScoresByTag(session: Session, tag_id: int) -> list[int]:
     _query = session.query(ActorTagRelationship) \
         .where(ActorTagRelationship.tag_id == tag_id)
     rels = session.scalars(_query)
-    scores = [0] * 11
+    scores = [0] * (Configs.MAX_SCORE + 1)
     for rel in rels:
         scores[rel.actor.score] += 1
     return scores
 
 
-def getTagsByScore(session: Session, min_score: int, max_score: int):
-    _query = session.query(ActorModel)
+def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit: int):
+    """
+    get tag counts used by actors who score between min_score and max_score
+    """
+    _query = (session.query(ActorTagRelationship.tag_id, func.count(ActorTagRelationship.actor_id))
+              .join(ActorModel, ActorModel.actor_id == ActorTagRelationship.actor_id))
     if min_score > 0:
         _query = _query.where(ActorModel.score >= min_score)
-    if 0 < max_score < 10:
+    if 0 < max_score < Configs.MAX_SCORE:
         _query = _query.where(ActorModel.score <= max_score)
-    actors = session.scalars(_query)
-
-    tag_map = {}
-    for actor in actors:
-        for rel_tag in actor.rel_tags:
-            tag_id = rel_tag.tag_id
-            if tag_id in tag_map:
-                tag_map[tag_id] += 1
-            else:
-                tag_map[tag_id] = 1
-    tag_list = [{'tag_id': tag_id, 'count': count} for tag_id, count in tag_map.items()]
-    tag_list.sort(key=lambda x: x['count'])
-    return tag_list
+    _query = (_query.group_by(ActorTagRelationship.tag_id)
+              .order_by(func.count(ActorTagRelationship.actor_id).desc())
+              .limit(limit))
+    ret = session.execute(_query).fetchall()
+    return [{'tag_id': tag_id, 'count': count} for tag_id, count in ret]

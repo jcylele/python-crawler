@@ -7,12 +7,14 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from Consts import WorkerType, QueueType, NoticeType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl
-from Download.DownloadLimit import PostFilter
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from WorkQueue import QueueUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
+
+# max number of post id
+MAX_POST_ID = 1 << 64 - 1
 
 
 class FetchActorWorker(BaseFetchWorker):
@@ -26,21 +28,22 @@ class FetchActorWorker(BaseFetchWorker):
     def _queueType(self) -> QueueType:
         return QueueType.FetchActor
 
-    def processPosts(self, post_list: list[int], from_url: str) -> bool:
+    def processPosts(self, post_list: list[(int, bool)], from_url: str) -> bool:
         # print("processPosts " +",".join([str(i) for i in post_list]))
         with DbCtrl.getSession() as session, session.begin():
             actor_id = self.actor_info.actor_id
             actor = ActorCtrl.getActor(session, actor_id)
             last_post_id = actor.last_post_id
             reach_last = False
-            for post_id in post_list:
+            for tup_post in post_list:
+                (post_id, is_dm) = tup_post
                 if post_id <= last_post_id:
                     reach_last = True
                     continue
                 post = PostCtrl.getPost(session, post_id)
                 if post is None:
-                    PostCtrl.addPost(session, actor_id, post_id)
-                    QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
+                    PostCtrl.addPost(session, actor_id, post_id, is_dm)
+                    QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
                 else:
                     if post.actor_id != actor_id:
                         owner_actor = post.actor
@@ -50,7 +53,7 @@ class FetchActorWorker(BaseFetchWorker):
                             LogUtil.error(
                                 f"same post {post.post_id} for {post.actor.actor_name} and {actor.actor_name}")
                     elif not post.completed:  # the post is not analysed yet
-                        QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, from_url)
+                        QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
                     else:  # all resources of the post are already added
                         QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit())
             return reach_last
@@ -66,6 +69,11 @@ class FetchActorWorker(BaseFetchWorker):
     def getActorInfo(actor_id: int) -> ActorInfo:
         with DbCtrl.getSession() as session, session.begin():
             return ActorCtrl.getActorInfo(session, actor_id)
+
+    @staticmethod
+    def addInvalidPostNotice(actor_name: str, page: int, post_id_str: str):
+        with DbCtrl.getSession() as session, session.begin():
+            NoticeCtrl.addNotice(session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
 
     def _process(self, item: FetchActorQueueItem) -> bool:
         post_count = 0
@@ -131,16 +139,22 @@ class FetchActorWorker(BaseFetchWorker):
             article_list = self.driver.find_elements(By.CSS_SELECTOR, 'article.post-card')
             post_list = []
             for article in article_list:
-                post_id = article.get_attribute("data-id")
-                if post_id is None:
+                post_id_str = article.get_attribute("data-id")
+                if post_id_str is None:
                     continue
+                is_dm = post_id_str.startswith('DM')
                 try:
-                    post_id = int(post_id)
-                    post_list.append(post_id)
+                    if is_dm:
+                        post_id = int(post_id_str[2:])
+                    else:
+                        post_id = int(post_id_str)
+                    if post_id > MAX_POST_ID:
+                        raise ValueError
                 except:
-                    LogUtil.error(f"actor {actor_name} page {i} post {post_id} invalid")
+                    FetchActorWorker.addInvalidPostNotice(actor_name, i, post_id_str)
+                    LogUtil.error(f"actor {actor_name} page {i} post {post_id_str} invalid")
                     continue
-
+                post_list.append((post_id, is_dm))
             reach_last_post = self.processPosts(post_list, real_url)
             post_count += len(post_list)
 

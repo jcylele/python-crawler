@@ -27,16 +27,16 @@ def enqueueFetchActor(queueMgr: QueueMgr, actor_id: int):
     queueMgr.put(QueueType.FetchActor, item)
 
 
-def enqueuePost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, from_url: str):
+def enqueuePost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, is_dm: bool, from_url: str):
     out_extra = PostExtraInfo(actor_info, post_id)
-    url = RequestCtrl.formatPostUrl(actor_info, post_id)
+    url = RequestCtrl.formatPostUrl(actor_info, post_id, is_dm)
     out_item = UrlQueueItem(url, from_url, out_extra)
     queueMgr.put(QueueType.PageDownload, out_item)
 
 
 def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, downloadLimit: DownloadLimit):
     # post = PostCtrl.getPost(session, post_id)
-    post_url = RequestCtrl.formatPostUrl(actor_info, post.post_id)
+    post_url = RequestCtrl.formatPostUrl(actor_info, post.post_id, post.is_dm)
     for res in post.res_list:
         # 文件已下载,检查大小
         file_path = res.filePath()

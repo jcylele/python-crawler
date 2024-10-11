@@ -53,7 +53,7 @@ def add_actor_tag(form: ActorTagForm):
         tag.tag_name = form.tag_name
         tag.tag_priority = cur_min_priority - 1
         ActorTagCtrl.addActorTag(session, tag)
-        
+
         return DbCtrl.CustomJsonResponse(tag)
 
 
@@ -69,6 +69,5 @@ def update_priorities(form: AllActorTagPriorities):
 @router.put("/{tag_id}")
 def update_actor_tag_name(tag_id: int, tag_name: str):
     with DbCtrl.getSession() as session, session.begin():
-        tag = ActorTagCtrl.getActorTag(session, tag_id)
-        tag.tag_name = tag_name
+        ActorTagCtrl.setTagName(session, tag_id, tag_name)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})

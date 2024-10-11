@@ -10,10 +10,10 @@ router = APIRouter(
 )
 
 
-@router.get("/relative_of_tag/{tag_id}")
-def relative_of_tag(tag_id: int):
+@router.get("/relative_of_tag")
+def relative_of_tag(tag_id: int = Query(alias='id'), limit: int = Query()):
     with DbCtrl.getSession() as session, session.begin():
-        count_map = ChartCtrl.getTagRelative(session, tag_id)
+        count_map = ChartCtrl.getTagRelative(session, tag_id, limit)
         return DbCtrl.CustomJsonResponse(count_map)
 
 
@@ -25,7 +25,7 @@ def scores_of_tag(tag_id: int):
 
 
 @router.get("/tags_of_score")
-def tags_of_score(min_score: int = Query(alias='min'), max_score: int = Query(alias='max')):
+def tags_of_score(min_score: int = Query(alias='min'), max_score: int = Query(alias='max'), limit: int = Query()):
     with DbCtrl.getSession() as session, session.begin():
-        tags = ChartCtrl.getTagsByScore(session, min_score, max_score)
+        tags = ChartCtrl.getTagCountsByScore(session, min_score, max_score, limit)
         return DbCtrl.CustomJsonResponse(tags)

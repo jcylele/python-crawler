@@ -18,6 +18,13 @@ def get_notices(notice_type: int):
         return DbCtrl.CustomJsonResponse(notices)
 
 
+@router.delete("/list/{notice_type}")
+def delete_notices(notice_type: int):
+    with DbCtrl.getSession() as session, session.begin():
+        NoticeCtrl.deleteNoticesOfType(session, NoticeType(notice_type))
+        return DbCtrl.CustomJsonResponse({"value": "ok"})
+
+
 @router.delete("/{notice_id}")
 def delete_notice(notice_id: int):
     with DbCtrl.getSession() as session, session.begin():

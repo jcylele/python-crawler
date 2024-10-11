@@ -79,8 +79,9 @@ def formatActorUrl(actor_info: ActorInfo) -> str:
     return formatActorHref(actor_info.actor_platform, actor_info.actor_link)
 
 
-def formatPostUrl(actor_info: ActorInfo, post_id: int) -> str:
-    return f"{__RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_id}"
+def formatPostUrl(actor_info: ActorInfo, post_id: int, is_dm: bool) -> str:
+    post_prefix = is_dm and "DM" or ""
+    return f"{__RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_prefix}{post_id}"
 
 
 def formatFullUrl(relative_url: str) -> str:

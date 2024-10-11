@@ -3,6 +3,7 @@ import os
 
 from sqlalchemy import select, ScalarResult, func
 from sqlalchemy.orm import Session, Query
+from sqlalchemy.orm.sync import update
 
 from Ctrls import FileInfoCacheCtrl, DbCtrl
 from Models.BaseModel import PostModel, ResState, ActorModel
@@ -30,13 +31,14 @@ def getMaxPostId(session: Session, actor_id: int) -> int:
     return result[0] or 0
 
 
-def addPost(session: Session, actor_id: int, post_id: int):
+def addPost(session: Session, actor_id: int, post_id: int, is_dm: bool):
     """
     add a post record
     """
     post = PostModel()
     post.post_id = post_id
     post.actor_id = actor_id
+    post.is_dm = is_dm
     session.add(post)
     session.flush()
 
@@ -113,10 +115,10 @@ def getFilteredPosts(session: Session, form: PostConditionForm) -> ScalarResult[
 
 
 def setPostComment(session: Session, post_id: int, comment: str):
-    post = getPost(session, post_id)
-    if post is None:
-        return
-    post.comment = comment
+    _query = update(PostModel) \
+        .where(PostModel.post_id == post_id) \
+        .values(comment=comment)
+    session.execute(_query)
 
 
 def getNewPosts(session: Session, actor_id: int, last_post_id: int) -> ScalarResult[PostModel]:

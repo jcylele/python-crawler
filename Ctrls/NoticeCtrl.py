@@ -1,3 +1,4 @@
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from Consts import NoticeType
@@ -10,6 +11,14 @@ def getNoticesOfType(session: Session, notice_type: NoticeType) -> list[NoticeMo
     """
     notices = session.query(NoticeModel).filter(NoticeModel.notice_type == notice_type).all()
     return [notice for notice in notices]
+
+
+def deleteNoticesOfType(session: Session, notice_type: NoticeType):
+    """
+    delete all notices of a certain type
+    """
+    _query = delete(NoticeModel).filter(NoticeModel.notice_type == notice_type)
+    session.execute(_query)
 
 
 def deleteNotice(session: Session, notice_id: int):

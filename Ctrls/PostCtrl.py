@@ -1,9 +1,8 @@
 # PostModel related operations
 import os
 
-from sqlalchemy import select, ScalarResult, func
+from sqlalchemy import select, ScalarResult, func, update
 from sqlalchemy.orm import Session, Query
-from sqlalchemy.orm.sync import update
 
 from Ctrls import FileInfoCacheCtrl, DbCtrl
 from Models.BaseModel import PostModel, ResState, ActorModel

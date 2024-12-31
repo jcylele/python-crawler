@@ -1,3 +1,4 @@
+import Consts
 from Consts import WorkerType, QueueType
 from Ctrls import DbCtrl, ResCtrl
 from Models.BaseModel import ResState, ResModel
@@ -35,14 +36,15 @@ class ResInfoWorker(BaseRequestWorker):
                 return False
 
             res1.setSize(size)
-            max_file_size = self.DownloadLimit().file_size
+            download_limit = self.DownloadLimit()
             # skip files which are too large for now
-            if size > max_file_size > 0:
+            if size > download_limit.file_size > 0:
                 res1.setState(ResState.Skip)
                 LogUtil.info(f"{extra_info} too big: {size:,d}")
                 return True
 
             # enqueue for downloading
-            QueueUtil.enqueueResFile(self.QueueMgr(), item, res1.tmpFilePath(), size)
+            if res1.shouldDownload(download_limit):
+                QueueUtil.downloadResFile(self.QueueMgr(), item, res1.tmpFilePath(), size)
 
             return True

@@ -31,7 +31,7 @@ class FetchActorsWorker(BaseFetchWorker):
                 # it's not the best place, but okay
                 QueueUtil.enqueueActorIcon(self.QueueMgr(), actor_info)
                 # enqueue actor if not exists
-                if not ActorCtrl.hasActor(session, actor_info.actor_name) \
+                if not ActorCtrl.hasActor(session, actor_info) \
                         and self.DownloadLimit().moreActor(True):
                     actor = ActorCtrl.addActor(session, actor_info, self.init_category())
                     actor_ids.append(actor.actor_id)
@@ -48,12 +48,14 @@ class FetchActorsWorker(BaseFetchWorker):
             except:
                 LogUtil.info(f"failed to load artists page {i}, get {self.driver.title} instead")
                 break
+
             # wait for status
-            WebDriverWait(self.driver, 10).until(
-                EC.text_to_be_present_in_element((By.ID, "display-status"), "Displaying search results")
-            )
+            # WebDriverWait(self.driver, 10).until(
+            #     EC.text_to_be_present_in_element((By.ID, "display-status"), "Displaying search results")
+            # )
+
             # wait for page load
-            WebDriverWait(self.driver, 10).until(
+            WebDriverWait(self.driver, 20).until(
                 EC.text_to_be_present_in_element((By.CSS_SELECTOR, "li.pagination-button-current b"), f"{i}")
             )
             # analyze content

@@ -43,7 +43,8 @@ class FetchActorWorker(BaseFetchWorker):
                 post = PostCtrl.getPost(session, post_id)
                 if post is None:
                     PostCtrl.addPost(session, actor_id, post_id, is_dm)
-                    QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
+                    # QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
+                    QueueUtil.enqueueFetchPost(self.QueueMgr(), self.actor_info, post_id, is_dm)
                 else:
                     if post.actor_id != actor_id:
                         owner_actor = post.actor
@@ -53,7 +54,8 @@ class FetchActorWorker(BaseFetchWorker):
                             LogUtil.error(
                                 f"same post {post.post_id} for {post.actor.actor_name} and {actor.actor_name}")
                     elif not post.completed:  # the post is not analysed yet
-                        QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
+                        # QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
+                        QueueUtil.enqueueFetchPost(self.QueueMgr(), self.actor_info, post_id, is_dm)
                     else:  # all resources of the post are already added
                         QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit())
             return reach_last
@@ -98,7 +100,10 @@ class FetchActorWorker(BaseFetchWorker):
         # webpage is new in every iteration, so keep elements inside the loop
         for i in range(1, 1000000):
             try:
-                user_header = self.driver.find_element(By.CSS_SELECTOR, "header.user-header")
+                #  wait and check user-header to ensure the page is loaded
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, ".user-header"))
+                )
             except:
                 LogUtil.info(f"failed to load {actor_name} page {i}, get {self.driver.title} instead")
                 break

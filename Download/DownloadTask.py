@@ -1,8 +1,9 @@
 import os
+import re
 
 import Configs
 import Consts
-from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl
+from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl
 from Download.DownloadLimit import DownloadLimit, PostFilter
 from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
@@ -22,6 +23,7 @@ class DownloadTask(object):
         self.init_group_id = 0
         self.desc = ""
         self.worker_count = {}
+        self.actor_ids = []
 
     def getWorkerCount(self, work_type: Consts.WorkerType) -> int:
         if work_type in self.worker_count:
@@ -77,11 +79,13 @@ class DownloadTask(object):
                 posts = PostCtrl.getNewPosts(session, actor_id, actor.last_post_id)
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
-                        QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, post.is_dm, None)
+                        # QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, post.is_dm, None)
+                        QueueUtil.enqueueFetchPost(self.queueMgr, actor_info, post.post_id, post.is_dm)
                     else:  # all resources of the post are already added
                         QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit)
 
     def downloadActors(self, actor_ids: list[int]):
+        self.actor_ids = actor_ids
         self.worker_count[Consts.WorkerType.FetchActors] = 0
         if self.downloadLimit.post_filter == PostFilter.Current:
             self.currentPosts(actor_ids)
@@ -104,7 +108,7 @@ class DownloadTask(object):
 
                 QueueUtil.enqueueActorIcon(self.queueMgr, actor_info)
                 # enqueue actor if not exists
-                if not ActorCtrl.hasActor(session, actor_info.actor_name):
+                if not ActorCtrl.hasActor(session, actor_info):
                     actor = ActorCtrl.addActor(session, actor_info, self.init_group_id)
                     actor_ids.append(actor.actor_id)
             session.flush()
@@ -140,6 +144,49 @@ class DownloadTask(object):
             for actor in actors:
                 actor_ids.append(actor.actor_id)
         self.downloadActors(actor_ids)
+
+    def resumeFiles(self):
+        self.desc = f"resume files"
+        # cache folder status
+        folder_dict = {}
+        download_folder = Configs.formatTmpFolderPath()
+        with DbCtrl.getSession() as session, session.begin():
+            try:
+                for root, _, files in os.walk(download_folder):
+                    for file in files:
+                        matchObj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
+                        if matchObj is None:
+                            continue
+                        actor_name = matchObj.group(1)
+                        # get and cache folder status
+                        actor_info = folder_dict.get(actor_name)
+                        if actor_info is None:
+                            actor = ActorCtrl.getActorByName(session, actor_name)
+                            if actor is not None and actor.actor_group.has_folder:
+                                actor_info = ActorInfo(actor)
+                                folder_dict[actor_name] = actor_info
+                            else:
+                                folder_dict[actor_name] = False
+
+                        # remove file if actor not exist or has no folder
+                        if actor_info is None:
+                            LogUtil.info(f"remove file {file} due to actor")
+                            os.remove(os.path.join(root, file))
+                        else:
+                            post_id = int(matchObj.group(2))
+                            res_index = int(matchObj.group(3))
+                            res = ResCtrl.getResByIndex(session, post_id, res_index)
+                            if res is None or res.res_state == Consts.ResState.Del:
+                                LogUtil.info(f"remove file {file} due to res")
+                                os.remove(os.path.join(root, file))
+                            elif res.shouldDownload(self.downloadLimit):
+                                QueueUtil.enqueueResFile(self.queueMgr, actor_info, res.post, res)
+            except Exception as e:
+                pass
+        # no need to fetch actors
+        self.worker_count[Consts.WorkerType.FetchActors] = 0
+        self.worker_count[Consts.WorkerType.FetchActor] = 0
+        self.startDownload()
 
     @staticmethod
     def initEnv():

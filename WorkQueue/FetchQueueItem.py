@@ -1,3 +1,4 @@
+from Models.ActorInfo import ActorInfo
 from WorkQueue.BaseQueueItem import BaseQueueItem
 
 
@@ -21,3 +22,18 @@ class FetchActorQueueItem(BaseQueueItem):
 
     def __repr__(self):
         return f"FetchActorQueueItem({self.actor_id})"
+
+
+class FetchPostQueueItem(BaseQueueItem):
+    """
+    fetch a single actor
+    """
+
+    def __init__(self, actor_info: ActorInfo, post_id: int, is_dm: bool):
+        super().__init__()
+        self.actor_info = actor_info
+        self.post_id = post_id
+        self.is_dm = is_dm
+
+    def __repr__(self):
+        return f"FetchPostQueueItem({self.actor_info.actor_name}, {self.post_id})"

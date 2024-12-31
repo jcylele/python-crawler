@@ -1,6 +1,5 @@
-from sqlalchemy import ScalarResult, select, func
+from sqlalchemy import ScalarResult, select, func, update
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.sync import update
 
 from Ctrls import DbCtrl
 from Models.BaseModel import ActorTagModel, ActorTagRelationship

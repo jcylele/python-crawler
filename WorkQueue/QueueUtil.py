@@ -3,17 +3,16 @@
 import os
 
 import Configs
-import Consts
 from Consts import QueueType
 from Ctrls import RequestCtrl
 from Download.DownloadLimit import DownloadLimit
 from Models.ActorInfo import ActorInfo
-from Models.BaseModel import ResState, PostModel
+from Models.BaseModel import ResState, PostModel, ResModel
 from Utils import LogUtil
 from WorkQueue import QueueMgr
 from WorkQueue.ExtraInfo import PostExtraInfo, ResInfoExtraInfo, ResFileExtraInfo, \
     FilePathExtraInfo
-from WorkQueue.FetchQueueItem import FetchActorsQueueItem, FetchActorQueueItem
+from WorkQueue.FetchQueueItem import FetchActorsQueueItem, FetchActorQueueItem, FetchPostQueueItem
 from WorkQueue.UrlQueueItem import UrlQueueItem
 
 
@@ -25,6 +24,11 @@ def enqueueFetchActors(queueMgr: QueueMgr):
 def enqueueFetchActor(queueMgr: QueueMgr, actor_id: int):
     item = FetchActorQueueItem(actor_id)
     queueMgr.put(QueueType.FetchActor, item)
+
+
+def enqueueFetchPost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, is_dm: bool):
+    item = FetchPostQueueItem(actor_info, post_id, is_dm)
+    queueMgr.put(QueueType.FetchPost, item)
 
 
 def enqueuePost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, is_dm: bool, from_url: str):
@@ -51,27 +55,24 @@ def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, do
                 res.setState(ResState.Down)
                 continue
 
-        # 不需要下载
-        if not res.shouldDownload(downloadLimit.file_size):
-            continue
-
-        # 检查类型
-        if res.res_type == Consts.ResType.Video:
-            if not downloadLimit.allow_video:
-                continue
-        elif res.res_type == Consts.ResType.Image:
-            if not downloadLimit.allow_img:
-                continue
-
-        out_extra = ResInfoExtraInfo(actor_info, post.post_id, res.res_id)
+        out_extra = ResInfoExtraInfo(actor_info, post.post_id, res.res_id, res.res_type)
         out_item = UrlQueueItem(res.res_url, post_url, out_extra)
+        # 所有资源都Info
         if res.res_size == 0:
             queueMgr.put(QueueType.ResInfo, out_item)
-        else:
-            enqueueResFile(queueMgr, out_item, res.tmpFilePath(), res.res_size)
+            continue
+        elif res.shouldDownload(downloadLimit):
+            downloadResFile(queueMgr, out_item, res.tmpFilePath(), res.res_size)
 
 
-def enqueueResFile(queueMgr: QueueMgr, item: UrlQueueItem, file_path: str, file_size: int):
+def enqueueResFile(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, res: ResModel):
+    post_url = RequestCtrl.formatPostUrl(actor_info, post.post_id, post.is_dm)
+    out_extra = ResInfoExtraInfo(actor_info, post.post_id, res.res_id, res.res_type)
+    out_item = UrlQueueItem(res.res_url, post_url, out_extra)
+    downloadResFile(queueMgr, out_item, res.tmpFilePath(), res.res_size)
+
+
+def downloadResFile(queueMgr: QueueMgr, item: UrlQueueItem, file_path: str, file_size: int):
     out_extra = ResFileExtraInfo(item.extra_info, file_path, file_size)
     out_item = UrlQueueItem(item.url, item.from_url, out_extra)
     queueMgr.put(QueueType.FileDownload, out_item)

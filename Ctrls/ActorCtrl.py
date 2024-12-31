@@ -8,7 +8,8 @@ from sqlalchemy import ScalarResult, select, delete
 from sqlalchemy.orm import Session, Query
 
 import Configs
-from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl, ActorGroupCtrl
+from Consts import NoticeType
+from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl, ActorGroupCtrl, NoticeCtrl
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ActorModel, ActorTagRelationship, ResState
 from Utils import LogUtil
@@ -48,12 +49,20 @@ def createActorFolder(actor_name: str):
     os.makedirs(Configs.formatActorFolderPath(actor_name), exist_ok=True)
 
 
+def checkSameActorName(session: Session, actor_name: str):
+    _query = session.query(ActorModel) \
+        .where(ActorModel.actor_name == actor_name)
+    actor = session.execute(_query).fetchone()
+    if actor is not None:
+        NoticeCtrl.addNotice(session, NoticeType.SameActorName, actor_name)
+
+
 def addActor(session: Session, actor_info: ActorInfo, group_id: int) -> ActorModel:
     """
     create a record for the actor, skip if already exist
     :return: actor record
     """
-
+    checkSameActorName(session, actor_info.actor_name)
     createActorFolder(actor_info.actor_name)
 
     actor = ActorModel(actor_name=actor_info.actor_name,
@@ -66,14 +75,10 @@ def addActor(session: Session, actor_info: ActorInfo, group_id: int) -> ActorMod
     return actor
 
 
-def hasActor(session: Session, actor_name: str) -> bool:
-    """
-    check if actor already exist
-    :param session:
-    :param actor_name:
-    :return: exist or not
-    """
-    _query = session.query(ActorModel).where(ActorModel.actor_name == actor_name)
+def hasActor(session: Session, actor_info: ActorInfo) -> bool:
+    _query = session.query(ActorModel) \
+        .where(ActorModel.actor_name == actor_info.actor_name) \
+        .where(ActorModel.actor_platform == actor_info.actor_platform)
     actor = session.execute(_query).fetchone()
     return actor is not None
 
@@ -278,16 +283,20 @@ def unlinkActors(session: Session, actor_ids: [str]):
 
 
 def linkActors(session: Session, actor_ids: [str]):
+    max_score = 0
     # merge all tags
     all_tags = set()
     for actor_id in actor_ids:
         actor = getActor(session, actor_id)
+        if actor.score > max_score:
+            max_score = actor.score
         for tag in actor.rel_tags:
             all_tags.add(tag.tag_id)
     # apply tags to all actors
     main_actor_id = actor_ids[0]
     for actor_id in actor_ids:
         actor = getActor(session, actor_id)
+        actor.score = max_score
         actor.main_actor_id = main_actor_id
         new_tags = all_tags.copy()
         for tag in actor.rel_tags:

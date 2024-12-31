@@ -1,3 +1,5 @@
+from typing import List
+
 from fastapi import APIRouter
 from fastapi.params import Query
 from Ctrls import ChartCtrl, DbCtrl
@@ -17,11 +19,14 @@ def relative_of_tag(tag_id: int = Query(alias='id'), limit: int = Query()):
         return DbCtrl.CustomJsonResponse(count_map)
 
 
-@router.get("/scores_of_tag/{tag_id}")
-def scores_of_tag(tag_id: int):
+@router.post("/scores_of_tag")
+def scores_of_tag(tag_ids: List[int]):
+    ret = []
     with DbCtrl.getSession() as session, session.begin():
-        scores = ChartCtrl.getScoresByTag(session, tag_id)
-        return DbCtrl.CustomJsonResponse(scores)
+        for tag_id in tag_ids:
+            scores = ChartCtrl.getScoresByTag(session, tag_id)
+            ret.append(scores)
+    return DbCtrl.CustomJsonResponse(ret)
 
 
 @router.get("/tags_of_score")

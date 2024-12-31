@@ -4,6 +4,8 @@ from enum import Enum, auto, IntEnum
 class NoticeType(Enum):
     UnlinkedActor = 1  # 2 actors are not linked, but share the same post
     InvalidPost = 2  # a post is invalid
+    SameActorName = 3 # 2 accounts(different platform) of same actor
+
 
 
 class ResType(Enum):
@@ -28,6 +30,7 @@ class WorkerType(Enum):
 
     FetchActors = auto()
     FetchActor = auto()
+    FetchPost = auto()
 
     AnalysePost = auto()
 
@@ -41,6 +44,7 @@ class QueueType(IntEnum):
 
     FetchActors = 11
     FetchActor = 12
+    FetchPost = 13
 
     # above queues are FIFO queues, below are priority queues
     MinPriorityQueue = 100

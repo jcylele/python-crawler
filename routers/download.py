@@ -4,8 +4,8 @@ from fastapi import APIRouter
 
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
-from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks
-from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm
+from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds
+from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, BaseDownloadForm
 
 router = APIRouter(
     prefix="/api/download",
@@ -31,6 +31,15 @@ def download_by_group(form: GroupDownloadForm):
     task = NewTask()
     task.setLimit(limit)
     task.downloadByActorGroup(form.actor_group_id)
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
+@router.post("/resume")
+def resume_files(form: BaseDownloadForm):
+    limit = DownloadLimit(form.download_limit)
+    task = NewTask()
+    task.setLimit(limit)
+    task.resumeFiles()
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
@@ -63,6 +72,12 @@ def download_by_urls(form: UrlDownloadForm):
 def get_tasks():
     tasks = GetAllTask()
     return DbCtrl.CustomJsonResponse(tasks)
+
+
+@router.get("/actor_ids")
+def get_task_actor_ids():
+    actor_ids = GetActorIds()
+    return DbCtrl.CustomJsonResponse(actor_ids)
 
 
 # must before @router.delete("/{task_uid}")

@@ -42,3 +42,10 @@ def StopAllTasks():
     task_dict.clear()
     # kill all web browser
     os.system("taskkill /f /t /im chrome.exe")
+
+
+def GetActorIds() -> list[int]:
+    actor_ids = []
+    for task in task_dict.values():
+        actor_ids.extend(task.actor_ids)
+    return actor_ids

@@ -11,6 +11,7 @@ import Configs
 from Consts import ResState, ResType, NoticeType
 from Ctrls import FileInfoCacheCtrl, RequestCtrl
 from Ctrls.FileInfoCacheCtrl import ActorFileInfo
+from Download.DownloadLimit import DownloadLimit
 from Utils import LogUtil
 
 
@@ -250,17 +251,21 @@ class ResModel(BaseModel):
         """
         return f"{Configs.formatTmpFolderPath()}/{self.tmpFileName()}"
 
-    def shouldDownload(self, max_file_size: int) -> bool:
-        """
-        check whether resources should be downloaded
-        :return:
-        """
-        if self.res_state == ResState.Init:
-            return True
-        if self.res_state != ResState.Skip:
+    def shouldDownload(self, downloadLimit: DownloadLimit) -> bool:
+        # 已下载/删除
+        if self.res_state == ResState.Down or self.res_state == ResState.Del:
             return False
-        if self.res_size > max_file_size > 0:
+        # 类型不对
+        if self.res_type == ResType.Video:
+            if not downloadLimit.allow_video:
+                return False
+        elif self.res_type == ResType.Image:
+            if not downloadLimit.allow_img:
+                return False
+        # 超过大小
+        if self.res_size > downloadLimit.file_size > 0:
             return False
+
         return True
 
     def setSize(self, size: int):

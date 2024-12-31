@@ -18,12 +18,19 @@ def getTagRelative(session: Session, tag_id: int, limit: int):
 
 
 def getScoresByTag(session: Session, tag_id: int) -> list[int]:
-    _query = session.query(ActorTagRelationship) \
-        .where(ActorTagRelationship.tag_id == tag_id)
-    rels = session.scalars(_query)
+    """
+    get scores of actors who have the tag
+    """
+    _query = select(ActorModel.score, func.count(ActorModel.actor_id)) \
+        .join(ActorTagRelationship, ActorModel.actor_id == ActorTagRelationship.actor_id) \
+        .where(ActorTagRelationship.tag_id == tag_id) \
+        .group_by(ActorModel.score)
+    ret = session.execute(_query).fetchall()
+
     scores = [0] * (Configs.MAX_SCORE + 1)
-    for rel in rels:
-        scores[rel.actor.score] += 1
+    for score, count in ret:
+        scores[score] = count
+
     return scores
 
 

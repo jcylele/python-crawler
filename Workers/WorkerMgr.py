@@ -4,6 +4,7 @@ from Workers.AnalysePostWorker import AnalysePostWorker
 from Workers.BaseWorker import BaseWorker
 from Workers.FetchActorWorker import FetchActorWorker
 from Workers.FetchActorsWorker import FetchActorsWorker
+from Workers.FetchPostWorker import FetchPostWorker
 from Workers.FileDownWorker import FileDownWorker
 from Workers.PageDownWorker import PageDownWorker
 from Workers.ResInfoWorker import ResInfoWorker
@@ -20,6 +21,7 @@ WorkerClasses = {
     WorkerType.SimpleFile: SimpleFileDownWorker,
     WorkerType.FetchActors: FetchActorsWorker,
     WorkerType.FetchActor: FetchActorWorker,
+    WorkerType.FetchPost: FetchPostWorker,
 }
 
 # specify worker count for types, count is 1 if not specified
@@ -27,7 +29,6 @@ WorkerCount = {
     WorkerType.PageDown: 3,
     WorkerType.FileDown: 7,
     WorkerType.ResInfo: 5,
-    # WorkerType.FetchActor: 3,
 }
 
 

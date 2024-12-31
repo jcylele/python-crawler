@@ -5,8 +5,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
-from Consts import WorkerType, QueueType, NoticeType
-from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl
+from Consts import WorkerType, QueueType, NoticeType, ActorLogType
+from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from WorkQueue import QueueUtil
@@ -66,6 +66,7 @@ class FetchActorWorker(BaseFetchWorker):
             actor = ActorCtrl.getActor(session, actor_id)
             if actor.total_post_count != post_count:
                 actor.total_post_count = post_count
+                ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.PostCount, post_count)
 
     @staticmethod
     def getActorInfo(actor_id: int) -> ActorInfo:

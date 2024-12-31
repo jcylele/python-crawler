@@ -8,7 +8,7 @@ from sqlalchemy import String, ForeignKey, BigInteger, DateTime, func
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
-from Consts import ResState, ResType, NoticeType
+from Consts import ResState, ResType, NoticeType, ActorLogType
 from Ctrls import FileInfoCacheCtrl, RequestCtrl
 from Ctrls.FileInfoCacheCtrl import ActorFileInfo
 from Download.DownloadLimit import DownloadLimit
@@ -342,6 +342,27 @@ class NoticeModel(BaseModel):
             'notice_param0': self.notice_param0,
             'notice_param1': self.notice_param1,
             'notice_param2': self.notice_param2
+        }
+
+        return json_data
+
+
+class ActorLogModel(BaseModel):
+    __tablename__ = "tab_log"
+
+    log_id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int] = mapped_column(
+        ForeignKey("tab_actor.actor_id"),
+        index=True
+    )
+    log_type: Mapped[ActorLogType] = mapped_column(IntEnum(ActorLogType))
+    log_param: Mapped[str] = mapped_column(String(100), default="")
+    log_time: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    def toJson(self):
+        json_data = {
+            'log_type': self.log_type,
+            'log_param': self.log_param,
         }
 
         return json_data

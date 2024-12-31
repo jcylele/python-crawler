@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from fastapi.params import Query
 
 import Configs
-from Ctrls import DbCtrl, ActorCtrl
+from Ctrls import DbCtrl, ActorCtrl, ActorLogCtrl
 from routers.web_data import ActorConditionForm, BatchActorGroup
 
 router = APIRouter(
@@ -136,3 +136,10 @@ def get_linked_actors(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
         actors = ActorCtrl.getLinkedActors(session, actor_id)
         return DbCtrl.CustomJsonResponse(actors)
+
+
+@router.get("/{actor_id}/logs")
+def get_logs(actor_id: int):
+    with DbCtrl.getSession() as session, session.begin():
+        logs = ActorLogCtrl.getActorLogs(session, actor_id)
+        return DbCtrl.CustomJsonResponse(logs)

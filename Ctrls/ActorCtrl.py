@@ -3,13 +3,14 @@
 import os
 import re
 import shutil
+from typing import Type
 
 from sqlalchemy import ScalarResult, select, delete
 from sqlalchemy.orm import Session, Query
 
 import Configs
-from Consts import NoticeType
-from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl, ActorGroupCtrl, NoticeCtrl
+from Consts import NoticeType, ActorLogType
+from Ctrls import PostCtrl, DbCtrl, FileInfoCacheCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ActorModel, ActorTagRelationship, ResState
 from Utils import LogUtil
@@ -71,6 +72,8 @@ def addActor(session: Session, actor_info: ActorInfo, group_id: int) -> ActorMod
                        actor_group_id=group_id)
     session.add(actor)
     session.flush()
+
+    ActorLogCtrl.addActorLog(session, actor.actor_id, ActorLogType.Add)
 
     return actor
 
@@ -172,6 +175,8 @@ def changeActorTags(session: Session, actor_id: int, tag_list: list[int]) -> Act
 
     session.flush()
 
+    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Tag, *tag_list)
+
     # return updated actor
     actor = getActor(session, actor_id)
     return actor
@@ -201,7 +206,7 @@ def removeOutdatedFiles(session: Session):
         pass
 
 
-def changeActorGroup(session: Session, actor_id: str, new_group_id: int) -> ActorModel:
+def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> ActorModel:
     actor = getActor(session, actor_id)
     # no change
     if actor.actor_group_id == new_group_id:
@@ -220,6 +225,9 @@ def changeActorGroup(session: Session, actor_id: str, new_group_id: int) -> Acto
     # set field
     actor.setGroup(new_group_id)
     session.flush()
+
+    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Group, new_group_id)
+
     return actor
 
 
@@ -228,6 +236,8 @@ def ResetActorPosts(session: Session, actor_id: int):
     actor.last_post_id = 0
 
     PostCtrl.batchSetResStates(session, actor_id, ResState.Init)
+
+    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetPost)
 
 
 def deleteAllRes(session: Session, actor: ActorModel):
@@ -245,6 +255,7 @@ def clearActorFolder(session: Session, actor: ActorModel):
         return
     # set res state according to file existence
     PostCtrl.removeCurrentResFiles(session, actor.actor_id)
+    ActorLogCtrl.addActorLog(session, actor.actor_id, ActorLogType.ClearFolder)
     # remove folder
     shutil.rmtree(actor_folder)
     # recreate folder
@@ -259,6 +270,9 @@ def changeActorScore(session: Session, actor_id: int, score: int) -> ActorModel:
     # set field
     actor.score = score
     session.flush()
+
+    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Score, score)
+
     return actor
 
 
@@ -270,6 +284,9 @@ def changeActorRemark(session: Session, actor_id: int, remark: str) -> ActorMode
     # set field
     actor.remark = remark
     session.flush()
+
+    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Remark, remark)
+
     return actor
 
 
@@ -279,6 +296,7 @@ def unlinkActors(session: Session, actor_ids: [str]):
         actor = getActor(session, actor_id)
         actor.main_actor_id = 0
         actor_list.append(actor)
+        ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Unlink)
     return actor_list
 
 
@@ -286,8 +304,10 @@ def linkActors(session: Session, actor_ids: [str]):
     max_score = 0
     # merge all tags
     all_tags = set()
+    actor_names = []
     for actor_id in actor_ids:
         actor = getActor(session, actor_id)
+        actor_names.append(actor.actor_name)
         if actor.score > max_score:
             max_score = actor.score
         for tag in actor.rel_tags:
@@ -313,6 +333,10 @@ def linkActors(session: Session, actor_ids: [str]):
     for actor_id in actor_ids:
         actor = getActor(session, actor_id)
         actor_list.append(actor)
+
+        ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Link, *actor_names)
+        ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Score, max_score)
+        ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Tag, *all_tags)
     return actor_list
 
 

@@ -72,7 +72,6 @@ def removeCurrentResFiles(session: Session, actor_id: int):
             if os.path.exists(res.filePath()):
                 res.setState(ResState.Del)
 
-
 def filterQuery(_query: Query, form: PostConditionForm) -> Query:
     # actor_name
     if form.actor_id != 0:

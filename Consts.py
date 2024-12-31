@@ -6,6 +6,17 @@ class NoticeType(Enum):
     InvalidPost = 2  # a post is invalid
     SameActorName = 3 # 2 accounts(different platform) of same actor
 
+class ActorLogType(Enum):
+    Add = 1
+    Group = 2
+    Score = 3
+    Tag = 4
+    ResetPost = 5
+    Remark = 6
+    Link = 7
+    Unlink = 8
+    PostCount = 9
+    ClearFolder = 10
 
 
 class ResType(Enum):

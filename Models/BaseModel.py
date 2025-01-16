@@ -306,6 +306,7 @@ class NoticeModel(BaseModel):
     notice_param0: Mapped[str] = mapped_column(String(100), default="")
     notice_param1: Mapped[str] = mapped_column(String(100), default="")
     notice_param2: Mapped[str] = mapped_column(String(100), default="")
+    deleted: Mapped[bool] = mapped_column(default=False)
 
     def __calcChecksum(self):
         bytes1 = self.notice_param0.encode('utf-8')

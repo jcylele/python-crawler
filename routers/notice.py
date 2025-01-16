@@ -10,6 +10,11 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+@router.get("/count_map")
+def get_notice_count():
+    with DbCtrl.getSession() as session, session.begin():
+        count_map = NoticeCtrl.getNoticeCountMap(session)
+        return DbCtrl.CustomJsonResponse(count_map)
 
 @router.get("/list/{notice_type}")
 def get_notices(notice_type: int):

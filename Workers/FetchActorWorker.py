@@ -78,6 +78,12 @@ class FetchActorWorker(BaseFetchWorker):
         with DbCtrl.getSession() as session, session.begin():
             NoticeCtrl.addNotice(session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
 
+    @staticmethod
+    def addLinkedNotice(actor_name: str):
+        with DbCtrl.getSession() as session, session.begin():
+            NoticeCtrl.addNotice(session, NoticeType.HasLinkedAccount, actor_name)
+
+
     def _process(self, item: FetchActorQueueItem) -> bool:
         post_count = 0
         self.actor_info = FetchActorWorker.getActorInfo(item.actor_id)
@@ -127,6 +133,12 @@ class FetchActorWorker(BaseFetchWorker):
                 page_menu = paginator_top.find_element(By.CSS_SELECTOR, 'menu')
             except:
                 page_menu = None
+
+            # has linked accounts
+            if i== 1:
+                linked_a = paginator_top.find_element(By.CSS_SELECTOR, "ul > li:nth-child(3) > a")
+                if linked_a.text == "Linked Accounts (✔️)":
+                    FetchActorWorker.addLinkedNotice(actor_name)
 
             LogUtil.info(f"actor {actor_name} page {i}")
             # wait for page load

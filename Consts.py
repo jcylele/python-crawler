@@ -2,9 +2,12 @@ from enum import Enum, auto, IntEnum
 
 
 class NoticeType(Enum):
+    All = 0
     UnlinkedActor = 1  # 2 actors are not linked, but share the same post
     InvalidPost = 2  # a post is invalid
-    SameActorName = 3 # 2 accounts(different platform) of same actor
+    SameActorName = 3  # 2 accounts(different platform) of same actor
+    HasLinkedAccount = 4  # actor has linked accounts
+
 
 class ActorLogType(Enum):
     Add = 1

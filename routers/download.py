@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
-from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds
+from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
 from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, BaseDownloadForm
 
 router = APIRouter(
@@ -67,6 +67,10 @@ def download_by_urls(form: UrlDownloadForm):
     task.downloadByUrls(form.urls)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
+@router.get("/count")
+def get_task_count():
+    count = GetTaskCount()
+    return DbCtrl.CustomJsonResponse(count)
 
 @router.get("/list")
 def get_tasks():

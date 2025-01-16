@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from fastapi.params import Query
 
 import Configs
-from Ctrls import DbCtrl, ActorCtrl, ActorLogCtrl
+from Ctrls import DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl
 from routers.web_data import ActorConditionForm, BatchActorGroup
 
 router = APIRouter(
@@ -43,7 +43,7 @@ def link_actors(actor_ids: List[int]):
 
 
 @router.post("/unlink")
-def link_actors(actor_ids: List[int]):
+def unlink_actors(actor_ids: List[int]):
     with DbCtrl.getSession() as session, session.begin():
         actors = ActorCtrl.unlinkActors(session, actor_ids)
         return DbCtrl.CustomJsonResponse(actors)
@@ -143,3 +143,17 @@ def get_logs(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
         logs = ActorLogCtrl.getActorLogs(session, actor_id)
         return DbCtrl.CustomJsonResponse(logs)
+
+
+@router.get("/{actor_id}/video_states")
+def get_video_states(actor_id: int):
+    with DbCtrl.getSession() as session, session.begin():
+        ret = ResCtrl.getResStatesOfActor(session, actor_id)
+        return DbCtrl.CustomJsonResponse(ret)
+
+
+@router.get("/{actor_id}/video_sizes")
+def get_video_sizes(actor_id: int):
+    with DbCtrl.getSession() as session, session.begin():
+        ret = ResCtrl.getResSizesOfActor(session, actor_id)
+        return DbCtrl.CustomJsonResponse(ret)

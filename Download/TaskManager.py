@@ -19,13 +19,22 @@ def NewTask() -> DownloadTask:
     return task
 
 
-def GetAllTask() -> list[DownloadTask]:
+def RemoveFinishedTasks():
     finished_task = []
     for task_uid, task in task_dict.items():
         if task.isDone():
             finished_task.append(task_uid)
     for task_uid in finished_task:
         del task_dict[task_uid]
+
+
+def GetTaskCount() -> int:
+    RemoveFinishedTasks()
+    return len(task_dict)
+
+
+def GetAllTask() -> list[DownloadTask]:
+    RemoveFinishedTasks()
     return list(task_dict.values())
 
 

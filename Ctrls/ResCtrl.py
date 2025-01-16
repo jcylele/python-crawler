@@ -1,13 +1,15 @@
 # Resource related operations
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
-from sqlalchemy import select, ScalarResult
-from sqlalchemy.orm import Session
+from sqlalchemy import select, ScalarResult, func
+from sqlalchemy.orm import Session, Query
 
+from Configs import RES_SIZE_LIST
 from Consts import ResState
 from Ctrls import FileInfoCacheCtrl
 from Models.BaseModel import ResModel, ResType, PostModel
+from Models.ResSizeCount import ResSizeCount
 
 
 def getRes(session: Session, res_id: int) -> ResModel:
@@ -68,6 +70,53 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
         session.add(res)
     session.flush()
     onResAdded(session, post_id)
+
+
+def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
+    _query = (select(ResModel.res_state, ResModel.res_size)
+              .where(ResModel.res_type == ResType.Video)
+              .where(ResModel.post_id == PostModel.post_id)
+              .where(PostModel.actor_id == actor_id)
+              .order_by(ResModel.res_size))
+    ret = session.execute(_query).fetchall()
+
+    len_size = len(RES_SIZE_LIST)
+    cur_index = 0
+    cur_size = RES_SIZE_LIST[0]
+    state_arr: list[dict[ResState, int]] = []
+    state_map = {}
+
+    for res_state, res_size in ret:
+        while res_size > cur_size and cur_index < len_size:
+            state_arr.append(state_map)
+            state_map = {}
+            cur_index += 1
+            if cur_index < len_size:
+                cur_size = RES_SIZE_LIST[cur_index]
+            else:
+                cur_size = -1
+        state_map[res_state] = state_map.get(res_state, 0) + 1
+    # fill the rest
+    for index in range(cur_index, len_size + 1):
+        state_arr.append(state_map)
+        state_map = {}
+
+    # print(state_arr)
+    rsc_list: List[ResSizeCount] = []
+    for i, state_map in enumerate(state_arr):
+        item = ResSizeCount()
+        item.setStateMap(state_map)
+        if i == 0:
+            item.min = 0
+            item.max = RES_SIZE_LIST[i]
+        elif i == len_size:
+            item.min = RES_SIZE_LIST[i - 1]
+            item.max = -1
+        else:
+            item.min = RES_SIZE_LIST[i - 1]
+            item.max = RES_SIZE_LIST[i]
+        rsc_list.append(item)
+    return rsc_list
 
 
 def getResStatesOfActor(session: Session, actor_id: int) -> list[Tuple[ResState, int]]:

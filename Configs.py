@@ -19,6 +19,9 @@ MAX_FETCH_ACTOR_COUNT = 0
 SHOW_BROWSER = False
 # maximum score of an actor
 MAX_SCORE = 12
+# res between RES_SIZE_LIST[i-1] and RES_SIZE_LIST[i] will be put into RES_SIZE_LIST[i] segment
+RES_SIZE_LIST = [0, 32 * 1024 * 1024, 64 * 1024 * 1024, 128 * 1024 * 1024,
+                 256 * 1024 * 1024, 512 * 1024 * 1024, 1024 * 1024 * 1024]
 
 
 def init():

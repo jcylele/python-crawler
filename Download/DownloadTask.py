@@ -25,6 +25,9 @@ class DownloadTask(object):
         self.worker_count = {}
         self.actor_ids = []
 
+    def setWorkerCount(self, work_type: Consts.WorkerType, count: int):
+        self.worker_count[work_type] = count
+
     def getWorkerCount(self, work_type: Consts.WorkerType) -> int:
         if work_type in self.worker_count:
             return self.worker_count[work_type]
@@ -64,29 +67,33 @@ class DownloadTask(object):
 
     def normalPosts(self, actor_ids: list[int]):
         val = min(len(actor_ids), Configs.MAX_FETCH_ACTOR_COUNT)
-        self.worker_count[Consts.WorkerType.FetchActor] = val
+        self.setWorkerCount(Consts.WorkerType.FetchActor, val)
 
         for actor_id in actor_ids:
             QueueUtil.enqueueFetchActor(self.queueMgr, actor_id)
 
     def currentPosts(self, actor_ids: list[int]):
-        self.worker_count[Consts.WorkerType.FetchActor] = 0
+        self.setWorkerCount(Consts.WorkerType.FetchActor, 0)
 
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
                 posts = PostCtrl.getNewPosts(session, actor_id, actor.last_post_id)
+                has_unfinished_posts = False
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
+                        has_unfinished_posts = True
                         # QueueUtil.enqueuePost(self.queueMgr, actor_info, post.post_id, post.is_dm, None)
                         QueueUtil.enqueueFetchPost(self.queueMgr, actor_info, post.post_id, post.is_dm)
                     else:  # all resources of the post are already added
                         QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit)
+                if not has_unfinished_posts:
+                    self.setWorkerCount(Consts.WorkerType.FetchPost, 0)
 
     def downloadActors(self, actor_ids: list[int]):
         self.actor_ids = actor_ids
-        self.worker_count[Consts.WorkerType.FetchActors] = 0
+        self.setWorkerCount(Consts.WorkerType.FetchActors, 0)
         if self.downloadLimit.post_filter == PostFilter.Current:
             self.currentPosts(actor_ids)
         else:
@@ -184,8 +191,8 @@ class DownloadTask(object):
             except Exception as e:
                 pass
         # no need to fetch actors
-        self.worker_count[Consts.WorkerType.FetchActors] = 0
-        self.worker_count[Consts.WorkerType.FetchActor] = 0
+        self.setWorkerCount(Consts.WorkerType.FetchActors, 0)
+        self.setWorkerCount(Consts.WorkerType.FetchActor, 0)
         self.startDownload()
 
     @staticmethod

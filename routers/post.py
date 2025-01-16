@@ -30,10 +30,3 @@ def set_comment(form: PostCommentForm):
     with DbCtrl.getSession() as session, session.begin():
         PostCtrl.setPostComment(session, int(form.post_id), form.comment)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
-
-
-@router.get("/video_states/{actor_id}")
-def get_video_states(actor_id: int):
-    with DbCtrl.getSession() as session, session.begin():
-        ret = ResCtrl.getResStatesOfActor(session, actor_id)
-        return DbCtrl.CustomJsonResponse(ret)

@@ -3,7 +3,6 @@
 import os
 import re
 import shutil
-from typing import Type
 
 from sqlalchemy import ScalarResult, select, delete
 from sqlalchemy.orm import Session, Query

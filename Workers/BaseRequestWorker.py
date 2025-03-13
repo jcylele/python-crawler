@@ -1,8 +1,8 @@
 import random
 import shutil
 import time
+import urllib.request
 
-import Configs
 from Consts import WorkerType
 from Ctrls import RequestCtrl
 from Utils import LogUtil
@@ -55,7 +55,7 @@ class BaseRequestWorker(BaseWorker):
             return self._head(item)
         elif res.status_code == 429 or res.status_code == 403:  # too fast
             time.sleep(5)
-            LogUtil.warn(f"head {item.extra_info} too fast")
+            LogUtil.warn(f"head {item.url} too fast")
             return self._head(item)
         else:
             LogUtil.info(f"head error {res.status_code}: {item.url}")
@@ -96,3 +96,13 @@ class BaseRequestWorker(BaseWorker):
             with open(file_path, file_mode) as f:
                 # write stream data into file, the most efficient way of download that I know
                 shutil.copyfileobj(r.raw, f)
+
+    def _downloadSmall(self, url: str, file_path: str) -> bool:
+        self._sleep()
+        try:
+            with urllib.request.urlopen(url) as response, open(file_path, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+            return True
+        except:
+            LogUtil.error(f"download {url} failed")
+            return False

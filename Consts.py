@@ -1,13 +1,20 @@
 from enum import Enum, auto, IntEnum
 
 
+class GroupCondType(Enum):
+    MinScore = 0  # param: score
+    MaxScore = 1  # param: score
+    HasAnyTag = 2  # param: bool
+    Linked = 3  # param: bool
+
+
 class NoticeType(Enum):
     All = 0
     UnlinkedActor = 1  # 2 actors are not linked, but share the same post
     InvalidPost = 2  # a post is invalid
-    SameActorName = 3  # 2 accounts(different platform) of same actor
+    SameActorName = 3  #  same name, different platform
     HasLinkedAccount = 4  # actor has linked accounts
-
+    SimilarActorName = 5 # actor name is similar
 
 class ActorLogType(Enum):
     Add = 1
@@ -39,31 +46,33 @@ class WorkerType(Enum):
     worker type, find corresponding worker classes in WorkerMgr.py
     """
     FileDown = auto()
-    PageDown = auto()
     ResInfo = auto()
-
-    FetchActors = auto()
-    FetchActor = auto()
-    FetchPost = auto()
-
-    AnalysePost = auto()
-
     ResValid = auto()
     SimpleFile = auto()
 
+    FetchActors = auto()
+    FetchActor = auto()
+    FetchActorLink = auto()
+    FetchPost = auto()
+
 
 class QueueType(IntEnum):
-    AnalysePost = 3
-    ResValid = 4
+    ResValid = auto()
 
-    FetchActors = 11
-    FetchActor = 12
-    FetchPost = 13
+    FetchActors = auto()
+    FetchActor = auto()
+    FetchActorLink = auto()
+    FetchPost = auto()
 
     # above queues are FIFO queues, below are priority queues
     MinPriorityQueue = 100
 
-    PageDownload = 101
-    FileDownload = 102
-    ResInfo = 103
-    SimpleFile = 104
+    FileDownload = auto()
+    ResInfo = auto()
+    SimpleFile = auto()
+
+
+class PoolState(Enum):
+    Idle = 1
+    Waiting = 2
+    Working = 3

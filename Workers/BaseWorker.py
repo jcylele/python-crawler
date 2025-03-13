@@ -2,11 +2,11 @@ import threading
 import time
 import traceback
 
-import Consts
 from Consts import WorkerType, QueueType
+from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
 from Utils import LogUtil
-from WorkQueue import QueueMgr
+from Download import QueueMgr
 from WorkQueue.BaseQueueItem import BaseQueueItem
 
 
@@ -41,6 +41,11 @@ class BaseWorker(threading.Thread):
         :return:
         """
         raise NotImplementedError("subclasses of BaseWorker must implement method _queueType")
+
+    def hasActorFolder(self, actor_id: int) -> bool:
+        with DbCtrl.getSession() as session, session.begin():
+            actor = ActorCtrl.getActor(session, actor_id)
+            return actor.actor_group.has_folder
 
     def run(self):
         while not self.__stop:

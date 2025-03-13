@@ -1,6 +1,5 @@
+import os.path
 import random
-import socket
-import socks
 import requests
 from requests import Session
 
@@ -37,15 +36,6 @@ __headers = {
 __RootUrl = "https://coomer.su"
 
 
-def initProxy():
-    """
-    set global proxy
-    :return:
-    """
-    socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 10808)
-    socket.socket = socks.socksocket
-
-
 def createRequestSession() -> Session:
     """
     create a request session with cookies and user agent
@@ -64,19 +54,36 @@ def createRequestSession() -> Session:
 
 
 def formatActorsUrl(start_index: int) -> str:
-    return f"{__RootUrl}/artists#o={start_index}"
+    return f"{__RootUrl}/artists?o={start_index}"
 
 
-def formatActorIconUrl(actor_platform: str, actor_link: str) -> str:
-    return f"{__RootUrl}/icons/{actor_platform}/{actor_link}"
+def smartActorIconSrc(actor_info: ActorInfo) -> str:
+    # real icon
+    file_path = actor_info.icon_file_path()
+    if os.path.exists(file_path):
+        return f"{Configs.formatIconFolderUrl()}/{actor_info.icon_file_name()}"
+    # screenshot icon
+    ss_file_path = actor_info.icon_ss_file_path()
+    if os.path.exists(ss_file_path):
+        return f"{Configs.formatIconFolderUrl()}/{actor_info.icon_ss_file_name()}"
+    # remote url
+    return formatActorIconUrl(actor_info)
 
 
-def formatActorHref(actor_platform: str, actor_link: str) -> str:
-    return f"{__RootUrl}/{actor_platform}/user/{actor_link}"
+def formatActorIconUrl(actor_info: ActorInfo) -> str:
+    return f"{__RootUrl}/icons/{actor_info.actor_platform}/{actor_info.actor_link}"
+
+
+def formatActorHref(actor_info: ActorInfo) -> str:
+    return f"{__RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}"
 
 
 def formatActorUrl(actor_info: ActorInfo) -> str:
-    return formatActorHref(actor_info.actor_platform, actor_info.actor_link)
+    return formatActorHref(actor_info)
+
+
+def formatActorLinksUrl(actor_info: ActorInfo) -> str:
+    return f"{formatActorHref(actor_info)}/links"
 
 
 def formatPostUrl(actor_info: ActorInfo, post_id: int, is_dm: bool) -> str:

@@ -14,7 +14,7 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 # Create a file handler to write logs to a file
 os.makedirs("logs", exist_ok=True)
 log_file_name = strftime("logs/%Y_%m_%d_%H_%M_%S.log")
-file_handler = logging.FileHandler(log_file_name)
+file_handler = logging.FileHandler(log_file_name, encoding='utf-8')
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 

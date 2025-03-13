@@ -1,11 +1,14 @@
+import os
 import threading
+import subprocess
 
 from fastapi import APIRouter
 
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
-from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, BaseDownloadForm
+from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, \
+    BaseDownloadForm, NewDownloadForm, DownloadLimitForm
 
 router = APIRouter(
     prefix="/api/download",
@@ -16,12 +19,12 @@ router = APIRouter(
 
 
 @router.post("/new")
-def download_new_actors(form: GroupDownloadForm):
+def download_new_actors(form: NewDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
-    task.downloadNewActors()
+    task.downloadNewActors(form.from_start)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
@@ -30,6 +33,7 @@ def download_by_group(form: GroupDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
+    task.setInitGroup(form.actor_group_id)
     task.downloadByActorGroup(form.actor_group_id)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
@@ -43,7 +47,17 @@ def resume_files(form: BaseDownloadForm):
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
-def add_task(actor_id: str, download_limit: DownloadLimit):
+@router.post("/manual")
+def manual(form: GroupDownloadForm):
+    limit = DownloadLimit(form.download_limit)
+    task = NewTask()
+    task.setLimit(limit)
+    task.setInitGroup(form.actor_group_id)
+    task.manual()
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
+def add_task(actor_id: int, download_limit: DownloadLimitForm):
     limit = DownloadLimit(download_limit)
     task = NewTask()
     task.setLimit(limit)
@@ -67,10 +81,12 @@ def download_by_urls(form: UrlDownloadForm):
     task.downloadByUrls(form.urls)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
+
 @router.get("/count")
 def get_task_count():
     count = GetTaskCount()
     return DbCtrl.CustomJsonResponse(count)
+
 
 @router.get("/list")
 def get_tasks():
@@ -102,3 +118,9 @@ def cleanFiles():
     with DbCtrl.getSession() as session, session.begin():
         ActorCtrl.removeOutdatedFiles(session)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
+@router.get("/logs")
+def openLogFolder():
+    cur_dir = os.getcwd()
+    subprocess.Popen(f'explorer {cur_dir}\\logs')

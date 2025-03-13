@@ -23,37 +23,16 @@ class BaseExtraInfo(object):
         raise NotImplementedError("subclasses of BaseExtraInfo must implement method priority")
 
 
-class FilePathExtraInfo(BaseExtraInfo):
-    def __init__(self, file_path: str):
+class ActorIconExtraInfo(BaseExtraInfo):
+    def __init__(self, actor_info: ActorInfo):
         super().__init__()
-        self.file_path = file_path
+        self.actor_info = actor_info
 
     def __repr__(self) -> str:
-        return f"(file_path={self.file_path})"
+        return f"(icon of {self.actor_info})"
 
     def priority(self) -> int:
         return 0
-
-
-class PostExtraInfo(BaseExtraInfo):
-    """
-    attached to UrlQueueItem, indicate that it's a page for resources of a post
-    """
-
-    def __init__(self, actor_info: ActorInfo, post_id: int):
-        super().__init__()
-        self.actor_info = actor_info
-        self.post_id = post_id
-
-    def queueType(self):
-        return QueueType.AnalysePost
-
-    def priority(self):
-        # newer post, larger post_id, higher priority
-        return 20000 + 10000 - (self.post_id // 100000)
-
-    def __repr__(self) -> str:
-        return f"({self.post_id} of {self.actor_info.actor_name})"
 
 
 class ResInfoExtraInfo(BaseExtraInfo):
@@ -74,9 +53,9 @@ class ResInfoExtraInfo(BaseExtraInfo):
     def priority(self):
         # resources of newer post, larger post_id, higher priority
         if self.res_type == ResType.Video:
-            return 2
-        else:
             return 1
+        else:
+            return 2
 
     def __repr__(self) -> str:
         return f"({self.res_id} of {self.post_id} of {self.actor_info.actor_name})"
@@ -97,7 +76,7 @@ class ResFileExtraInfo(ResInfoExtraInfo):
 
     def priority(self):
         # small files first
-        return -self.file_size
+        return self.file_size
 
     def __repr__(self) -> str:
         return f"(file {self.res_id} of {self.post_id} of {self.actor_info.actor_name})"

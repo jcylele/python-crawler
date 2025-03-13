@@ -1,11 +1,9 @@
 import os.path
-import time
 
 import Configs
 from Consts import WorkerType, QueueType
-from Download import FileManager
+from Download import FileManager, QueueUtil
 from Utils import LogUtil
-from WorkQueue import QueueUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseRequestWorker import BaseRequestWorker
@@ -28,6 +26,11 @@ class FileDownWorker(BaseRequestWorker):
 
     def _process(self, item: UrlQueueItem) -> bool:
         extra_info: ResFileExtraInfo = item.extra_info
+
+        # skip if no folder
+        if not self.hasActorFolder(extra_info.actor_info.actor_id):
+            return True
+
         self.requestSession.headers["referer"] = item.from_url
 
         # protection

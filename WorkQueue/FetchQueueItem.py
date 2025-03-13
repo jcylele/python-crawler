@@ -7,8 +7,12 @@ class FetchActorsQueueItem(BaseQueueItem):
     fetch actor list
     """
 
+    def __init__(self, from_start: bool):
+        super().__init__()
+        self.from_start = from_start
+
     def __repr__(self):
-        return f"FetchActorsQueueItem"
+        return f"FetchActorsQueueItem {self.from_start}"
 
 
 class FetchActorQueueItem(BaseQueueItem):
@@ -16,7 +20,7 @@ class FetchActorQueueItem(BaseQueueItem):
     fetch a single actor
     """
 
-    def __init__(self, actor_id: str):
+    def __init__(self, actor_id: int):
         super().__init__()
         self.actor_id = actor_id
 

@@ -16,10 +16,11 @@ def get_notice_count():
         count_map = NoticeCtrl.getNoticeCountMap(session)
         return DbCtrl.CustomJsonResponse(count_map)
 
+
 @router.get("/list/{notice_type}")
-def get_notices(notice_type: int):
+def get_notices(notice_type: int, limit: int = 0, offset: int = 0):
     with DbCtrl.getSession() as session, session.begin():
-        notices = NoticeCtrl.getNoticesOfType(session, NoticeType(notice_type))
+        notices = NoticeCtrl.getNoticesOfType(session, NoticeType(notice_type), limit, offset)
         return DbCtrl.CustomJsonResponse(notices)
 
 

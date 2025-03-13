@@ -9,15 +9,15 @@ from Download.DownloadLimit import DownloadLimit
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ResState, PostModel, ResModel
 from Utils import LogUtil
-from WorkQueue import QueueMgr
-from WorkQueue.ExtraInfo import PostExtraInfo, ResInfoExtraInfo, ResFileExtraInfo, \
-    FilePathExtraInfo
+from Download import QueueMgr
+from WorkQueue.ExtraInfo import ResInfoExtraInfo, ResFileExtraInfo, \
+    ActorIconExtraInfo
 from WorkQueue.FetchQueueItem import FetchActorsQueueItem, FetchActorQueueItem, FetchPostQueueItem
 from WorkQueue.UrlQueueItem import UrlQueueItem
 
 
-def enqueueFetchActors(queueMgr: QueueMgr):
-    item = FetchActorsQueueItem()
+def enqueueFetchActors(queueMgr: QueueMgr, from_start: bool):
+    item = FetchActorsQueueItem(from_start)
     queueMgr.put(QueueType.FetchActors, item)
 
 
@@ -26,16 +26,14 @@ def enqueueFetchActor(queueMgr: QueueMgr, actor_id: int):
     queueMgr.put(QueueType.FetchActor, item)
 
 
+def enqueueFetchActorLink(queueMgr: QueueMgr, actor_id: int):
+    item = FetchActorQueueItem(actor_id)
+    queueMgr.put(QueueType.FetchActorLink, item)
+
+
 def enqueueFetchPost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, is_dm: bool):
     item = FetchPostQueueItem(actor_info, post_id, is_dm)
     queueMgr.put(QueueType.FetchPost, item)
-
-
-def enqueuePost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, is_dm: bool, from_url: str):
-    out_extra = PostExtraInfo(actor_info, post_id)
-    url = RequestCtrl.formatPostUrl(actor_info, post_id, is_dm)
-    out_item = UrlQueueItem(url, from_url, out_extra)
-    queueMgr.put(QueueType.PageDownload, out_item)
 
 
 def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, downloadLimit: DownloadLimit):
@@ -88,12 +86,13 @@ def enqueueResValid(queueMgr: QueueMgr, item: UrlQueueItem):
     queueMgr.put(QueueType.ResValid, item)
 
 
-def enqueueActorIcon(queueMgr: QueueMgr, actor_info: ActorInfo):
-    file_path = f"{Configs.formatIconFolderPath()}/{actor_info.actor_name}.jfif"
+def enqueueActorIcon(queueMgr: QueueMgr, actor_info: ActorInfo, from_url: str):
+    # same actor_name on different platform, so use {actor_name}_{platform}.png
+    file_path = actor_info.icon_file_path()
     # skip is exist
     if os.path.exists(file_path):
         return
-    out_extra = FilePathExtraInfo(file_path)
-    url = RequestCtrl.formatActorIconUrl(actor_info.actor_platform, actor_info.actor_link)
-    out_item = UrlQueueItem(url, None, out_extra)
+    out_extra = ActorIconExtraInfo(actor_info)
+    url = RequestCtrl.formatActorIconUrl(actor_info)
+    out_item = UrlQueueItem(url, from_url, out_extra)
     queueMgr.put(QueueType.SimpleFile, out_item)

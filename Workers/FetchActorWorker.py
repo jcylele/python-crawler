@@ -1,15 +1,15 @@
 import re
 import time
 
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from Consts import WorkerType, QueueType, NoticeType, ActorLogType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
-from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
-from WorkQueue import QueueUtil
+from Download import QueueUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
 
@@ -49,8 +49,8 @@ class FetchActorWorker(BaseFetchWorker):
                     if post.actor_id != actor_id:
                         owner_actor = post.actor
                         if actor.main_actor_id != owner_actor.main_actor_id or actor.main_actor_id == 0:
-                            NoticeCtrl.addNotice(session, NoticeType.UnlinkedActor,
-                                                 actor.actor_name, owner_actor.actor_name)
+                            NoticeCtrl.addNoticeStrict(session, NoticeType.UnlinkedActor,
+                                                       [actor.actor_name, owner_actor.actor_name])
                             LogUtil.error(
                                 f"same post {post.post_id} for {post.actor.actor_name} and {actor.actor_name}")
                     elif not post.completed:  # the post is not analysed yet
@@ -69,54 +69,38 @@ class FetchActorWorker(BaseFetchWorker):
                 ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.PostCount, post_count)
 
     @staticmethod
-    def getActorInfo(actor_id: int) -> ActorInfo:
-        with DbCtrl.getSession() as session, session.begin():
-            return ActorCtrl.getActorInfo(session, actor_id)
-
-    @staticmethod
     def addInvalidPostNotice(actor_name: str, page: int, post_id_str: str):
         with DbCtrl.getSession() as session, session.begin():
             NoticeCtrl.addNotice(session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
 
-    @staticmethod
-    def addLinkedNotice(actor_name: str):
-        with DbCtrl.getSession() as session, session.begin():
-            NoticeCtrl.addNotice(session, NoticeType.HasLinkedAccount, actor_name)
+    def _loadSelector(self) -> str:
+        return ".user-header"
 
+    def _url(self, item: FetchActorQueueItem) -> str:
+        actor_info = self.getActorInfo(item.actor_id)
+        return RequestCtrl.formatActorUrl(actor_info)
 
-    def _process(self, item: FetchActorQueueItem) -> bool:
-        post_count = 0
-        self.actor_info = FetchActorWorker.getActorInfo(item.actor_id)
-        if self.actor_info is None:
-            return False
+    def _checkFetch(self, item: FetchActorQueueItem):
+        return self.hasActorFolder(item.actor_id)
+
+    def _onFetched(self, item: FetchActorQueueItem, driver: webdriver.Chrome) -> bool:
+        self.actor_info = self.getActorInfo(item.actor_id)
         actor_name = self.actor_info.actor_name
-        # fetch icon
-        QueueUtil.enqueueActorIcon(self.QueueMgr(), self.actor_info)
+
         # create folder
-        ActorCtrl.createActorFolder(actor_name)
+        ActorCtrl.createActorFolder(self.actor_info)
 
-        url = RequestCtrl.formatActorUrl(self.actor_info)
-        self.driver.get(url)
-        real_url = self.driver.current_url
-        if not real_url.startswith(url):
-            LogUtil.error(f"actor {actor_name} not found")
-            return True
+        # actor icon
+        self._saveActorIcon(self.actor_info, ".user-header__avatar img", driver, True)
 
+        # update post count
+        post_count = 0
         post_count_updated = False
 
         # webpage is new in every iteration, so keep elements inside the loop
         for i in range(1, 1000000):
             try:
-                #  wait and check user-header to ensure the page is loaded
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, ".user-header"))
-                )
-            except:
-                LogUtil.info(f"failed to load {actor_name} page {i}, get {self.driver.title} instead")
-                break
-
-            try:
-                paginator_top = self.driver.find_element(By.CSS_SELECTOR, "#paginator-top")
+                paginator_top = driver.find_element(By.CSS_SELECTOR, "#paginator-top")
             except:
                 paginator_top = None
 
@@ -134,17 +118,11 @@ class FetchActorWorker(BaseFetchWorker):
             except:
                 page_menu = None
 
-            # has linked accounts
-            if i== 1:
-                linked_a = paginator_top.find_element(By.CSS_SELECTOR, "ul > li:nth-child(3) > a")
-                if linked_a.text == "Linked Accounts (✔️)":
-                    FetchActorWorker.addLinkedNotice(actor_name)
-
             LogUtil.info(f"actor {actor_name} page {i}")
             # wait for page load
             if page_menu is not None:
                 try:
-                    WebDriverWait(self.driver, 10).until(
+                    WebDriverWait(driver, 10).until(
                         EC.text_to_be_present_in_element((By.CSS_SELECTOR, "li.pagination-button-current b"), f"{i}")
                     )
                 except:
@@ -154,7 +132,7 @@ class FetchActorWorker(BaseFetchWorker):
                 LogUtil.info(f"actor {actor_name} page {i} no page menu")
 
             # analyze content
-            article_list = self.driver.find_elements(By.CSS_SELECTOR, 'article.post-card')
+            article_list = driver.find_elements(By.CSS_SELECTOR, 'article.post-card')
             post_list = []
             for article in article_list:
                 post_id_str = article.get_attribute("data-id")
@@ -173,7 +151,7 @@ class FetchActorWorker(BaseFetchWorker):
                     LogUtil.error(f"actor {actor_name} page {i} post {post_id_str} invalid")
                     continue
                 post_list.append((post_id, is_dm))
-            reach_last_post = self.processPosts(post_list, real_url)
+            reach_last_post = self.processPosts(post_list, driver.current_url)
             post_count += len(post_list)
 
             # only one page
@@ -197,9 +175,8 @@ class FetchActorWorker(BaseFetchWorker):
                 break
 
             # js click
-            self.driver.execute_script("arguments[0].click();", next_btn)
+            driver.execute_script("arguments[0].click();", next_btn)
             # wait
-            # driver.implicitly_wait(2)
-            time.sleep(1)
+            time.sleep(3)
 
         return True

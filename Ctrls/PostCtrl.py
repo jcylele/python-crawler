@@ -5,7 +5,7 @@ from sqlalchemy import select, ScalarResult, func, update
 from sqlalchemy.orm import Session, Query
 
 from Ctrls import FileInfoCacheCtrl, DbCtrl
-from Models.BaseModel import PostModel, ResState, ActorModel
+from Models.BaseModel import PostModel, ResState, ActorModel, ResModel
 from routers.web_data import PostConditionForm, ActorPostInfo
 
 
@@ -44,33 +44,26 @@ def addPost(session: Session, actor_id: int, post_id: int, is_dm: bool):
 
 def batchSetResStates(session: Session, actor_id: int, state: ResState):
     FileInfoCacheCtrl.RemoveCachedFileSizes(actor_id)
-    # uncompleted post has no res in db
-    stmt = (
-        select(PostModel)
-        .where(PostModel.actor_id == actor_id)
-        .where(PostModel.completed == True)
-    )
-    post_list: ScalarResult[PostModel] = session.scalars(stmt)
-    for post in post_list:
-        for res in post.res_list:
-            res.setState(state)
+
+    _query = (update(ResModel)
+              .where(ResModel.post_id == PostModel.post_id)
+              .where(PostModel.actor_id == actor_id)
+              .values(res_state=state))
+    session.execute(_query)
 
 
 # set current downloaded res(file exists) to del
 def removeCurrentResFiles(session: Session, actor_id: int):
     # remove cache first, prevent update to cache
     FileInfoCacheCtrl.RemoveCachedFileSizes(actor_id)
-    # uncompleted post has no res in db
-    stmt = (
-        select(PostModel)
-        .where(PostModel.actor_id == actor_id)
-        .where(PostModel.completed == True)
-    )
-    post_list: ScalarResult[PostModel] = session.scalars(stmt)
-    for post in post_list:
-        for res in post.res_list:
-            if os.path.exists(res.filePath()):
-                res.setState(ResState.Del)
+
+    _query = (update(ResModel)
+              .where(ResModel.post_id == PostModel.post_id)
+              .where(PostModel.actor_id == actor_id)
+              .where(ResModel.res_state == ResState.Down)
+              .values(res_state=ResState.Del))
+    session.execute(_query)
+
 
 def filterQuery(_query: Query, form: PostConditionForm) -> Query:
     # actor_name
@@ -120,7 +113,8 @@ def setPostComment(session: Session, post_id: int, comment: str):
 
 
 def getNewPosts(session: Session, actor_id: int, last_post_id: int) -> ScalarResult[PostModel]:
-    _query = session.query(PostModel) \
-        .where(PostModel.actor_id == actor_id) \
-        .where(PostModel.post_id > last_post_id)
+    _query = (session.query(PostModel)
+              .where(PostModel.actor_id == actor_id)
+              .where(PostModel.post_id > last_post_id)
+              .order_by(PostModel.post_id.desc()))
     return session.scalars(_query)

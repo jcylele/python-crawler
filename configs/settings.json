@@ -5,7 +5,5 @@
   "IconFolder": "_icon",
   "MIN_DOWN_SPEED": 102400,
   "BASE_TIME_OUT": 30,
-  "MAX_FETCH_ACTOR_COUNT": 3,
-  "SHOW_BROWSER": false,
-  "MAX_SCORE": 12
+  "SHOW_BROWSER": true
 }

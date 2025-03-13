@@ -2,9 +2,12 @@ from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
+import Configs
+
 router = APIRouter()
 
-templates = Jinja2Templates(directory="assets")
+assets_folder = Configs.formatStaticFile("assets")
+templates = Jinja2Templates(directory=assets_folder)
 
 
 @router.get("/", include_in_schema=False)

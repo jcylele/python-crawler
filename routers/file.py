@@ -3,8 +3,7 @@ import socketserver
 import threading
 
 import Configs
-
-PORT = 1314
+from Utils import LogUtil
 
 
 class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -17,8 +16,8 @@ handler_object = MyHttpRequestHandler
 
 
 def create_server():
-    with socketserver.TCPServer(("", PORT), handler_object) as httpd:
-        print("serving at port", PORT)
+    with socketserver.TCPServer(("", Configs.FILE_PORT), handler_object) as httpd:
+        LogUtil.info(f"file server listen at port {Configs.FILE_PORT}")
         httpd.serve_forever()
 
 

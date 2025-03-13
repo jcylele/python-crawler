@@ -2,7 +2,7 @@ import os
 
 from Consts import WorkerType, QueueType
 from Utils import LogUtil
-from WorkQueue.ExtraInfo import FilePathExtraInfo
+from WorkQueue.ExtraInfo import ActorIconExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseRequestWorker import BaseRequestWorker
 
@@ -19,14 +19,15 @@ class SimpleFileDownWorker(BaseRequestWorker):
         return QueueType.SimpleFile
 
     def _process(self, item: UrlQueueItem) -> bool:
-        extra_info: FilePathExtraInfo = item.extra_info
-        file_path = extra_info.file_path
+        extra_info: ActorIconExtraInfo = item.extra_info
+        actor_info = extra_info.actor_info
+        file_path = actor_info.icon_file_path()
         # double check file exists
         if os.path.exists(file_path):
             return True
         succeed, size = self._head(item)
         if not succeed:
-            LogUtil.warn(f"head failed: {item.url}")
+            LogUtil.warn(f"head icon failed: {item.url}")
             return False
         self._downloadStream(item.url, file_path)
 
@@ -36,5 +37,13 @@ class SimpleFileDownWorker(BaseRequestWorker):
             LogUtil.warn(f"{file_path} incorrect size, expect {size:,d} get {real_size:,d}")
             os.remove(file_path)
             return False
+
+        # self._downloadSmall(item.url, file_path)
+
+        # remove screenshot file
+        try:
+            os.remove(actor_info.icon_ss_file_path())
+        except:
+            pass
 
         return True

@@ -5,7 +5,7 @@ from Consts import WorkerType, QueueType
 from Ctrls import DbCtrl, ResCtrl
 from Models.BaseModel import ResState
 from Utils import LogUtil
-from WorkQueue import QueueUtil
+from Download import QueueUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseWorker import BaseWorker

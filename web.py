@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
+import Configs
 from Download.DownloadTask import DownloadTask
 from routers import actor, actor_tag, download, file, vue, actor_group, chart, post, notice
 
@@ -19,7 +20,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+assets_folder = Configs.formatStaticFile("assets")
+app.mount("/assets", StaticFiles(directory=assets_folder), name="assets")
 
 app.include_router(actor.router)
 app.include_router(actor_tag.router)
@@ -38,5 +40,3 @@ DownloadTask.initEnv()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=7878)
-
-    pass

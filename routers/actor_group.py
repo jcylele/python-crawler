@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from Ctrls import DbCtrl, ActorGroupCtrl
-from routers.web_data import ActorGroupForm
+from routers.web_data import ActorGroupForm, ActorGroupCond
 
 router = APIRouter(
     prefix="/api/actor_group",
@@ -43,7 +43,14 @@ def update_actor_group(form: ActorGroupForm):
 
 
 @router.delete("/{group_id}")
-def delete_actor_tag(group_id: int):
+def delete_actor_group(group_id: int):
     with DbCtrl.getSession() as session, session.begin():
         succeed = ActorGroupCtrl.deleteActorGroup(session, group_id)
         return DbCtrl.CustomJsonResponse({'value': succeed})
+
+
+@router.post("/{group_id}/set_condition")
+def set_group_condition(group_id: int, cond_list: list[ActorGroupCond]):
+    with DbCtrl.getSession() as session, session.begin():
+        ActorGroupCtrl.setGroupCondition(session, group_id, cond_list)
+        return DbCtrl.CustomJsonResponse({'value': 'ok'})

@@ -1,9 +1,10 @@
 from sqlalchemy import ScalarResult, select, delete
 from sqlalchemy.orm import Session
 
+from Consts import GroupCondType
 from Ctrls import DbCtrl
-from Models.BaseModel import ActorGroupModel, ActorModel
-from routers.web_data import ActorGroupForm
+from Models.BaseModel import ActorGroupModel, ActorModel, ActorGroupCondModel
+from routers.web_data import ActorGroupForm, ActorGroupCond
 
 
 def getAllActorGroups(session: Session) -> ScalarResult[ActorGroupModel]:
@@ -50,3 +51,20 @@ def deleteActorGroup(session: Session, group_id: int) -> bool:
     session.execute(_query)
 
     return True
+
+
+def setGroupCondition(session: Session, group_id: int, cond_list: list[ActorGroupCond]):
+    _query = delete(ActorGroupCondModel) \
+        .where(ActorGroupCondModel.group_id == group_id)
+    session.execute(_query)
+
+    for cond in cond_list:
+        cond_model = ActorGroupCondModel(group_id=group_id,
+                                         cond_type=GroupCondType(cond.cond_type),
+                                         cond_param=cond.cond_param)
+        session.add(cond_model)
+    session.flush()
+
+
+def getGroupConditions(session: Session, group_id: int):
+    return session.query(ActorGroupCondModel).where(ActorGroupCondModel.group_id == group_id).all()

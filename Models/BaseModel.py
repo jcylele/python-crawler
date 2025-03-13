@@ -8,10 +8,11 @@ from sqlalchemy import String, ForeignKey, BigInteger, DateTime, func
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship
 
 import Configs
-from Consts import ResState, ResType, NoticeType, ActorLogType
+from Consts import ResState, ResType, NoticeType, ActorLogType, GroupCondType
 from Ctrls import FileInfoCacheCtrl, RequestCtrl
 from Ctrls.FileInfoCacheCtrl import ActorFileInfo
 from Download.DownloadLimit import DownloadLimit
+from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 
 
@@ -105,6 +106,8 @@ class ActorModel(BaseModel):
     score: Mapped[int] = mapped_column(default=0)
     group_time: Mapped[DateTime] = mapped_column(DateTime(timezone=True), default=func.now())
     last_post_id: Mapped[int] = mapped_column(BigInteger, default=0)
+    link_checked: Mapped[bool] = mapped_column(default=False)
+    manual_done: Mapped[bool] = mapped_column(default=False)
 
     actor_group: Mapped["ActorGroupModel"] = relationship()
     post_list: Mapped[list["PostModel"]] = relationship(
@@ -123,12 +126,15 @@ class ActorModel(BaseModel):
         self.group_time = func.now()
 
     def toJson(self):
+        actor_info = ActorInfo(self)
         json_data = {
             'actor_id': self.actor_id,
             'actor_name': self.actor_name,
+            'actor_platform': self.actor_platform,
             'actor_group_id': self.actor_group_id,
             'score': self.score,
-            'href': RequestCtrl.formatActorHref(self.actor_platform, self.actor_link),
+            'icon': RequestCtrl.smartActorIconSrc(actor_info),
+            'href': RequestCtrl.formatActorHref(actor_info),
             'has_main_actor': self.main_actor_id != 0
         }
         # remark encode for url
@@ -183,6 +189,47 @@ class ActorGroupModel(BaseModel):
     has_folder: Mapped[bool] = mapped_column(default=False)
     group_priority: Mapped[int] = mapped_column(default=0)
 
+    cond_list: Mapped[list["ActorGroupCondModel"]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan"
+    )
+
+    def toJson(self):
+        json_data = {
+            'group_id': self.group_id,
+            'group_name': self.group_name,
+            'group_desc': self.group_desc,
+            'group_color': self.group_color,
+            'has_folder': self.has_folder,
+            'group_priority': self.group_priority
+        }
+
+        cond_list = []
+        for cond in self.cond_list:
+            cond_list.append(cond.toJson())
+        json_data['cond_list'] = cond_list
+
+        return json_data
+
+
+class ActorGroupCondModel(BaseModel):
+    __tablename__ = "tab_actor_group_condition"
+
+    cond_id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("tab_actor_group.group_id"))
+    cond_type: Mapped[GroupCondType] = mapped_column(IntEnum(GroupCondType))
+    cond_param: Mapped[int] = mapped_column(default=0)
+
+    group: Mapped["ActorGroupModel"] = relationship(back_populates="cond_list")
+
+    def toJson(self):
+        json_data = {
+            'cond_type': self.cond_type,
+            'cond_param': self.cond_param
+        }
+
+        return json_data
+
 
 class PostModel(BaseModel):
     __tablename__ = "tab_post"
@@ -224,32 +271,29 @@ class ResModel(BaseModel):
     post_id: Mapped[int] = mapped_column(ForeignKey("tab_post.post_id", ondelete="CASCADE"))
     post: Mapped["PostModel"] = relationship(back_populates="res_list")
 
-    def actor_name(self):
-        return self.post.actor.actor_name
+    def actor(self):
+        return self.post.actor
 
     def actor_id(self):
         return self.post.actor_id
-
-    def fileName(self) -> str:
-        ext = self.res_url.split('.')[-1]
-        return f"{self.post_id}_{self.res_index}.{ext}"
 
     def filePath(self) -> str:
         """
         real location for valid resources
         :return:
         """
-        return f"{Configs.RootFolder}\\{self.actor_name()}\\{self.fileName()}"
-
-    def tmpFileName(self) -> str:
-        return f"{self.actor_name()}_{self.fileName()}"
+        actor = self.actor()
+        actor_folder = Configs.formatActorFolderPath(actor.actor_id, actor.actor_name)
+        ext = self.res_url.split('.')[-1]
+        return f"{actor_folder}\\{self.post_id}_{self.res_index}.{ext}"
 
     def tmpFilePath(self) -> str:
         """
         temporary location for resources before validation
         :return:
         """
-        return f"{Configs.formatTmpFolderPath()}/{self.tmpFileName()}"
+        ext = self.res_url.split('.')[-1]
+        return f"{Configs.formatTmpFolderPath()}/{self.actor().actor_name}_{self.post_id}_{self.res_index}.{ext}"
 
     def shouldDownload(self, downloadLimit: DownloadLimit) -> bool:
         # 已下载/删除
@@ -269,7 +313,7 @@ class ResModel(BaseModel):
         return True
 
     def setSize(self, size: int):
-        actor_name = self.actor_name()
+        actor_name = self.actor().actor_name
         if self.res_size > 0:
             if self.res_size == size:
                 LogUtil.warn(
@@ -306,43 +350,47 @@ class NoticeModel(BaseModel):
     notice_param0: Mapped[str] = mapped_column(String(100), default="")
     notice_param1: Mapped[str] = mapped_column(String(100), default="")
     notice_param2: Mapped[str] = mapped_column(String(100), default="")
+    notice_param3: Mapped[str] = mapped_column(String(100), default="")
     deleted: Mapped[bool] = mapped_column(default=False)
 
-    def __calcChecksum(self):
-        bytes1 = self.notice_param0.encode('utf-8')
-        bytes2 = self.notice_param1.encode('utf-8')
-        bytes3 = self.notice_param2.encode('utf-8')
-        xor_len = len(bytes1) ^ len(bytes2) ^ len(bytes3)
-        max_len = max(len(bytes1), len(bytes2), len(bytes3))
-        bytes1 = bytes1.ljust(max_len, b'\0')
-        bytes2 = bytes2.ljust(max_len, b'\0')
-        bytes3 = bytes3.ljust(max_len, b'\0')
-        xor = bytearray(a ^ b ^ c for a, b, c in zip(bytes1, bytes2, bytes3))
-        checksum = base64.encodebytes(xor).decode('utf-8').replace('\n', '')
-        shift = xor_len % len(checksum)
-        self.notice_checksum = checksum[shift:] + checksum[:shift]
-
-    def sortedParams(self):
+    def __checksum(self) -> str:
         """
-        get sorted parameters
+        simple is the best
         """
-        return sorted([self.notice_param0, self.notice_param1, self.notice_param2])
+        result = 17
+        result = 37 * result + hash(self.notice_param0)
+        result = 37 * result + hash(self.notice_param1)
+        result = 37 * result + hash(self.notice_param2)
+        result = 37 * result + hash(self.notice_param3)
+        result = result << self.notice_type.value
+        return str(result)
 
-    def setParams(self, param0: str, param1: str = "", param2: str = ""):
+    def isSameParams(self, other: "NoticeModel"):
+        return (self.notice_param0 == other.notice_param0
+                and self.notice_param1 == other.notice_param1
+                and self.notice_param2 == other.notice_param2
+                and self.notice_param3 == other.notice_param3)
+
+    def setParams(self, param0: str, param1: str = "", param2: str = "", param3: str = ""):
         """
         set parameters and calculate checksum
         """
         self.notice_param0 = param0
         self.notice_param1 = param1
         self.notice_param2 = param2
-        self.__calcChecksum()
+        self.notice_param3 = param3
+        self.refreshChecksum()
+
+    def refreshChecksum(self):
+        self.notice_checksum = self.__checksum()
 
     def toJson(self):
         json_data = {
             'notice_id': self.notice_id,
             'notice_param0': self.notice_param0,
             'notice_param1': self.notice_param1,
-            'notice_param2': self.notice_param2
+            'notice_param2': self.notice_param2,
+            'notice_param3': self.notice_param3
         }
 
         return json_data

@@ -4,7 +4,7 @@ from time import sleep
 from typing import List
 
 from Utils import LogUtil
-from Workers import WorkerMgr
+from Download import WorkerMgr
 from Workers.BaseWorker import BaseWorker
 
 ReportQueueInterval = 10

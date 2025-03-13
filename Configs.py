@@ -1,4 +1,7 @@
 import json
+import os
+import sys
+from os import path
 
 # connection string
 DbConnectString = ""
@@ -13,30 +16,43 @@ IconFolder = ""
 MIN_DOWN_SPEED = 0
 # base time out for downloading files
 BASE_TIME_OUT = 0
-# maximum number of actors to fetch
-MAX_FETCH_ACTOR_COUNT = 0
 # if show Chrome browser
 SHOW_BROWSER = False
+
+### above variables are in configs/settings.json, below are constants ###
+
 # maximum score of an actor
 MAX_SCORE = 12
 # res between RES_SIZE_LIST[i-1] and RES_SIZE_LIST[i] will be put into RES_SIZE_LIST[i] segment
-RES_SIZE_LIST = [0, 32 * 1024 * 1024, 64 * 1024 * 1024, 128 * 1024 * 1024,
-                 256 * 1024 * 1024, 512 * 1024 * 1024, 1024 * 1024 * 1024]
+RES_SIZE_LIST = [0, 16 * 1024 * 1024, 32 * 1024 * 1024, 64 * 1024 * 1024,
+                 128 * 1024 * 1024, 256 * 1024 * 1024, 512 * 1024 * 1024, 1024 * 1024 * 1024]
+
+FILE_PORT = 1314
 
 
 def init():
-    with open('configs/settings.json') as setting_file:
+    with open(formatStaticFile('configs/settings.json')) as setting_file:
         setting_json = json.load(setting_file)
-        global DbConnectString, RootFolder, TmpFolder, IconFolder, MIN_DOWN_SPEED, BASE_TIME_OUT, MAX_FETCH_ACTOR_COUNT, SHOW_BROWSER, MAX_SCORE
+        global DbConnectString, RootFolder, TmpFolder, IconFolder, MIN_DOWN_SPEED, BASE_TIME_OUT, SHOW_BROWSER
         DbConnectString = setting_json['DbConnectString']
         RootFolder = setting_json['RootFolder']
         TmpFolder = setting_json['TmpFolder']
         IconFolder = setting_json['IconFolder']
         MIN_DOWN_SPEED = setting_json['MIN_DOWN_SPEED']
         BASE_TIME_OUT = setting_json['BASE_TIME_OUT']
-        MAX_FETCH_ACTOR_COUNT = setting_json['MAX_FETCH_ACTOR_COUNT']
         SHOW_BROWSER = setting_json['SHOW_BROWSER']
-        MAX_SCORE = setting_json['MAX_SCORE']
+
+
+def formatStaticFile(relative_path: str) -> str:
+    if getattr(sys, 'frozen', False):
+        # we are running in a bundle
+        bundle_dir = sys._MEIPASS
+    else:
+        # we are running in a normal Python environment
+        bundle_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # print(bundle_dir)
+    return path.join(bundle_dir, relative_path)
 
 
 def formatTmpFolderPath() -> str:
@@ -55,10 +71,9 @@ def formatIconFolderPath() -> str:
     return f"{RootFolder}\\{IconFolder}"
 
 
-def formatActorFolderPath(actor_name: str) -> str:
-    """
-    path of the folder for an actor
-    :param actor_name:
-    :return:
-    """
-    return f"{RootFolder}\\{actor_name}"
+def formatIconFolderUrl() -> str:
+    return f"http://localhost:{FILE_PORT}/{IconFolder}"
+
+
+def formatActorFolderPath(actor_id: int, actor_name: str) -> str:
+    return f"{RootFolder}\\{actor_name}_{actor_id}"

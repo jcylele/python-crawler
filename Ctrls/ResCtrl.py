@@ -1,9 +1,9 @@
 # Resource related operations
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 
-from sqlalchemy import select, ScalarResult, func
-from sqlalchemy.orm import Session, Query
+from sqlalchemy import select, ScalarResult
+from sqlalchemy.orm import Session
 
 from Configs import RES_SIZE_LIST
 from Consts import ResState
@@ -117,27 +117,3 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
             item.max = RES_SIZE_LIST[i]
         rsc_list.append(item)
     return rsc_list
-
-
-def getResStatesOfActor(session: Session, actor_id: int) -> list[Tuple[ResState, int]]:
-    _query = (select(ResModel.res_state)
-              .where(ResModel.res_type == ResType.Video)
-              .where(ResModel.post_id == PostModel.post_id)
-              .where(PostModel.actor_id == actor_id)
-              .order_by(ResModel.post_id.desc(), ResModel.res_index))
-    ret = session.scalars(_query)
-    state_list = []
-    last_state = None
-    last_count = 0
-    for r in ret:
-        if r != last_state:
-            if last_state is not None:
-                state_list.append((last_state, last_count))
-            last_state = r
-            last_count = 1
-        else:
-            last_count += 1
-    if last_state is not None:
-        state_list.append((last_state, last_count))
-
-    return state_list

@@ -1,0 +1,1 @@
+import{O as s}from"./index-cc5e9fa3.js";const n=s("SubMenuStore",{state:()=>({sub_menu_map:new Map}),getters:{},actions:{set(e,t){this.sub_menu_map||(this.sub_menu_map=new Map),this.sub_menu_map.set(e,t)},get(e){return this.sub_menu_map?this.sub_menu_map.get(e):null}}});export{n as S};

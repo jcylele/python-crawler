@@ -1,0 +1,1 @@
+import{E as s}from"./index-761755ee.js";import{A as o}from"./ActorData-1847541b.js";class e{}class i extends s{}class f extends s{constructor(t){super(t),t&&t.actor&&(this.actor=new o(t.actor))}}export{i as A,e as T,f as a};

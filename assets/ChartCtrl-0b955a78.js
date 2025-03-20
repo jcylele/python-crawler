@@ -1,1 +1,0 @@
-import{L as r,k as c,B as n}from"./index-cc5e9fa3.js";const e=`${n}/api/chart`;async function g(t,a){const s=`${e}/relative_of_tag?id=${t}&limit=${a}`;return await r(s)}async function f(t){const a=`${e}/scores_of_tag`;return await c(a,t)}async function u(t,a,s){const o=`${e}/tags_of_score?min=${t}&max=${a}&limit=${s}`;return await r(o)}export{u as a,g as b,f as g};

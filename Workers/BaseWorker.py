@@ -2,6 +2,7 @@ import threading
 import time
 import traceback
 
+import Consts
 from Consts import WorkerType, QueueType
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
@@ -27,7 +28,7 @@ class BaseWorker(threading.Thread):
         return self.task.queueMgr
 
     def DownloadLimit(self) -> DownloadLimit:
-        return self.task.downloadLimit
+        return self.task.download_limit
 
     def init_category(self) -> int:
         return self.task.init_group_id

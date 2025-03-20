@@ -12,9 +12,10 @@ class NoticeType(Enum):
     All = 0
     UnlinkedActor = 1  # 2 actors are not linked, but share the same post
     InvalidPost = 2  # a post is invalid
-    SameActorName = 3  #  same name, different platform
+    SameActorName = 3  # same name, different platform
     HasLinkedAccount = 4  # actor has linked accounts
-    SimilarActorName = 5 # actor name is similar
+    SimilarActorName = 5  # actor name is similar
+
 
 class ActorLogType(Enum):
     Add = 1
@@ -72,7 +73,6 @@ class QueueType(IntEnum):
     SimpleFile = auto()
 
 
-class PoolState(Enum):
-    Idle = 1
-    Waiting = 2
-    Working = 3
+class PostFilter(IntEnum):
+    Normal = 0
+    Current = 1

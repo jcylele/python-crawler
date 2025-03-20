@@ -1,5 +1,5 @@
 # ActorModel related operations
-
+import itertools
 import os
 import re
 import shutil
@@ -13,7 +13,7 @@ from Ctrls import PostCtrl, ResCtrl, DbCtrl, FileInfoCacheCtrl, ActorGroupCtrl, 
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import ActorModel, ActorTagRelationship, ResState
 from Utils import LogUtil
-from routers.web_data import ActorConditionForm, SortType
+from routers.web_data import ActorConditionForm, SortType, LinkActorForm
 
 
 def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
@@ -87,6 +87,9 @@ def _buildQuery(session: Session, form: ActorConditionForm) -> Query:
             _query = _query.where(ActorModel.actor_name.in_(name_list))
         else:
             _query = _query.where(ActorModel.actor_name.like(f'%{name_list[0]}%'))
+    # linked
+    if form.linked:
+        _query = _query.where(ActorModel.main_actor_id != 0)
     # category
     if len(form.group_id_list) > 0:
         _query = _query.where(ActorModel.actor_group_id.in_(form.group_id_list))
@@ -352,11 +355,11 @@ def unlinkActors(session: Session, actor_ids: list[int]) -> bool:
     return True
 
 
-def linkActors(session: Session, actor_ids: list[int]) -> bool:
-    if not checkDistinct(actor_ids):
+def linkActors(session: Session, form: LinkActorForm) -> bool:
+    if not checkDistinct(form.actor_ids):
         return False
     # check all actors belong to the same group or no group
-    actor_list = [getActor(session, actor_id) for actor_id in actor_ids]
+    actor_list = [getActor(session, actor_id) for actor_id in form.actor_ids]
     main_actor_id = 0
     for actor in actor_list:
         if actor.main_actor_id != 0:
@@ -366,26 +369,16 @@ def linkActors(session: Session, actor_ids: list[int]) -> bool:
                 return False
 
     if main_actor_id == 0:
-        main_actor_id = actor_ids[0]
+        main_actor_id = form.actor_ids[0]
 
-    max_score = 0
-    all_tags = set()
-
-    # calc max score and all tags
     actor_names = [actor.actor_name for actor in actor_list]
-    for actor in actor_list:
-        if actor.score > max_score:
-            max_score = actor.score
-        for tag in actor.rel_tags:
-            all_tags.add(tag.tag_id)
-
     # apply link
     for actor in actor_list:
         actor.main_actor_id = main_actor_id
         ActorLogCtrl.addActorLog(session, actor.actor_id, ActorLogType.Link, *actor_names)
 
-        _innerSetActorScore(session, actor, max_score)
-        _innerSetActorTags(session, actor.actor_id, all_tags)
+        _innerSetActorScore(session, actor, form.score)
+        _innerSetActorTags(session, actor.actor_id, form.tag_list)
 
     return True
 
@@ -472,38 +465,135 @@ def checkActorLink(session, actor_infos: list[ActorInfo], init_group: int):
         setActorLinkChecked(session, actor_info.actor_id)
 
 
-_post_fix = ["vip", "free", "official"]
-_pre_post_fix = [".", "-", "_"]
+# region find similar names
+
+_pre_fix = ['the', 'free', 'goddess', 'only']
+_post_fix = ["vip", "free", "official", "premium", "ppv", "clips"]
+sp_chars = [".", "-", "_"]
 
 
 def findAllSimilarActors(session: Session):
+    for prefix in _pre_fix:
+        _findSimilarByPrefix(session, prefix)
+
     for postfix in _post_fix:
-        _findSimilarOfPostfix(session, postfix)
+        _findSimilarByPostfix(session, postfix)
+
+    for sp_char in sp_chars:
+        _findSimilarBySpChar(session, sp_char)
+
+    _findSimilarByLastDigits(session)
+    _findSimilarByLastXs(session)
+    _findSimilarByLastChar(session)
 
 
-def _findSimilarOfPostfix(session: Session, postfix: str):
+def _findSimilarByLastChar(session: Session):
     stmt = (
         select(ActorModel.actor_name)
-        .where(ActorModel.actor_name.like(f'%{postfix}'))
+        .where(ActorModel.actor_name.regexp_match('(.)\\1{2,}$'))
+    )
+    actor_names = session.scalars(stmt)
+    for actor_name in actor_names:
+        pure_actor_name = actor_name[:-1]
+        possible_names = possibleNames(pure_actor_name)
+        possible_names.append(actor_name)
+        _checkAllPossibleNames(session, possible_names)
+
+
+def _findSimilarBySpChar(session: Session, sp_char: str):
+    stmt = (
+        select(ActorModel.actor_name)
+        .where(ActorModel.actor_name.regexp_match(f'\w+{sp_char}\w+'))
+    )
+    result1 = session.scalars(stmt)
+    for actor_name in result1:
+        possible_names = [actor_name]
+        # split by mid, skip empty
+        name_segments = [x for x in actor_name.split(sp_char) if x]
+        # all permutations means all possible names
+        perm = itertools.permutations(name_segments)
+        for p in perm:
+            possible_names.append("".join(p))
+            for sp_char2 in sp_chars:
+                possible_names.append(sp_char2.join(p))
+
+        _checkAllPossibleNames(session, possible_names)
+
+
+def _findSimilarByPrefix(session: Session, prefix: str):
+    stmt = (
+        select(ActorModel.actor_name)
+        .where(ActorModel.actor_name.regexp_match(f'^{prefix}\w+'))
+    )
+    actor_names = session.scalars(stmt)
+    for actor_name in actor_names:
+        pure_actor_name = actor_name[len(prefix):]
+
+        possible_names = possibleNames(pure_actor_name)
+        _checkAllPossibleNames(session, possible_names)
+
+
+def _findSimilarByPostfix(session: Session, postfix: str):
+    stmt = (
+        select(ActorModel.actor_name)
+        .where(ActorModel.actor_name.regexp_match(f'\w+{postfix}$'))
     )
     actor_names = session.scalars(stmt)
     len_post_fix = len(postfix)
     for actor_name in actor_names:
-        prepost = actor_name[-len_post_fix - 1]
-        if prepost in _pre_post_fix:
-            actor_name = actor_name[:-len_post_fix - 1]
+        sp_char = actor_name[-len_post_fix - 1]
+        if sp_char in sp_chars:
+            pure_actor_name = actor_name[:-len_post_fix - 1]
         else:
-            actor_name = actor_name[:-len_post_fix]
-        _findSimilarOfName(session, actor_name)
+            pure_actor_name = actor_name[:-len_post_fix]
+
+        possible_names = possibleNames(pure_actor_name)
+        _checkAllPossibleNames(session, possible_names)
 
 
-def _findSimilarOfName(session: Session, pure_actor_name: str):
-    possible_names = [pure_actor_name]
+def _findSimilarByLastDigits(session: Session):
+    _findSimilarByEndChars(session, r'\d+$', lambda x: x.isdigit())
+
+
+def _findSimilarByLastXs(session: Session):
+    _findSimilarByEndChars(session, r'x+$', lambda x: x == "x")
+
+
+def _findSimilarByEndChars(session: Session, str_reg: str, char_filter: callable):
+    stmt = (
+        select(ActorModel.actor_name)
+        .where(ActorModel.actor_name.regexp_match(str_reg))
+    )
+    actor_names = session.scalars(stmt)
+    for actor_name in actor_names:
+        # trim right 0-9 chars
+        index = len(actor_name) - 1
+        while char_filter(actor_name[index]):
+            index -= 1
+        if index == -1:
+            continue
+        pure_actor_name = actor_name[:index + 1]
+
+        possible_names = possibleNames(pure_actor_name)
+        possible_names.append(actor_name)
+        _checkAllPossibleNames(session, possible_names)
+
+
+def possibleNames(pure_name: str):
+    possible_names = [pure_name]
     for postfix in _post_fix:
-        possible_names.append(pure_actor_name + postfix)
-        for prepostfix in _pre_post_fix:
-            possible_names.append(pure_actor_name + prepostfix + postfix)
+        possible_names.append(pure_name + postfix)
+        for sp_char in sp_chars:
+            possible_names.append(pure_name + sp_char + postfix)
 
+    # prefix and sp_char don't match
+    for pre_fix in _pre_fix:
+        possible_names.append(pre_fix + pure_name)
+
+    return possible_names
+
+
+def _checkAllPossibleNames(session: Session, possible_names: list[str]):
     stmt = (
         select(ActorModel)
         .where(ActorModel.actor_name.in_(possible_names))
@@ -523,4 +613,6 @@ def _findSimilarOfName(session: Session, pure_actor_name: str):
     elif len(actor_names) == 1:
         pass
     else:
-        raise Exception(f"WTF, no actor found by pure name {pure_actor_name}")
+        raise Exception(f"WTF, no actor found for {possible_names}")
+
+# endregion

@@ -9,6 +9,9 @@ __pycache__/
 # log files
 *.log
 
+# temp python files
+*.py~
+
 # Distribution / packaging
 .Python
 build/

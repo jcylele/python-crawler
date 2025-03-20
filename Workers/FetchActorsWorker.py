@@ -33,7 +33,8 @@ class FetchActorsWorker(BaseFetchWorker):
             for actor_info in actor_infos:
                 # enqueue actor if not exists
                 actor = ActorCtrl.getActorByInfo(session, actor_info)
-                if actor is None and self.DownloadLimit().moreActor(True):
+                if actor is None and self.DownloadLimit().moreActor():
+                    self.DownloadLimit().onActor()
                     actor = ActorCtrl.addActor(session, actor_info, self.init_category())
                     actor_ids.append(actor.actor_id)
 
@@ -89,7 +90,7 @@ class FetchActorsWorker(BaseFetchWorker):
                 print(f"no next button, page {current_page.text} is the last page")
                 break
 
-            if not self.DownloadLimit().moreActor(False):
+            if not self.DownloadLimit().moreActor():
                 break
 
             self.start_page += 1

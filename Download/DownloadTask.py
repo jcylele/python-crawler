@@ -3,14 +3,14 @@ import re
 
 import Configs
 import Consts
-from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ManualCtrl
-from Download.DownloadLimit import DownloadLimit, PostFilter
+from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl
+from Download.DownloadLimit import DownloadLimit
 from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from Download.QueueMgr import QueueMgr
 from Download import WorkerMgr, QueueUtil
-from routers.web_data import ActorUrl
+from routers.web_data import ActorUrl, DownloadLimitForm
 
 
 class DownloadTask(object):
@@ -18,7 +18,7 @@ class DownloadTask(object):
         self.uid = task_uid
         self.guarder = Guarder(self)
         self.queueMgr = QueueMgr()
-        self.downloadLimit: DownloadLimit = None
+        self.download_limit: DownloadLimit = None
         self.init_group_id = 0
         self.desc = ""
         self.actor_ids = []
@@ -45,7 +45,7 @@ class DownloadTask(object):
         """
         set download limit
         """
-        self.downloadLimit = limit
+        self.download_limit = limit
 
     def setInitGroup(self, group_id: int):
         """
@@ -69,11 +69,11 @@ class DownloadTask(object):
                     if not post.completed:  # the post is not analysed yet
                         QueueUtil.enqueueFetchPost(self.queueMgr, actor_info, post.post_id, post.is_dm)
                     else:  # all resources of the post are already added
-                        QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.downloadLimit)
+                        QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.download_limit)
 
     def downloadActors(self, actor_ids: list[int]):
         self.actor_ids = actor_ids
-        if self.downloadLimit.post_filter == PostFilter.Current:
+        if self.download_limit.isCurrentPost():
             self.currentPosts(actor_ids)
         else:
             self.normalPosts(actor_ids)
@@ -149,7 +149,7 @@ class DownloadTask(object):
                         post_id = int(matchObj.group(2))
                         res_index = int(matchObj.group(3))
                         res = ResCtrl.getResByIndex(session, post_id, res_index)
-                        if res.shouldDownload(self.downloadLimit):
+                        if res.shouldDownload(self.download_limit):
                             post = PostCtrl.getPost(session, post_id)
                             actor_info = ActorInfo(post.actor)
                             QueueUtil.enqueueResFile(self.queueMgr, actor_info, post, res)
@@ -163,13 +163,12 @@ class DownloadTask(object):
         custom logic to fix bugs etc
         """
         self.desc = f"manual op"
-        return
-        with DbCtrl.getSession() as session, session.begin():
-            actor_ids = ManualCtrl.getManualActorIds(session, self.downloadLimit.actor_count)
-            for actor_id in actor_ids:
-                QueueUtil.enqueueFetchActorLink(self.queueMgr, actor_id)
-
-        self.startDownload()
+        # with DbCtrl.getSession() as session, session.begin():
+        #     actor_ids = ManualCtrl.getManualActorIds(session, self.downloadLimit.actor_count)
+        #     for actor_id in actor_ids:
+        #         QueueUtil.enqueueFetchActorLink(self.queueMgr, actor_id)
+        #
+        # self.startDownload()
 
     @staticmethod
     def initEnv():
@@ -186,14 +185,14 @@ class DownloadTask(object):
         DbCtrl.init()
 
     def __repr__(self):
-        return f"({self.desc}\tdownloadLimit={self.downloadLimit}"
+        return self.desc
 
     def toJson(self):
         worker_count_map = self.guarder.getWorkerCountMap()
         queue_count_map = self.queueMgr.getQueueCountMap()
         return {'uid': self.uid,
                 'desc': self.desc,
-                'download_limit': self.downloadLimit.toJson(),
+                'download_limit': self.download_limit.toJson(),
                 'worker_count': worker_count_map,
                 'queue_count': queue_count_map,
                 }

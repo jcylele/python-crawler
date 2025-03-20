@@ -17,6 +17,7 @@ class SortItem(BaseModel):
 
 class ActorConditionForm(BaseModel):
     name: str
+    linked: bool
     group_id_list: list[int]
     tag_list: list[int]
     no_tag: bool
@@ -34,7 +35,7 @@ class PostConditionForm(BaseModel):
     has_comment: bool
 
 
-class ServerData:
+class ServerData(object):
     def toJson(self):
         return self.__dict__
 
@@ -67,12 +68,15 @@ class ActorTagForm(BaseModel):
     tag_priority: int
 
 
-class BatchActorOperation(BaseModel):
+class BatchActorGroup(BaseModel):
     actor_ids: list[int]
-
-
-class BatchActorGroup(BatchActorOperation):
     group_id: int
+
+
+class LinkActorForm(BaseModel):
+    actor_ids: list[int]
+    score: int
+    tag_list: list[int]
 
 
 class ActorTagPriority(BaseModel):
@@ -84,14 +88,31 @@ class AllActorTagPriorities(BaseModel):
     tag_priorities: list[ActorTagPriority]
 
 
+class DownloadProgress(ServerData):
+    actor_count = 0
+    file_count = 0
+    total_file_size = 0
+
+    def __init__(self):
+        super().__init__()
+        self.actor_count = 0
+        self.file_count = 0
+        self.total_file_size = 0
+
+
 class DownloadLimitForm(BaseModel):
     actor_count: int
+    # post count of each actor
     post_count: int
     post_filter: int
-    file_size: int
+    # res limit
+    res_type: int
+    file_count: int
     total_file_size: int
-    allow_video: bool
-    allow_img: bool
+    single_file_size: int
+
+    def toJson(self):
+        return self.__dict__
 
 
 class ActorGroupForm(BaseModel):

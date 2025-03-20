@@ -58,7 +58,6 @@ def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, do
         # 所有资源都Info
         if res.res_size == 0:
             queueMgr.put(QueueType.ResInfo, out_item)
-            continue
         elif res.shouldDownload(downloadLimit):
             downloadResFile(queueMgr, out_item, res.tmpFilePath(), res.res_size)
 

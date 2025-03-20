@@ -6,6 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
+import Consts
 from Consts import WorkerType, QueueType, NoticeType, ActorLogType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
 from Utils import LogUtil
@@ -160,7 +161,7 @@ class FetchActorWorker(BaseFetchWorker):
                 post_count_updated = True
 
             # download no more
-            if reach_last_post or (post_count >= self.DownloadLimit().post_count > 0):
+            if reach_last_post or (not self.DownloadLimit().morePost(post_count)):
                 break
 
             # next page

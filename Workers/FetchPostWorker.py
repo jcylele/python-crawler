@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 
+import Consts
 from Consts import WorkerType, QueueType, ResType
 from Ctrls import DbCtrl, RequestCtrl, PostCtrl, ResCtrl
 from Download import QueueUtil

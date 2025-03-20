@@ -7,7 +7,7 @@ from fastapi.params import Query
 
 import Configs
 from Ctrls import DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl
-from routers.web_data import ActorConditionForm, BatchActorGroup, ActorResult
+from routers.web_data import ActorConditionForm, BatchActorGroup, ActorResult, LinkActorForm
 
 router = APIRouter(
     prefix="/api/actor",
@@ -36,13 +36,13 @@ def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
 
 
 @router.post("/link")
-def link_actors(actor_ids: List[int]):
+def link_actors(form: LinkActorForm):
     # complex logic, ensure transaction is done
     with DbCtrl.getSession() as session, session.begin():
-        succeed = ActorCtrl.linkActors(session, actor_ids)
+        succeed = ActorCtrl.linkActors(session, form)
 
     with DbCtrl.getSession() as session, session.begin():
-        actors = [ActorCtrl.getActor(session, actor_id) for actor_id in actor_ids]
+        actors = [ActorCtrl.getActor(session, actor_id) for actor_id in form.actor_ids]
         msg = succeed and "linked" or "link failed"
         ar_list = [ActorResult(succeed, actor, f"actor {actor.actor_name} {msg}") for actor in actors]
         return DbCtrl.CustomJsonResponse(ar_list)

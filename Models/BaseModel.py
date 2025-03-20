@@ -295,19 +295,16 @@ class ResModel(BaseModel):
         ext = self.res_url.split('.')[-1]
         return f"{Configs.formatTmpFolderPath()}/{self.actor().actor_name}_{self.post_id}_{self.res_index}.{ext}"
 
-    def shouldDownload(self, downloadLimit: DownloadLimit) -> bool:
+    def shouldDownload(self, download_limit: DownloadLimit) -> bool:
         # 已下载/删除
         if self.res_state == ResState.Down or self.res_state == ResState.Del:
             return False
-        # 类型不对
-        if self.res_type == ResType.Video:
-            if not downloadLimit.allow_video:
-                return False
-        elif self.res_type == ResType.Image:
-            if not downloadLimit.allow_img:
-                return False
+
+        # 类型
+        if not download_limit.allowRes(self.res_type):
+            return False
         # 超过大小
-        if self.res_size > downloadLimit.file_size > 0:
+        if not download_limit.checkResSize(self.res_size):
             return False
 
         return True

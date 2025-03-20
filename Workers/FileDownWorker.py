@@ -1,6 +1,7 @@
 import os.path
 
 import Configs
+import Consts
 from Consts import WorkerType, QueueType
 from Download import FileManager, QueueUtil
 from Utils import LogUtil

@@ -1,5 +1,5 @@
 #! fix/update bugs/problems in database, mainly caused by existing actors skipping new features
-
+import itertools
 import os
 import re
 
@@ -27,26 +27,6 @@ def removeActorFolders(session: Session):
             elif not actor.actor_group.has_folder:
                 LogUtil.info(f"remove folder {folder}")
                 os.rmdir(os.path.join(root, folder))
-
-
-def RelinkActors(session: Session):
-    """
-    synchronize linked actors' score, tags by relinking them
-    :param session:
-    :return:
-    """
-    stmt1 = (select(ActorModel.main_actor_id.distinct()))
-    main_list = session.scalars(stmt1)
-    for main_actor_id in main_list:
-        if main_actor_id == 0:
-            continue
-        stmt2 = (
-            select(ActorModel.actor_id)
-            .where(ActorModel.main_actor_id == main_actor_id)
-        )
-        actor_ids = session.scalars(stmt2)
-        actor_ids = [a for a in actor_ids]
-        ActorCtrl.linkActors(session, actor_ids)
 
 
 def RenameActorFolders(session: Session):
@@ -177,12 +157,14 @@ def reChecksumAllNotices(session: Session):
         for notice in result:
             notice.refreshChecksum()
 
+
 def reorderNoticeParams(session: Session, notice_type: NoticeType):
     stmt = (select(NoticeModel)
             .filter(NoticeModel.notice_type == notice_type))
     result = session.scalars(stmt)
     for notice in result:
-        names = NoticeCtrl.sortedDistinctNames([notice.notice_param0, notice.notice_param1, notice.notice_param2, notice.notice_param3])
+        names = NoticeCtrl.sortedDistinctNames(
+            [notice.notice_param0, notice.notice_param1, notice.notice_param2, notice.notice_param3])
         for i in range(4):
             if i < len(names):
                 setattr(notice, f"notice_param{i}", names[i])

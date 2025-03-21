@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from Ctrls import DbCtrl, ActorTagCtrl
-from Models.BaseModel import ActorTagModel
+from Models.ActorTagModel import ActorTagModel
 from routers.web_data import ActorTagForm, AllActorTagPriorities
 
 router = APIRouter(

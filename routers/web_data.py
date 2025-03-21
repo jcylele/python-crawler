@@ -46,15 +46,29 @@ class ActorPostInfo(ServerData):
     post_count: int
 
 
-class ActorResult(ServerData):
+class BaseResult(ServerData):
     succeed: bool
-    actor: any
     msg: str
 
-    def __init__(self, succeed: bool, actor, msg: str):
+    def __init__(self, succeed: bool, msg: str):
         self.succeed = succeed
-        self.actor = actor
         self.msg = msg
+
+
+class ActorResult(BaseResult):
+    actor: "ActorModel"
+
+    def __init__(self, succeed: bool, msg: str, actor: "ActorModel" = None):
+        super().__init__(succeed, msg)
+        self.actor = actor
+
+
+class ActorListResult(BaseResult):
+    actor_list: list["ActorModel"]
+
+    def __init__(self, succeed: bool, msg: str, actor_list: list["ActorModel"] = []):
+        super().__init__(succeed, msg)
+        self.actor_list = actor_list
 
 
 class PostCommentForm(BaseModel):
@@ -77,6 +91,7 @@ class LinkActorForm(BaseModel):
     actor_ids: list[int]
     score: int
     tag_list: list[int]
+    remark: str
 
 
 class ActorTagPriority(BaseModel):

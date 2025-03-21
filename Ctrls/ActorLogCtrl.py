@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from Consts import ActorLogType
-from Models.BaseModel import ActorLogModel
+from Models.ActorLogModel import ActorLogModel
 
 
 def getActorLogs(session: Session, actor_id: int):

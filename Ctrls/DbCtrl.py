@@ -1,8 +1,8 @@
 # database connection related operations
 import json
 
-from sqlalchemy import create_engine, func
-from sqlalchemy.orm import Session, sessionmaker, Query
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 from starlette.responses import Response
 
 import Configs
@@ -18,7 +18,7 @@ def init():
     """
     init database
     """
-    engine = create_engine(Configs.DbConnectString, echo=False, future=True)
+    engine = create_engine(Configs.DbConnectString, echo=False)
 
     # create all table if not exist
     BaseModel.metadata.create_all(engine)
@@ -39,7 +39,4 @@ def CustomJsonResponse(json_data) -> Response:
     return Response(content=str_data, media_type="application/text")
 
 
-def queryCount(q: Query) -> int:
-    count_q = q.statement.with_only_columns(func.count(), maintain_column_froms=True).order_by(None)
-    count = q.session.execute(count_q).scalar()
-    return count
+

@@ -2,14 +2,14 @@
 
 import os
 
-import Configs
-from Consts import QueueType
+from Consts import QueueType, ResState
 from Ctrls import RequestCtrl
+from Download import QueueMgr
 from Download.DownloadLimit import DownloadLimit
 from Models.ActorInfo import ActorInfo
-from Models.BaseModel import ResState, PostModel, ResModel
+from Models.PostModel import PostModel
+from Models.ResModel import ResModel
 from Utils import LogUtil
-from Download import QueueMgr
 from WorkQueue.ExtraInfo import ResInfoExtraInfo, ResFileExtraInfo, \
     ActorIconExtraInfo
 from WorkQueue.FetchQueueItem import FetchActorsQueueItem, FetchActorQueueItem, FetchPostQueueItem

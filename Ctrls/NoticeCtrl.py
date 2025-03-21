@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import update, func, select
 from Consts import NoticeType
-from Models.BaseModel import NoticeModel
+from Models.NoticeModel import NoticeModel
 from Utils import LogUtil
 
 

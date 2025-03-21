@@ -6,9 +6,10 @@ from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
 from Configs import RES_SIZE_LIST
-from Consts import ResState
+from Consts import ResState, ResType
 from Ctrls import FileInfoCacheCtrl
-from Models.BaseModel import ResModel, ResType, PostModel
+from Models.PostModel import PostModel
+from Models.ResModel import ResModel
 from Models.ResSizeCount import ResSizeCount
 
 

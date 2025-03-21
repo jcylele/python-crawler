@@ -1,6 +1,5 @@
-from Consts import WorkerType, QueueType
+from Consts import WorkerType, QueueType, ResState
 from Ctrls import DbCtrl, ResCtrl
-from Models.BaseModel import ResState, ResModel
 from Utils import LogUtil
 from Download import QueueUtil
 from WorkQueue.ExtraInfo import ResInfoExtraInfo
@@ -29,7 +28,7 @@ class ResInfoWorker(BaseRequestWorker):
         # so head first, then start session
         with DbCtrl.getSession() as session1, session1.begin():
             extra_info: ResInfoExtraInfo = item.extra_info
-            res1: ResModel = ResCtrl.getRes(session1, extra_info.res_id)
+            res1 = ResCtrl.getRes(session1, extra_info.res_id)
             if res1 is None:
                 LogUtil.warn(f"res not found {extra_info}")
                 return False

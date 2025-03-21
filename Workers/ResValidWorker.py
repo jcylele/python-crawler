@@ -1,9 +1,8 @@
 import os.path
 import shutil
 
-from Consts import WorkerType, QueueType
+from Consts import WorkerType, QueueType, ResState
 from Ctrls import DbCtrl, ResCtrl
-from Models.BaseModel import ResState
 from Utils import LogUtil
 from Download import QueueUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo

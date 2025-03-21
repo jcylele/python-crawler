@@ -1,30 +1,41 @@
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 import Configs
-from Models.BaseModel import ActorTagRelationship, ActorModel
+from Models.ActorMainModel import ActorMainModel
+from Models.ActorModel import ActorModel
+from Models.ActorTagRelationship import ActorTagRelationship
 
 
 def getTagRelative(session: Session, tag_id: int, limit: int):
-    _query1 = select(ActorTagRelationship.actor_id) \
-        .where(ActorTagRelationship.tag_id == tag_id)
-    _query2 = select(ActorTagRelationship.tag_id, func.count(ActorTagRelationship.actor_id)) \
-        .where(ActorTagRelationship.actor_id.in_(_query1)) \
-        .group_by(ActorTagRelationship.tag_id) \
-        .order_by(func.count(ActorTagRelationship.actor_id).desc()) \
-        .limit(limit + 1)  # self is included
-    ret = session.execute(_query2).fetchall()
+    # 正确创建别名
+    TagRel2 = aliased(ActorTagRelationship)
+    
+    stmt = (select(
+                ActorTagRelationship.tag_id, 
+                func.count(ActorTagRelationship.main_actor_id)
+            )
+            .join(
+                TagRel2,
+                ActorTagRelationship.main_actor_id == TagRel2.main_actor_id
+            )
+            .where(TagRel2.tag_id == tag_id)
+            .group_by(ActorTagRelationship.tag_id)
+            .order_by(func.count(ActorTagRelationship.main_actor_id).desc())
+            .limit(limit + 1))
+    
+    ret = session.execute(stmt).all()
     return [{'tag_id': tag_id, 'count': count} for tag_id, count in ret]
-
 
 def getScoresByTag(session: Session, tag_id: int) -> list[int]:
     """
     get scores of actors who have the tag
     """
-    _query = select(ActorModel.score, func.count(ActorModel.actor_id)) \
-        .join(ActorTagRelationship, ActorModel.actor_id == ActorTagRelationship.actor_id) \
+    _query = select(ActorMainModel.score, func.count(ActorModel.actor_id)) \
+        .join(ActorModel, ActorMainModel.main_actor_id == ActorModel.main_actor_id) \
+        .join(ActorTagRelationship, ActorMainModel.main_actor_id == ActorTagRelationship.main_actor_id) \
         .where(ActorTagRelationship.tag_id == tag_id) \
-        .group_by(ActorModel.score)
+        .group_by(ActorMainModel.score)
     ret = session.execute(_query).fetchall()
 
     scores = [0] * (Configs.MAX_SCORE + 1)
@@ -38,14 +49,14 @@ def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit:
     """
     get tag counts used by actors who score between min_score and max_score
     """
-    _query = (session.query(ActorTagRelationship.tag_id, func.count(ActorTagRelationship.actor_id))
-              .join(ActorModel, ActorModel.actor_id == ActorTagRelationship.actor_id))
+    _query = (session.query(ActorTagRelationship.tag_id, func.count(ActorTagRelationship.main_actor_id))
+              .join(ActorMainModel, ActorMainModel.main_actor_id == ActorTagRelationship.main_actor_id))
     if min_score > 0:
-        _query = _query.where(ActorModel.score >= min_score)
+        _query = _query.where(ActorMainModel.score >= min_score)
     if 0 < max_score < Configs.MAX_SCORE:
-        _query = _query.where(ActorModel.score <= max_score)
+        _query = _query.where(ActorMainModel.score <= max_score)
     _query = (_query.group_by(ActorTagRelationship.tag_id)
-              .order_by(func.count(ActorTagRelationship.actor_id).desc())
+              .order_by(func.count(ActorTagRelationship.main_actor_id).desc())
               .limit(limit))
     ret = session.execute(_query).fetchall()
     return [{'tag_id': tag_id, 'count': count} for tag_id, count in ret]

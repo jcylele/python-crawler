@@ -1,6 +1,4 @@
-# from Models.BaseModel import ActorModel
 import Configs
-
 
 class ActorInfo(object):
     actor_id: int
@@ -8,7 +6,7 @@ class ActorInfo(object):
     actor_platform: str
     actor_link: str
 
-    def __init__(self, actor=None):
+    def __init__(self, actor: "ActorModel" = None):
         if actor is None:
             return
         self.actor_id = actor.actor_id

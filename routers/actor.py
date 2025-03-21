@@ -1,4 +1,3 @@
-import base64
 import subprocess
 from typing import List
 
@@ -7,7 +6,8 @@ from fastapi.params import Query
 
 import Configs
 from Ctrls import DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl
-from routers.web_data import ActorConditionForm, BatchActorGroup, ActorResult, LinkActorForm
+from Utils import PyUtil
+from routers.web_data import ActorConditionForm, ActorListResult, BatchActorGroup, ActorResult, LinkActorForm
 
 router = APIRouter(
     prefix="/api/actor",
@@ -39,24 +39,27 @@ def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
 def link_actors(form: LinkActorForm):
     # complex logic, ensure transaction is done
     with DbCtrl.getSession() as session, session.begin():
-        succeed = ActorCtrl.linkActors(session, form)
+        succeed, msg = ActorCtrl.linkActors(session, form)
+
+    if not succeed:
+        return DbCtrl.CustomJsonResponse(ActorListResult(False, msg))
 
     with DbCtrl.getSession() as session, session.begin():
         actors = [ActorCtrl.getActor(session, actor_id) for actor_id in form.actor_ids]
-        msg = succeed and "linked" or "link failed"
-        ar_list = [ActorResult(succeed, actor, f"actor {actor.actor_name} {msg}") for actor in actors]
-        return DbCtrl.CustomJsonResponse(ar_list)
+        return DbCtrl.CustomJsonResponse(ActorListResult(True, msg, actors))
 
 
 @router.post("/unlink")
 def unlink_actors(actor_ids: List[int]):
     with DbCtrl.getSession() as session, session.begin():
-        succeed = ActorCtrl.unlinkActors(session, actor_ids)
-        session.flush()
+        succeed, msg = ActorCtrl.unlinkActors(session, actor_ids)
+
+    if not succeed:
+        return DbCtrl.CustomJsonResponse(ActorListResult(False, msg))
+
+    with DbCtrl.getSession() as session, session.begin():
         actors = [ActorCtrl.getActor(session, actor_id) for actor_id in actor_ids]
-        msg = succeed and "unlinked" or "unlink failed"
-        ar_list = [ActorResult(True, actor, f"actor {actor.actor_name} {msg}") for actor in actors]
-        return DbCtrl.CustomJsonResponse(ar_list)
+        return DbCtrl.CustomJsonResponse(ActorListResult(True, msg, actors))
 
 
 @router.post("/batch/group")
@@ -64,8 +67,8 @@ def batch_set_group(form: BatchActorGroup):
     with DbCtrl.getSession() as session, session.begin():
         ar_list = []
         for actor_id in form.actor_ids:
-            ok, actor, msg = ActorCtrl.changeActorGroup(session, actor_id, form.group_id)
-            ar_list.append(ActorResult(ok, actor, msg))
+            succeed, actor, msg = ActorCtrl.changeActorGroup(session, actor_id, form.group_id)
+            ar_list.append(ActorResult(succeed, msg, actor))
         return DbCtrl.CustomJsonResponse(ar_list)
 
 
@@ -96,7 +99,7 @@ def get_actor(actor_id: int):
 def change_actor_group(actor_id: int, actor_group_id: int = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
         succeed, actor, msg = ActorCtrl.changeActorGroup(session, actor_id, actor_group_id)
-        ar = ActorResult(succeed, actor, msg)
+        ar = ActorResult(succeed, msg, actor)
         return DbCtrl.CustomJsonResponse(ar)
 
 
@@ -104,18 +107,23 @@ def change_actor_group(actor_id: int, actor_group_id: int = Query(alias='val')):
 def change_actor_score(actor_id: int, score: int = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
         actors = ActorCtrl.changeActorScore(session, actor_id, score)
-        ar_list = [ActorResult(True, actor, f"actor {actor.actor_name} score changed") for actor in actors]
-        return DbCtrl.CustomJsonResponse(ar_list)
+        alr = ActorListResult(True, f"actor score changed", actors)
+        return DbCtrl.CustomJsonResponse(alr)
 
 
 @router.patch("/{actor_id}/remark")
 def set_actor_remark(actor_id: int, remark: str = Query(alias='val')):
     with DbCtrl.getSession() as session, session.begin():
-        remark += '=='
-        real_remark = base64.urlsafe_b64decode(remark).decode('utf-8')
-        actor = ActorCtrl.changeActorRemark(session, actor_id, real_remark)
-        ar = ActorResult(True, actor, f"actor {actor.actor_name} remark changed")
-        return DbCtrl.CustomJsonResponse(ar)
+        real_remark = PyUtil.decodeBase64(remark)
+        actors = ActorCtrl.changeActorRemark(session, actor_id, real_remark)
+        return DbCtrl.CustomJsonResponse(ActorListResult(True, f"actor remark changed", actors))
+
+
+@router.post("/{actor_id}/tag")
+def change_actor_tag(actor_id: int, tag_list: List[int]):
+    with DbCtrl.getSession() as session, session.begin():
+        actors = ActorCtrl.changeActorTags(session, actor_id, tag_list)
+        return DbCtrl.CustomJsonResponse(ActorListResult(True, f"actor tag changed", actors))
 
 
 @router.get("/{actor_id}/open")
@@ -144,14 +152,6 @@ def clear_actor_folder(actor_id: int):
         return DbCtrl.CustomJsonResponse(ret)
 
 
-@router.post("/{actor_id}/tag")
-def change_actor_tag(actor_id: int, tag_list: List[int]):
-    with DbCtrl.getSession() as session, session.begin():
-        actors = ActorCtrl.changeActorTags(session, actor_id, tag_list)
-        ar_list = [ActorResult(True, actor, f"actor {actor.actor_name} tag changed") for actor in actors]
-        return DbCtrl.CustomJsonResponse(ar_list)
-
-
 @router.get("/{actor_id}/file_info")
 def get_actor_file_info(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
@@ -162,7 +162,10 @@ def get_actor_file_info(actor_id: int):
 @router.get("/{actor_id}/linked")
 def get_linked_actors(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        actor_ids = ActorCtrl.getLinkedActorIds(session, actor_id)
+        actor = ActorCtrl.getActor(session, actor_id)
+        if not actor.isLinked():
+            return DbCtrl.CustomJsonResponse([actor_id])
+        actor_ids = ActorCtrl.getLinkedActorIds(session, actor.main_actor_id)
         return DbCtrl.CustomJsonResponse(actor_ids)
 
 

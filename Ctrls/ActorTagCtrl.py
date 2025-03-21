@@ -2,7 +2,8 @@ from sqlalchemy import ScalarResult, select, func, update
 from sqlalchemy.orm import Session
 
 from Ctrls import DbCtrl
-from Models.BaseModel import ActorTagModel, ActorTagRelationship
+from Models.ActorTagModel import ActorTagModel
+from Models.ActorTagRelationship import ActorTagRelationship
 
 
 def getAllActorTags(session: Session) -> ScalarResult[ActorTagModel]:
@@ -13,7 +14,7 @@ def getAllActorTags(session: Session) -> ScalarResult[ActorTagModel]:
 def getAllTagsUsedCount(session: Session) -> dict[int, int]:
     _query = session.query(
         ActorTagRelationship.tag_id,
-        func.count(ActorTagRelationship.actor_id)
+        func.count(ActorTagRelationship.main_actor_id)
     ).group_by(ActorTagRelationship.tag_id)
     result = session.execute(_query).fetchall()
     count_map = {}
@@ -23,9 +24,13 @@ def getAllTagsUsedCount(session: Session) -> dict[int, int]:
 
 
 def getTagUsedCount(session: Session, tag_id: int) -> int:
-    _query = session.query(ActorTagRelationship) \
-        .where(ActorTagRelationship.tag_id == tag_id)
-    return DbCtrl.queryCount(_query)
+    # 使用select函数构建查询
+    stmt = select(func.count()).select_from(ActorTagRelationship).where(
+        ActorTagRelationship.tag_id == tag_id
+    )
+    # 执行查询并获取单一值结果
+    count = session.execute(stmt).scalar_one()
+    return count
 
 
 def getActorTag(session: Session, tag_id: int) -> ActorTagModel:
@@ -59,6 +64,4 @@ def deleteActorTag(session: Session, tag_id: int):
     tag = getActorTag(session, tag_id)
     if tag is None:
         return
-    for rel in tag.rel_actors:
-        session.delete(rel)
     session.delete(tag)

@@ -1,11 +1,13 @@
 # PostModel related operations
-import os
 
-from sqlalchemy import select, ScalarResult, func, update
+from sqlalchemy import ScalarResult, func, select, update
 from sqlalchemy.orm import Session, Query
 
-from Ctrls import FileInfoCacheCtrl, DbCtrl
-from Models.BaseModel import PostModel, ResState, ActorModel, ResModel
+from Consts import ResState
+from Ctrls import FileInfoCacheCtrl
+from Models.ActorModel import ActorModel
+from Models.PostModel import PostModel
+from Models.ResModel import ResModel
 from routers.web_data import PostConditionForm, ActorPostInfo
 
 
@@ -17,11 +19,12 @@ def getPost(session: Session, post_id: int) -> PostModel:
 
 
 def getPostCount(session: Session, actor_id: int, completed: bool) -> int:
-    _query = session.query(PostModel) \
-        .where(PostModel.actor_id == actor_id) \
-        .where(PostModel.completed == completed)
-    return DbCtrl.queryCount(_query)
-
+    stmt = select(func.count()).select_from(PostModel).where(
+        PostModel.actor_id == actor_id,
+        PostModel.completed == completed
+    )
+    count = session.execute(stmt).scalar_one()
+    return count
 
 def getMaxPostId(session: Session, actor_id: int) -> int:
     _query = session.query(func.max(PostModel.post_id)) \

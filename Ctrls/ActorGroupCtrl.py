@@ -1,9 +1,11 @@
-from sqlalchemy import ScalarResult, select, delete
+from sqlalchemy import ScalarResult, func, select, delete
 from sqlalchemy.orm import Session
 
 from Consts import GroupCondType
 from Ctrls import DbCtrl
-from Models.BaseModel import ActorGroupModel, ActorModel, ActorGroupCondModel
+from Models.ActorGroupCondModel import ActorGroupCondModel
+from Models.ActorGroupModel import ActorGroupModel
+from Models.ActorModel import ActorModel
 from routers.web_data import ActorGroupForm, ActorGroupCond
 
 
@@ -40,15 +42,18 @@ def updateActorGroup(session: Session, group: ActorGroupForm):
 
 
 def deleteActorGroup(session: Session, group_id: int) -> bool:
-    _query = session.query(ActorModel) \
-        .where(ActorModel.actor_group_id == group_id)
-    actor_count = DbCtrl.queryCount(_query)
+    # 使用Query API直接计数
+    actor_count = session.query(func.count(ActorModel.actor_id)).filter(
+        ActorModel.actor_group_id == group_id
+    ).scalar()
+
     if actor_count > 0:
         return False
 
-    _query = delete(ActorGroupModel) \
-        .where(ActorGroupModel.group_id == group_id)
-    session.execute(_query)
+    # 删除演员组
+    session.execute(
+        delete(ActorGroupModel).where(ActorGroupModel.group_id == group_id)
+    )
 
     return True
 
@@ -60,7 +65,8 @@ def setGroupCondition(session: Session, group_id: int, cond_list: list[ActorGrou
 
     for cond in cond_list:
         cond_model = ActorGroupCondModel(group_id=group_id,
-                                         cond_type=GroupCondType(cond.cond_type),
+                                         cond_type=GroupCondType(
+                                             cond.cond_type),
                                          cond_param=cond.cond_param)
         session.add(cond_model)
     session.flush()

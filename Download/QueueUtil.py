@@ -39,7 +39,7 @@ def enqueueFetchPost(queueMgr: QueueMgr, actor_info: ActorInfo, post_id: int, is
 def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, downloadLimit: DownloadLimit):
     # post = PostCtrl.getPost(session, post_id)
     post_url = RequestCtrl.formatPostUrl(actor_info, post.post_id, post.is_dm)
-    for res in post.res_list:
+    for res in post.res_list:  # type: ResModel
         # 文件已下载,检查大小
         file_path = res.filePath()
         if os.path.exists(file_path):
@@ -54,7 +54,7 @@ def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, do
                 continue
 
         out_extra = ResInfoExtraInfo(actor_info, post.post_id, res.res_id, res.res_type)
-        out_item = UrlQueueItem(res.res_url, post_url, out_extra)
+        out_item = UrlQueueItem(res.full_url(), post_url, out_extra)
         # 所有资源都Info
         if res.res_size == 0:
             queueMgr.put(QueueType.ResInfo, out_item)
@@ -65,7 +65,7 @@ def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, do
 def enqueueResFile(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, res: ResModel):
     post_url = RequestCtrl.formatPostUrl(actor_info, post.post_id, post.is_dm)
     out_extra = ResInfoExtraInfo(actor_info, post.post_id, res.res_id, res.res_type)
-    out_item = UrlQueueItem(res.res_url, post_url, out_extra)
+    out_item = UrlQueueItem(res.full_url(), post_url, out_extra)
     downloadResFile(queueMgr, out_item, res.tmpFilePath(), res.res_size)
 
 

@@ -13,7 +13,10 @@ class ResModel(BaseModel):
     __tablename__ = "tab_res"
 
     res_id: Mapped[int] = mapped_column(primary_key=True)
-    res_url: Mapped[str] = mapped_column(String(200))
+    res_url: Mapped[str] = mapped_column(String(200), default="")
+    res_url_id: Mapped[int] = mapped_column(
+        ForeignKey("tab_res_url.url_id", ondelete="CASCADE"),
+        default=0)
     res_index: Mapped[int] = mapped_column()
     res_state: Mapped[ResState] = mapped_column(
         IntEnum(ResState), default=ResState.Init)
@@ -22,11 +25,23 @@ class ResModel(BaseModel):
 
     post_id: Mapped[int] = mapped_column(
         ForeignKey("tab_post.post_id", ondelete="CASCADE"))
+
+    res_url_info: Mapped["ResUrlModel"] = relationship(
+        back_populates="res",
+        uselist=False,
+        single_parent=True,
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+
     post: Mapped["PostModel"] = relationship(
         back_populates="res_list",
         cascade="all",
         passive_deletes=True
     )
+
+    def full_url(self) -> str:
+        return self.res_url_info.full_url
 
     def actor(self):
         return self.post.actor
@@ -42,7 +57,7 @@ class ResModel(BaseModel):
         actor = self.actor()
         actor_folder = Configs.formatActorFolderPath(
             actor.actor_id, actor.actor_name)
-        ext = self.res_url.split('.')[-1]
+        ext = self.res_url_info.extension
         return f"{actor_folder}\\{self.post_id}_{self.res_index}.{ext}"
 
     def tmpFilePath(self) -> str:
@@ -50,7 +65,7 @@ class ResModel(BaseModel):
         temporary location for resources before validation
         :return:
         """
-        ext = self.res_url.split('.')[-1]
+        ext = self.res_url_info.extension
         return f"{Configs.formatTmpFolderPath()}/{self.actor().actor_name}_{self.post_id}_{self.res_index}.{ext}"
 
     def shouldDownload(self, download_limit: DownloadLimit) -> bool:

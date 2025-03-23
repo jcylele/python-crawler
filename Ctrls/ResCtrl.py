@@ -1,5 +1,6 @@
 # Resource related operations
 
+import re
 from typing import List, Tuple
 
 from sqlalchemy import select, ScalarResult
@@ -9,8 +10,11 @@ from Configs import RES_SIZE_LIST
 from Consts import ResState, ResType
 from Ctrls import FileInfoCacheCtrl
 from Models.PostModel import PostModel
+from Models.ResDomainModel import ResDomainModel
 from Models.ResModel import ResModel
 from Models.ResSizeCount import ResSizeCount
+from Models.ResUrlModel import ResUrlModel
+from Utils import LogUtil, PyUtil
 
 
 def getRes(session: Session, res_id: int) -> ResModel:
@@ -24,7 +28,8 @@ def getResByIndex(session: Session, post_id: int, res_index: int) -> ResModel:
     """
     get a resource record by post_id and res_index
     """
-    stmt = select(ResModel).where(ResModel.post_id == post_id, ResModel.res_index == res_index)
+    stmt = select(ResModel).where(ResModel.post_id ==
+                                  post_id, ResModel.res_index == res_index)
     return session.scalar(stmt)
 
 
@@ -46,29 +51,56 @@ def onResAdded(session: Session, post_id: int):
         actor_file_info.addRes(res)
 
 
+def addResUrl(session: Session, url: str) -> int:
+    index = url.find("?")
+    if index > 0:
+        url = url[:index]
+    match = re.match(
+        r'https://([^/]+)/data/[^/]+/[^/]+/([a-f0-9]{64})\.(\w+)', url)
+    if not match:
+        LogUtil.error(f"无法解析资源URL: {url}")
+        return 0
+
+    domain_name = match.group(1)
+    hash_hex = match.group(2)
+    extension = match.group(3)
+
+    # 获取或创建domain
+    domain = session.scalar(select(ResDomainModel).where(
+        ResDomainModel.domain_name == domain_name))
+    if domain is None:
+        domain = ResDomainModel(domain_name=domain_name)
+        session.add(domain)
+        session.flush()  # 获取domain.domain_id
+
+    # 创建ResUrlModel
+    hash_binary = PyUtil.hex2bytes(hash_hex)
+    res_url = ResUrlModel(
+        domain_id=domain.domain_id,
+        hash_binary=hash_binary,
+        extension=extension
+    )
+
+    session.add(res_url)
+    session.flush()  # 获取res_url.url_id
+    return res_url.url_id
+
+
 def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]]):
-    """
-    add resource records of a post
-    :param session:
-    :param post_id:
-    :param url_list: [(resource type, url of the resource)]
-    :return:
-    """
     for i in range(len(url_list)):
         res = ResModel()
         res.post_id = post_id
         res.res_index = i + 1
         res.res_type = url_list[i][0]
-        # trim query params
-        url = url_list[i][1]
-        index = url.find("?")
-        if index > 0:
-            url = url[:index]
-        res.res_url = url
-
-        # keep other attributes as default
+        # add res url
+        url_id = addResUrl(session, url_list[i][1])
+        if url_id > 0:
+            res.res_url_id = url_id
+        else:
+            res.res_url = url_list[i][1]
 
         session.add(res)
+
     session.flush()
     onResAdded(session, post_id)
 

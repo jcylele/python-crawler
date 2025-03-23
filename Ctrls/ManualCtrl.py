@@ -1,14 +1,19 @@
 #! fix/update bugs/problems in database, mainly caused by existing actors skipping new features
 import os
 import re
+import random
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 import Configs
-from Ctrls import ActorCtrl
+from Ctrls import ActorCtrl, DbCtrl, ResCtrl
+from Models.ActorTagModel import ActorTagModel
+from Models.ResDomainModel import ResDomainModel
+from Models.ResModel import ResModel
 from Models.ActorModel import ActorModel
-from Utils import LogUtil
+from Models.ResUrlModel import ResUrlModel
+from Utils import LogUtil, PyUtil
 
 
 def removeActorFolders(session: Session):

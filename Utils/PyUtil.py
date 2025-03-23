@@ -1,4 +1,5 @@
 import base64
+import binascii
 
 
 def decodeBase64(b64string):
@@ -8,3 +9,10 @@ def decodeBase64(b64string):
 
 def encodeBase64(string):
     return base64.urlsafe_b64encode(string.encode('utf-8')).decode('utf-8')
+
+def hex2bytes(hex_string):
+    return binascii.unhexlify(hex_string)
+
+def bytes2hex(bytes_data):
+    return binascii.hexlify(bytes_data).decode('ascii')
+

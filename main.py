@@ -5,5 +5,6 @@ from Download.DownloadTask import DownloadTask
 if __name__ == '__main__':
     DownloadTask.initEnv()
     with DbCtrl.getSession() as session, session.begin():
-        ManualCtrl.generateSingleMainActors(session)
+        # ManualCtrl.testResUrl(session)
         # ActorCtrl.findAllSimilarActors(session)
+        pass

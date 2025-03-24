@@ -16,29 +16,14 @@ class ActorTagRelationship(BaseModel):
         primary_key=True
     )
 
-    # main_actor: Mapped["ActorMainModel"] = relationship(
-    #     back_populates="rel_tags",
-    #     cascade="all",
-    #     passive_deletes=True
-    # )
-    #
-    # tag: Mapped["ActorTagModel"] = relationship(
-    #     back_populates="rel_main_actors",
-    #     cascade="all",
-    #     passive_deletes=True
-    # )
+    main_actor: Mapped["ActorMainModel"] = relationship(
+        back_populates="rel_tags",
+        cascade="all",
+        passive_deletes=True
+    )
 
-
-ActorTagRelationship.main_actor = relationship(
-    "ActorMainModel",
-    back_populates="rel_tags",
-    cascade="all",
-    passive_deletes=True
-)
-
-ActorTagRelationship.tag = relationship(
-    "ActorTagModel",
-    back_populates="rel_main_actors",
-    cascade="all",
-    passive_deletes=True
-)
+    tag: Mapped["ActorTagModel"] = relationship(
+        back_populates="rel_main_actors",
+        cascade="all",
+        passive_deletes=True
+    )

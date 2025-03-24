@@ -13,7 +13,6 @@ class ResModel(BaseModel):
     __tablename__ = "tab_res"
 
     res_id: Mapped[int] = mapped_column(primary_key=True)
-    res_url: Mapped[str] = mapped_column(String(200), default="")
     res_url_id: Mapped[int] = mapped_column(
         ForeignKey("tab_res_url.url_id", ondelete="CASCADE"),
         default=0)

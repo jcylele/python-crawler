@@ -12,11 +12,12 @@ class ActorMainModel(BaseModel):
         primary_key=True, autoincrement=False)
     remark: Mapped[str] = mapped_column(String(100), default="")
     score: Mapped[int] = mapped_column(default=0)
-    # rel_tags: Mapped[list["ActorTagRelationship"]] = relationship(
-    #     back_populates="main_actor",
-    #     cascade="all, delete-orphan",
-    #     passive_deletes=True
-    # )
+
+    rel_tags: Mapped[list["ActorTagRelationship"]] = relationship(
+        back_populates="main_actor",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     def toJson(self):
         json_data = {
@@ -25,10 +26,3 @@ class ActorMainModel(BaseModel):
             'remark': PyUtil.encodeBase64(self.remark)
         }
         return json_data
-
-ActorMainModel.rel_tags = relationship(
-    "ActorTagRelationship",
-    back_populates="main_actor",
-    cascade="all, delete-orphan",
-    passive_deletes=True
-)

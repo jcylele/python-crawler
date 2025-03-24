@@ -1,19 +1,16 @@
 #! fix/update bugs/problems in database, mainly caused by existing actors skipping new features
 import os
 import re
-import random
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 import Configs
-from Ctrls import ActorCtrl, DbCtrl, ResCtrl
-from Models.ActorTagModel import ActorTagModel
-from Models.ResDomainModel import ResDomainModel
-from Models.ResModel import ResModel
+from Ctrls import ActorCtrl
 from Models.ActorModel import ActorModel
-from Models.ResUrlModel import ResUrlModel
-from Utils import LogUtil, PyUtil
+from Models.NoticeModel import NoticeModel
+from Models.ActorTagModel import ActorTagModel
+from Utils import LogUtil
 
 
 def removeActorFolders(session: Session):
@@ -52,3 +49,4 @@ def getManualActorIds(session: Session, limit: int, offset: int = 0) -> list[int
         stmt = stmt.offset(offset)
     actor_ids = session.scalars(stmt)
     return [a for a in actor_ids]
+

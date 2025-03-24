@@ -97,7 +97,7 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
         if url_id > 0:
             res.res_url_id = url_id
         else:
-            res.res_url = url_list[i][1]
+            raise Exception(f"无法解析资源URL: {url_list[i][1]}")
 
         session.add(res)
 

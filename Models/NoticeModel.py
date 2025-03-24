@@ -1,4 +1,4 @@
-from sqlalchemy import String
+from sqlalchemy import Index, String, BigInteger
 from sqlalchemy.orm import mapped_column, Mapped
 
 from Consts import NoticeType
@@ -10,24 +10,33 @@ class NoticeModel(BaseModel):
 
     notice_id: Mapped[int] = mapped_column(primary_key=True)
     notice_type: Mapped[NoticeType] = mapped_column(IntEnum(NoticeType))
-    notice_checksum: Mapped[str] = mapped_column(String(100))
+    notice_checksum: Mapped[int] = mapped_column(BigInteger)
     notice_param0: Mapped[str] = mapped_column(String(100), default="")
     notice_param1: Mapped[str] = mapped_column(String(100), default="")
     notice_param2: Mapped[str] = mapped_column(String(100), default="")
     notice_param3: Mapped[str] = mapped_column(String(100), default="")
     deleted: Mapped[bool] = mapped_column(default=False)
 
-    def __checksum(self) -> str:
-        """
-        simple is the best
-        """
-        result = 17
-        result = 37 * result + hash(self.notice_param0)
-        result = 37 * result + hash(self.notice_param1)
-        result = 37 * result + hash(self.notice_param2)
-        result = 37 * result + hash(self.notice_param3)
-        result = result << self.notice_type.value
-        return str(result)
+    # 添加复合索引
+    __table_args__ = (
+        Index('idx_notice_type_checksum', notice_type, notice_checksum),
+    )
+
+    def __checksum(self) -> int:
+        # 使用更大的素数可以减少冲突
+        prime = 0x01000193  # FNV prime
+        result = 0x811c9dc5  # FNV offset basis
+        
+        for param in [self.notice_param0, self.notice_param1, 
+                    self.notice_param2, self.notice_param3]:
+            # 更好的混合方式
+            result ^= hash(param)  # 异或操作
+            result = (result * prime) & 0x7FFFFFFFFFFFFFFF  # 乘法和截断
+        
+        # 结合notice_type但不使用位移
+        result = (result * (self.notice_type.value + 1)) & 0x7FFFFFFFFFFFFFFF
+        
+        return result
 
     def isSameParams(self, other: "NoticeModel"):
         return (self.notice_param0 == other.notice_param0

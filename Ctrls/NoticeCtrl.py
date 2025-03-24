@@ -61,20 +61,21 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
         LogUtil.warn(f"too many params {params} for notice type {notice_type}")
         params = params[:4]
 
-    notice = NoticeModel()
-    notice.notice_type = notice_type
+    notice = NoticeModel(
+        notice_type=notice_type,
+    )
     notice.setParams(*params)
-    notices = (session.query(NoticeModel)
-               .filter(NoticeModel.notice_checksum == notice.notice_checksum)
-               .filter(NoticeModel.notice_type == notice_type)
-               .all())
-    if len(notices) > 0:
-        for n in notices:
-            # check if the notice already exists
-            if notice.isSameParams(n):
-                return
+    stmt = (select(NoticeModel)
+            .where(NoticeModel.notice_checksum == notice.notice_checksum)
+            .where(NoticeModel.notice_type == notice_type))
+    notices = session.scalars(stmt)
+    for n in notices:
+        # check if the notice already exists
+        if notice.isSameParams(n):
+            return
         # different params, same checksum
         LogUtil.warn(f"notice checksum conflict {notice.notice_checksum}")
+    
     session.add(notice)
     session.flush()
 

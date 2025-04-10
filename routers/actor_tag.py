@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from Ctrls import DbCtrl, ActorTagCtrl
 from Models.ActorTagModel import ActorTagModel
-from routers.web_data import ActorTagForm, AllActorTagPriorities
+from routers.web_data import ActorTagForm, AllActorTagPriorities, TagUsedInfo
 
 router = APIRouter(
     prefix="/api/actor_tag",
@@ -12,15 +12,26 @@ router = APIRouter(
 )
 
 
+def format_tag_json(tag: ActorTagModel, used_info: TagUsedInfo) -> dict:
+    json = tag.toJson()
+    if used_info is None:
+        json['used_count'] = 0
+        json['avg_score'] = 0
+    else:
+        for k, v in used_info.items():
+            json[k] = v
+    return json
+
+
 @router.get("/list")
 def get_actor_tag_list():
     with DbCtrl.getSession() as session, session.begin():
         tags = ActorTagCtrl.getAllActorTags(session)
-        count_map = ActorTagCtrl.getAllTagsUsedCount(session)
+        used_info_map = ActorTagCtrl.getAllTagsUsedInfo(session)
         response = []
         for tag in tags:
-            json = tag.toJson()
-            json['used_count'] = count_map.get(tag.tag_id, 0)
+            used_info = used_info_map.get(tag.tag_id)
+            json = format_tag_json(tag, used_info)
             response.append(json)
         return DbCtrl.CustomJsonResponse(response)
 
@@ -30,9 +41,9 @@ def get_actor_tag_list():
 def get_actor_tag(tag_id: int):
     with DbCtrl.getSession() as session, session.begin():
         tag = ActorTagCtrl.getActorTag(session, tag_id)
-        json = tag.toJson()
-        json['used_count'] = ActorTagCtrl.getTagUsedCount(session, tag_id)
-        return json
+        used_info = ActorTagCtrl.getTagUsedInfo(session, tag_id)
+        json = format_tag_json(tag, used_info)
+        return DbCtrl.CustomJsonResponse(json)
 
 
 # 必须在/list之后,同方法(get)按顺序匹配

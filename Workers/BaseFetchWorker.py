@@ -105,6 +105,7 @@ class BaseFetchWorker(BaseWorker):
                     time.sleep(10)
                     driver.refresh()
 
+        LogUtil.info(f"on fetch {item}")
         processed = self._onFetched(item, driver)
         WebPool.releaseDriver(driver, self.workerType())
         return processed

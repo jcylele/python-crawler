@@ -65,14 +65,14 @@ class FetchActorsWorker(BaseFetchWorker):
         while True:
             try:
                 WebDriverWait(driver, 10).until(
-                    EC.text_to_be_present_in_element((By.CSS_SELECTOR, "li.pagination-button-current b"),
+                    EC.text_to_be_present_in_element((By.CSS_SELECTOR, ".pagination-button-current b"),
                                                      str(self.start_page + 1))
                 )
             except:
                 LogUtil.error(f"actors page {self.start_page + 1} not found")
                 break
 
-            current_page = driver.find_element(By.CSS_SELECTOR, "li.pagination-button-current b")
+            current_page = driver.find_element(By.CSS_SELECTOR, ".pagination-button-current b")
             LogUtil.info(f"fetch actors page {current_page.text}")
 
             # analyze content

@@ -28,11 +28,7 @@ def get_actor_count(form: ActorConditionForm):
 def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
     with DbCtrl.getSession() as session, session.begin():
         actor_ids = ActorCtrl.getActorList(session, form, limit, start)
-
-        response = []
-        for actor_id in actor_ids:
-            response.append(actor_id)
-        return DbCtrl.CustomJsonResponse(response)
+        return DbCtrl.CustomJsonResponse(actor_ids)
 
 
 @router.post("/link")
@@ -84,6 +80,14 @@ def similar_names():
     with DbCtrl.getSession() as session, session.begin():
         ActorCtrl.findAllSimilarActors(session)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+
+@router.get("/clear_group_folder/{group_id}")
+def clear_folder_by_group(group_id: int):
+    with DbCtrl.getSession() as session, session.begin():
+        actors = ActorCtrl.getActorsByGroup(session, group_id)
+        for actor in actors:
+            ActorCtrl.clearActorFolder(session, actor)
 
 
 # 同方法(get)按顺序匹配, 固定前缀在前，{actor_id}在后, 以下皆为单个匹配

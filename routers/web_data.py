@@ -1,6 +1,11 @@
 from enum import Enum
-
+from typing import TypedDict
 from pydantic import BaseModel
+
+
+class TagUsedInfo(TypedDict):
+    used_count: int
+    avg_score: float
 
 
 class SortType(Enum):

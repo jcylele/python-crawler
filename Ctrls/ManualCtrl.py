@@ -2,14 +2,16 @@
 import os
 import re
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 import Configs
+from Consts import ResState
 from Ctrls import ActorCtrl
 from Models.ActorModel import ActorModel
-from Models.NoticeModel import NoticeModel
-from Models.ActorTagModel import ActorTagModel
+from Models.PostModel import PostModel
+from Models.ResModel import ResModel
 from Utils import LogUtil
 
 
@@ -49,4 +51,6 @@ def getManualActorIds(session: Session, limit: int, offset: int = 0) -> list[int
         stmt = stmt.offset(offset)
     actor_ids = session.scalars(stmt)
     return [a for a in actor_ids]
+
+
 

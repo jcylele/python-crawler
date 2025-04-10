@@ -34,3 +34,9 @@ def tags_of_score(min_score: int = Query(alias='min'), max_score: int = Query(al
     with DbCtrl.getSession() as session, session.begin():
         tags = ChartCtrl.getTagCountsByScore(session, min_score, max_score, limit)
         return DbCtrl.CustomJsonResponse(tags)
+
+@router.get("/down_size_of_groups")
+def down_size_of_groups():
+    with DbCtrl.getSession() as session, session.begin():
+        ret = ChartCtrl.getResSizeStats(session)
+        return DbCtrl.CustomJsonResponse(ret)

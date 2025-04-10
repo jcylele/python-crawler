@@ -1,6 +1,6 @@
 # PostModel related operations
 
-from sqlalchemy import ScalarResult, func, select, update
+from sqlalchemy import ScalarResult, func, select, update, Select
 from sqlalchemy.orm import Session, Query
 
 from Consts import ResState
@@ -26,11 +26,12 @@ def getPostCount(session: Session, actor_id: int, completed: bool) -> int:
     count = session.execute(stmt).scalar_one()
     return count
 
+
 def getMaxPostId(session: Session, actor_id: int) -> int:
-    _query = session.query(func.max(PostModel.post_id)) \
+    _query = select(func.max(PostModel.post_id)) \
         .where(PostModel.actor_id == actor_id)
-    result = session.execute(_query).fetchone()
-    return result[0] or 0
+    result = session.scalar(_query)
+    return result or 0
 
 
 def addPost(session: Session, actor_id: int, post_id: int, is_dm: bool):
@@ -68,7 +69,7 @@ def removeCurrentResFiles(session: Session, actor_id: int):
     session.execute(_query)
 
 
-def filterQuery(_query: Query, form: PostConditionForm) -> Query:
+def filterQuery(_query: Select, form: PostConditionForm) -> Query:
     # actor_name
     if form.actor_id != 0:
         _query = _query.where(PostModel.actor_id == form.actor_id)
@@ -82,7 +83,7 @@ def filterQuery(_query: Query, form: PostConditionForm) -> Query:
 
 
 def getPostCountList(session: Session, form: PostConditionForm):
-    _query = session.query(
+    _query = select(
         PostModel.actor_id,
         func.count(PostModel.post_id)
     ).group_by(PostModel.actor_id)
@@ -101,7 +102,7 @@ def getPostCountList(session: Session, form: PostConditionForm):
 
 
 def getFilteredPosts(session: Session, form: PostConditionForm) -> ScalarResult[PostModel]:
-    _query = session.query(PostModel)
+    _query = select(PostModel)
     _query = filterQuery(_query, form)
     # _query = _query.order_by(PostModel.actor_name)
     # _query = _query.order_by(desc(PostModel.post_id))
@@ -116,7 +117,7 @@ def setPostComment(session: Session, post_id: int, comment: str):
 
 
 def getNewPosts(session: Session, actor_id: int, last_post_id: int) -> ScalarResult[PostModel]:
-    _query = (session.query(PostModel)
+    _query = (select(PostModel)
               .where(PostModel.actor_id == actor_id)
               .where(PostModel.post_id > last_post_id)
               .order_by(PostModel.post_id.desc()))

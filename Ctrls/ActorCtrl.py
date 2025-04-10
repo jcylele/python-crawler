@@ -4,12 +4,13 @@ import os
 import re
 import shutil
 from typing import Union
-from sqlalchemy import ScalarResult, func, select, delete, update, Select
+
+from sqlalchemy import ScalarResult, exists, func, select, delete, update, Select
 from sqlalchemy.orm import Session
 
 import Configs
 from Consts import NoticeType, ActorLogType, GroupCondType, ResState
-from Ctrls import PostCtrl, ResCtrl, DbCtrl, FileInfoCacheCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl
+from Ctrls import PostCtrl, ResCtrl, FileInfoCacheCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl
 from Models.ActorInfo import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
@@ -17,6 +18,8 @@ from Models.ActorTagRelationship import ActorTagRelationship
 from Utils import LogUtil
 from routers.web_data import ActorConditionForm, SortType, LinkActorForm
 
+
+# region single actor
 
 def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
     actor = getActor(session, actor_id)
@@ -42,10 +45,9 @@ def getActorByInfo(session: Session, actor_info: ActorInfo) -> ActorModel:
 
 
 def getActorsByName(session: Session, actor_name: str) -> list[ActorModel]:
-    query = session.query(ActorModel).where(
+    query = select(ActorModel).where(
         ActorModel.actor_name == actor_name)
-    ret = session.execute(query).scalars()
-    return list(ret)
+    return list(session.scalars(query))
 
 
 def createActorFolder(actor: Union[ActorInfo, ActorModel]):
@@ -54,10 +56,11 @@ def createActorFolder(actor: Union[ActorInfo, ActorModel]):
 
 
 def checkSameActorName(session: Session, actor_name: str):
-    _query = session.query(ActorModel) \
-        .where(ActorModel.actor_name == actor_name)
-    actor = session.execute(_query).fetchone()
-    if actor is not None:
+    exists_query = select(exists().where(
+        ActorModel.actor_name == actor_name
+    ))
+    name_exists = session.scalar(exists_query)
+    if name_exists:
         NoticeCtrl.addNotice(session, NoticeType.SameActorName, actor_name)
 
 
@@ -84,117 +87,6 @@ def addActor(session: Session, actor_info: ActorInfo, group_id: int) -> ActorMod
     createActorFolder(actor)
 
     return actor
-
-
-def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
-    form.name = form.name.strip()
-    if form.name:
-        name_list = [name.strip()
-                     for name in form.name.split("||") if name.strip()]
-        if len(name_list) > 1:
-            query = query.where(ActorModel.actor_name.in_(name_list))
-        elif name_list:
-            query = query.where(
-                ActorModel.actor_name.like(f"%{name_list[0]}%"))
-
-    if form.linked:
-        query = query.where(ActorModel.main_actor_id != ActorModel.actor_id)
-
-    if form.group_id_list:
-        query = query.where(ActorModel.actor_group_id.in_(form.group_id_list))
-
-    if form.no_tag:
-        query = query.where(~ActorModel.main_actor.has(
-            ActorMainModel.rel_tags.any()))
-    elif form.tag_list:
-        query = query.where(
-            ActorModel.main_actor.has(
-                ActorMainModel.rel_tags.any(
-                    ActorTagRelationship.tag_id.in_(form.tag_list))
-            )
-        )
-
-    if form.min_score > 0:
-        query = query.where(ActorModel.main_actor.has(
-            ActorMainModel.score >= form.min_score))
-    if form.max_score < Configs.MAX_SCORE:
-        query = query.where(ActorModel.main_actor.has(
-            ActorMainModel.score <= form.max_score))
-
-    form.remark_str = form.remark_str.strip()
-    if form.remark_str:
-        query = query.where(
-            ActorModel.main_actor.has(
-                ActorMainModel.remark.like(f"%{form.remark_str}%"))
-        )
-    elif form.remark_any:
-        query = query.where(ActorModel.main_actor.has(
-            ActorMainModel.remark != ""))
-
-    return query
-
-
-def getActorCount(session: Session, form: ActorConditionForm) -> int:
-    _query = select(func.count(ActorModel.actor_id))
-    _query = _filterQuery(_query, form)
-    return session.execute(_query).scalar_one()
-
-
-def getAllActorCount(session: Session) -> int:
-    # 直接用select()和func.count()计数，最简洁高效
-    stmt = select(func.count()).select_from(ActorModel)
-    return session.execute(stmt).scalar_one()
-
-
-def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
-    for sort_item in form.sort_items:
-        if sort_item.sort_type == SortType.Score:
-            # use related field to sort
-            subq = select(ActorMainModel.score).where(
-                ActorMainModel.main_actor_id == ActorModel.main_actor_id
-            ).scalar_subquery()
-
-            if not sort_item.sort_asc:
-                subq = subq.desc()
-            _query = _query.order_by(subq)
-
-        elif sort_item.sort_type == SortType.TotalPostCount:
-            sort_clause = ActorModel.total_post_count
-            if not sort_item.sort_asc:
-                sort_clause = sort_clause.desc()
-            _query = _query.order_by(sort_clause)
-
-        elif sort_item.sort_type == SortType.CategoryTime:
-            sort_clause = ActorModel.group_time
-            if not sort_item.sort_asc:
-                sort_clause = sort_clause.desc()
-            _query = _query.order_by(sort_clause)
-
-        else:
-            raise SystemError(f"invalid sort type {sort_item.sort_type}")
-
-    # default
-    _query = _query.order_by(ActorModel.actor_name)
-
-    return _query
-
-
-def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> ScalarResult[int]:
-    _query = _sortQuery(_filterQuery(select(ActorModel.actor_id), form), form)
-    if start != 0:
-        _query = _query.offset(start)
-    if limit != 0:
-        _query = _query.limit(limit)
-    return session.scalars(_query)
-
-
-def getActorsByGroup(session: Session, group_id: int) -> ScalarResult[ActorModel]:
-    """
-    search actors by category
-    """
-    _query = (session.query(ActorModel)
-              .where(ActorModel.actor_group_id == group_id))
-    return session.scalars(_query)
 
 
 def getActorFileInfo(session: Session, actor_id: int):
@@ -252,6 +144,124 @@ def clearActorFolder(session: Session, actor: ActorModel):
     shutil.rmtree(actor_folder)
     # recreate folder
     createActorFolder(actor)
+
+
+# endregion
+
+# region query
+
+def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
+    form.name = form.name.strip()
+    if form.name:
+        name_list = [name.strip()
+                     for name in form.name.split("||") if name.strip()]
+        if len(name_list) > 1:
+            query = query.where(ActorModel.actor_name.in_(name_list))
+        elif name_list:
+            query = query.where(
+                ActorModel.actor_name.like(f"%{name_list[0]}%"))
+
+    if form.linked:
+        query = query.where(ActorModel.main_actor_id != ActorModel.actor_id)
+
+    if form.group_id_list:
+        query = query.where(ActorModel.actor_group_id.in_(form.group_id_list))
+
+    if form.no_tag:
+        query = query.where(~ActorModel.main_actor.has(
+            ActorMainModel.rel_tags.any()))
+    elif form.tag_list:
+        query = query.where(
+            ActorModel.main_actor.has(
+                ActorMainModel.rel_tags.any(
+                    ActorTagRelationship.tag_id.in_(form.tag_list))
+            )
+        )
+
+    if form.min_score > 0:
+        query = query.where(ActorModel.main_actor.has(
+            ActorMainModel.score >= form.min_score))
+    if form.max_score < Configs.MAX_SCORE:
+        query = query.where(ActorModel.main_actor.has(
+            ActorMainModel.score <= form.max_score))
+
+    form.remark_str = form.remark_str.strip()
+    if form.remark_str:
+        query = query.where(
+            ActorModel.main_actor.has(
+                ActorMainModel.remark.like(f"%{form.remark_str}%"))
+        )
+    elif form.remark_any:
+        query = query.where(ActorModel.main_actor.has(
+            ActorMainModel.remark != ""))
+
+    return query
+
+
+def getActorCount(session: Session, form: ActorConditionForm) -> int:
+    _query = select(func.count(ActorModel.actor_id))
+    _query = _filterQuery(_query, form)
+    return session.scalar(_query)
+
+
+def getAllActorCount(session: Session) -> int:
+    # 直接用select()和func.count()计数，最简洁高效
+    stmt = select(func.count()).select_from(ActorModel)
+    return session.scalar(stmt)
+
+
+def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
+    for sort_item in form.sort_items:
+        if sort_item.sort_type == SortType.Score:
+            # use related field to sort
+            subq = select(ActorMainModel.score).where(
+                ActorMainModel.main_actor_id == ActorModel.main_actor_id
+            ).scalar_subquery()
+
+            if not sort_item.sort_asc:
+                subq = subq.desc()
+            _query = _query.order_by(subq)
+
+        elif sort_item.sort_type == SortType.TotalPostCount:
+            sort_clause = ActorModel.total_post_count
+            if not sort_item.sort_asc:
+                sort_clause = sort_clause.desc()
+            _query = _query.order_by(sort_clause)
+
+        elif sort_item.sort_type == SortType.CategoryTime:
+            sort_clause = ActorModel.group_time
+            if not sort_item.sort_asc:
+                sort_clause = sort_clause.desc()
+            _query = _query.order_by(sort_clause)
+
+        else:
+            raise SystemError(f"invalid sort type {sort_item.sort_type}")
+
+    # default
+    _query = _query.order_by(ActorModel.actor_name)
+
+    return _query
+
+
+def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> list[int]:
+    _query = _sortQuery(_filterQuery(select(ActorModel.actor_id), form), form)
+    if start != 0:
+        _query = _query.offset(start)
+    if limit != 0:
+        _query = _query.limit(limit)
+    return list(session.scalars(_query))
+
+
+def getActorsByGroup(session: Session, group_id: int) -> ScalarResult[ActorModel]:
+    """
+    search actors by category
+    """
+    _query = (select(ActorModel)
+              .where(ActorModel.actor_group_id == group_id))
+    return session.scalars(_query)
+
+
+# endregion
 
 # region update actor / main_actor
 
@@ -392,6 +402,7 @@ def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> tupl
 
     return True, actor, f"actor {actor.actor_name} join group {new_group.group_name}"
 
+
 # endregion
 
 # region link related
@@ -413,7 +424,7 @@ def unlinkActors(session: Session, actor_ids: list[int]) -> tuple[bool, str]:
     # check if all actors included
     stmt = select(func.count(ActorModel.actor_id)).where(
         ActorModel.main_actor_id == main_actor_id)
-    linked_actor_count = session.execute(stmt).scalar_one()
+    linked_actor_count = session.scalar(stmt)
     if linked_actor_count > len(actor_ids):
         return False, f"not all actors in the link are selected"
 
@@ -461,20 +472,23 @@ def linkActors(session: Session, form: LinkActorForm) -> tuple[bool, str]:
     # will be removed at the end
     old_main_actor_ids = set()
     old_main_actor_id = 0
+    linked_actor_count = 0
     for actor in actor_list:
         old_main_actor_ids.add(actor.main_actor_id)
         if actor.isLinked():
+            linked_actor_count += 1
             if old_main_actor_id == 0:
                 old_main_actor_id = actor.main_actor_id
             elif old_main_actor_id != actor.main_actor_id:  # not in same link
                 return False, f"actors are in different links"
 
-    # check all actors are included
-    stmt = select(func.count(ActorModel.actor_id)).where(
-        ActorModel.main_actor_id == old_main_actor_id)
-    linked_actor_count = session.execute(stmt).scalar_one()
-    if linked_actor_count > len(actor_ids):
-        return False, f"not all actors in the link are selected"
+    # check all linked actors are included
+    if old_main_actor_id != 0:
+        stmt = select(func.count(ActorModel.actor_id)).where(
+            ActorModel.main_actor_id == old_main_actor_id)
+        total_linked_actor_count = session.scalar(stmt)
+        if total_linked_actor_count > linked_actor_count:
+            return False, f"not all actors in the link are selected"
 
     # choose a new main_actor_id from actor_ids, exclude old_main_actor_id
     for actor_id in actor_ids:
@@ -517,11 +531,6 @@ def linkActors(session: Session, form: LinkActorForm) -> tuple[bool, str]:
     # flush to ensure old_main_actor_ids are not ref by actors now
     session.flush()
 
-    refs = session.query(ActorModel).filter(
-        ActorModel.main_actor_id.in_(old_main_actor_ids)).all()
-    if refs:
-        LogUtil.error(f"refs: {refs}")
-
     # remove old main_actors along with rel_tags
     for main_actor_id in old_main_actor_ids:
         main_actor = session.get(ActorMainModel, main_actor_id)
@@ -541,8 +550,7 @@ def getLinkedActorGroups(session: Session, actor_id: int) -> list[int]:
         .where(ActorModel.main_actor_id == actor.main_actor_id)
         .order_by(ActorModel.actor_group_id)
     )
-    group_ids = session.scalars(stmt)
-    return [gid for gid in group_ids]
+    return list(session.scalars(stmt))
 
 
 def getLinkedActors(session: Session, main_actor_id: int) -> list[ActorModel]:
@@ -601,6 +609,7 @@ def checkActorLink(session, actor_infos: list[ActorInfo], init_group: int):
 
     for actor_info in actor_infos:
         setActorLinkChecked(session, actor_info.actor_id)
+
 
 # endregion
 

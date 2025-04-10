@@ -1,9 +1,10 @@
 from sqlalchemy import ScalarResult, select, func, update
 from sqlalchemy.orm import Session
 
-from Ctrls import DbCtrl
+from Models.ActorMainModel import ActorMainModel
 from Models.ActorTagModel import ActorTagModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from routers.web_data import TagUsedInfo
 
 
 def getAllActorTags(session: Session) -> ScalarResult[ActorTagModel]:
@@ -11,26 +12,46 @@ def getAllActorTags(session: Session) -> ScalarResult[ActorTagModel]:
     return session.scalars(stmt)
 
 
-def getAllTagsUsedCount(session: Session) -> dict[int, int]:
-    _query = session.query(
-        ActorTagRelationship.tag_id,
-        func.count(ActorTagRelationship.main_actor_id)
-    ).group_by(ActorTagRelationship.tag_id)
+def getAllTagsUsedInfo(session: Session) -> dict[int, TagUsedInfo]:
+    _query = (
+        select(
+            ActorTagRelationship.tag_id,
+            func.count(ActorTagRelationship.main_actor_id),
+            func.avg(ActorMainModel.score)
+        )
+        .select_from(ActorTagRelationship)
+        .join(ActorMainModel, ActorMainModel.main_actor_id == ActorTagRelationship.main_actor_id)
+        .group_by(ActorTagRelationship.tag_id)
+    )
     result = session.execute(_query).fetchall()
     count_map = {}
     for data in result:
-        count_map[data[0]] = data[1]
+        count_map[data[0]] = {
+            'used_count': data[1],
+            'avg_score': float(data[2])
+        }
     return count_map
 
 
-def getTagUsedCount(session: Session, tag_id: int) -> int:
+def getTagUsedInfo(session: Session, tag_id: int) -> TagUsedInfo:
     # 使用select函数构建查询
-    stmt = select(func.count()).select_from(ActorTagRelationship).where(
-        ActorTagRelationship.tag_id == tag_id
+    stmt = (
+        select(
+            func.count(ActorTagRelationship.main_actor_id),
+            func.avg(ActorMainModel.score)
+        )
+        .select_from(ActorTagRelationship)
+        .join(ActorMainModel, ActorMainModel.main_actor_id == ActorTagRelationship.main_actor_id)
+        .where(
+            ActorTagRelationship.tag_id == tag_id
+        )
     )
     # 执行查询并获取单一值结果
-    count = session.execute(stmt).scalar_one()
-    return count
+    result = session.execute(stmt).fetchone()
+    return {
+        'used_count': result[0],
+        'avg_score': float(result[1])
+    }
 
 
 def getActorTag(session: Session, tag_id: int) -> ActorTagModel:
@@ -54,10 +75,10 @@ def getMinPriority(session: Session, group: int) -> int:
     # func.min()
     max_priority = (group + 1) * 100 - 1
     min_priority = group * 100
-    _query = session.query(func.min(ActorTagModel.tag_priority)) \
+    _query = select(func.min(ActorTagModel.tag_priority)) \
         .where(ActorTagModel.tag_priority >= min_priority) \
         .where(ActorTagModel.tag_priority <= max_priority)
-    return session.execute(_query).scalar()
+    return session.scalar(_query)
 
 
 def deleteActorTag(session: Session, tag_id: int):

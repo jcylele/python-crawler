@@ -6,11 +6,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
-import Consts
 from Consts import WorkerType, QueueType, NoticeType, ActorLogType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
-from Utils import LogUtil
 from Download import QueueUtil
+from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
 
@@ -124,7 +123,7 @@ class FetchActorWorker(BaseFetchWorker):
             if page_menu is not None:
                 try:
                     WebDriverWait(driver, 10).until(
-                        EC.text_to_be_present_in_element((By.CSS_SELECTOR, "li.pagination-button-current b"), f"{i}")
+                        EC.text_to_be_present_in_element((By.CSS_SELECTOR, ".pagination-button-current b"), f"{i}")
                     )
                 except:
                     LogUtil.error(f"actor {actor_name} page {i} not found")
@@ -168,7 +167,8 @@ class FetchActorWorker(BaseFetchWorker):
             next_btn = None
             if page_menu is not None:
                 try:
-                    next_btn = page_menu.find_element(By.CSS_SELECTOR, '.next')
+                    next_btn = page_menu.find_element(By.CSS_SELECTOR, '.pagination-button-after-current')
+
                 except:
                     pass
 

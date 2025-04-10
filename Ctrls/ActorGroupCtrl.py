@@ -2,7 +2,6 @@ from sqlalchemy import ScalarResult, func, select, delete
 from sqlalchemy.orm import Session
 
 from Consts import GroupCondType
-from Ctrls import DbCtrl
 from Models.ActorGroupCondModel import ActorGroupCondModel
 from Models.ActorGroupModel import ActorGroupModel
 from Models.ActorModel import ActorModel
@@ -43,10 +42,11 @@ def updateActorGroup(session: Session, group: ActorGroupForm):
 
 def deleteActorGroup(session: Session, group_id: int) -> bool:
     # 使用Query API直接计数
-    actor_count = session.query(func.count(ActorModel.actor_id)).filter(
+    stmt = (select(func.count(ActorModel.actor_id))
+                   .where(
         ActorModel.actor_group_id == group_id
-    ).scalar()
-
+    ))
+    actor_count = session.scalar(stmt)
     if actor_count > 0:
         return False
 
@@ -73,4 +73,5 @@ def setGroupCondition(session: Session, group_id: int, cond_list: list[ActorGrou
 
 
 def getGroupConditions(session: Session, group_id: int):
-    return session.query(ActorGroupCondModel).where(ActorGroupCondModel.group_id == group_id).all()
+    stmt = select(ActorGroupCondModel).where(ActorGroupCondModel.group_id == group_id)
+    return session.scalars(stmt)

@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from Consts import ActorLogType
@@ -5,11 +6,10 @@ from Models.ActorLogModel import ActorLogModel
 
 
 def getActorLogs(session: Session, actor_id: int):
-    logs = (session.query(ActorLogModel)
-            .filter(ActorLogModel.actor_id == actor_id)
-            .order_by(ActorLogModel.log_id)
-            .all())
-    return [log for log in logs]
+    stmt = (select(ActorLogModel)
+            .where(ActorLogModel.actor_id == actor_id)
+            .order_by(ActorLogModel.log_id))
+    return list(session.scalars(stmt))
 
 
 def addActorLog(session: Session, actor_id: int, log_type: ActorLogType, *params):

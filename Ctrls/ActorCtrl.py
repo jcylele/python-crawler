@@ -3,7 +3,7 @@ import itertools
 import os
 import re
 import shutil
-from typing import Union
+from typing import Union, List, Dict, Tuple, Set
 
 from sqlalchemy import ScalarResult, exists, func, select, delete, update, Select
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from Models.ActorInfo import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from Models.PostModel import PostModel
 from Utils import LogUtil
 from routers.web_data import ActorConditionForm, SortType, LinkActorForm
 
@@ -227,6 +228,15 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
             if not sort_item.sort_asc:
                 sort_clause = sort_clause.desc()
             _query = _query.order_by(sort_clause)
+
+        elif sort_item.sort_type == SortType.CurPostCount:
+            subq = select(func.count(PostModel.post_id)).where(
+                PostModel.actor_id == ActorModel.actor_id
+            ).scalar_subquery()
+
+            if not sort_item.sort_asc:
+                subq = subq.desc()
+            _query = _query.order_by(subq)
 
         elif sort_item.sort_type == SortType.CategoryTime:
             sort_clause = ActorModel.group_time
@@ -634,6 +644,7 @@ def findAllSimilarActors(session: Session):
     _findSimilarByLastDigits(session)
     _findSimilarByLastXs(session)
     _findSimilarByLastChar(session)
+    _find_similar_actor_names(session)
 
 
 def _findSimilarByLastChar(session: Session):
@@ -764,5 +775,62 @@ def _checkAllPossibleNames(session: Session, possible_names: list[str]):
         pass
     else:
         raise Exception(f"WTF, no actor found for {possible_names}")
+
+
+def _find_common_substrings(strings: List[str], length: int) -> Dict[int, Tuple[str, Set[str]]]:
+    """
+    使用固定长度的滚动哈希查找公共子串
+
+    Args:
+        strings: 输入字符串列表
+        length: 固定的子串长度
+
+    """
+    # 存储所有子串哈希值及其出现的字符串
+    hash_groups: Dict[int, Tuple[str, Set[str]]] = {}
+
+    # 对每个字符串生成固定长度的子串哈希
+    for s in strings:
+        if len(s) < length:
+            continue
+
+        # 计算第一个子串的哈希值
+        hash_value = 0
+        for i in range(length):
+            hash_value = (hash_value * 31 + ord(s[i])) & 0xFFFFFFFF
+
+        # 存储第一个子串
+        if hash_value not in hash_groups:
+            hash_groups[hash_value] = (s[:length], set())
+        hash_groups[hash_value][1].add(s)
+
+        # 使用滚动哈希计算后续子串
+        for i in range(1, len(s) - length + 1):
+            # 减去最左边字符的贡献
+            hash_value = (hash_value - (ord(s[i - 1]) * pow(31, length - 1, 0xFFFFFFFF))) & 0xFFFFFFFF
+            # 乘以31并加上新字符
+            hash_value = (hash_value * 31 + ord(s[i + length - 1])) & 0xFFFFFFFF
+            if hash_value not in hash_groups:
+                hash_groups[hash_value] = (s[i:i + length], set())
+            hash_groups[hash_value][1].add(s)
+
+    return hash_groups
+
+
+def _find_similar_actor_names(session: Session):
+    stmt = (select(ActorModel.actor_name.distinct()))
+    actor_names = session.scalars(stmt).fetchall()
+    unique_sets = set()
+    for length in range(30, 10, -1):
+        name_group_dict = _find_common_substrings(actor_names, length)
+        for name_tup in name_group_dict.values():
+            if len(name_tup[1]) == 1:
+                continue
+            else:
+                name_list = sorted(name_tup[1])
+                tup = tuple(name_list)
+                if tup not in unique_sets:
+                    unique_sets.add(tup)
+                    _checkAllPossibleNames(session, name_list)
 
 # endregion

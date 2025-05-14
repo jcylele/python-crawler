@@ -3,6 +3,7 @@ import time
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
@@ -72,6 +73,10 @@ class FetchActorWorker(BaseFetchWorker):
     def addInvalidPostNotice(actor_name: str, page: int, post_id_str: str):
         with DbCtrl.getSession() as session, session.begin():
             NoticeCtrl.addNotice(session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
+
+    @staticmethod
+    def elementInClass(element: WebElement, class_name: str):
+        return element.get_attribute("class").find(class_name) != -1
 
     def _loadSelector(self) -> str:
         return ".user-header"
@@ -172,11 +177,11 @@ class FetchActorWorker(BaseFetchWorker):
                 except:
                     pass
 
-            if next_btn is None:
+            if next_btn is None or FetchActorWorker.elementInClass(next_btn, "pagination-button-disabled"):
                 break
 
-            # js click
-            driver.execute_script("arguments[0].click();", next_btn)
+            # click
+            next_btn.click()
             # wait
             time.sleep(3)
 

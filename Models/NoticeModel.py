@@ -1,3 +1,5 @@
+import hashlib
+
 from sqlalchemy import Index, String, BigInteger
 from sqlalchemy.orm import mapped_column, Mapped
 
@@ -10,7 +12,7 @@ class NoticeModel(BaseModel):
 
     notice_id: Mapped[int] = mapped_column(primary_key=True)
     notice_type: Mapped[NoticeType] = mapped_column(IntEnum(NoticeType))
-    notice_checksum: Mapped[int] = mapped_column(BigInteger)
+    notice_checksum: Mapped[str] = mapped_column(String(32))
     notice_param0: Mapped[str] = mapped_column(String(100), default="")
     notice_param1: Mapped[str] = mapped_column(String(100), default="")
     notice_param2: Mapped[str] = mapped_column(String(100), default="")
@@ -22,21 +24,14 @@ class NoticeModel(BaseModel):
         Index('idx_notice_type_checksum', notice_type, notice_checksum),
     )
 
-    def __checksum(self) -> int:
-        # 使用更大的素数可以减少冲突
-        prime = 0x01000193  # FNV prime
-        result = 0x811c9dc5  # FNV offset basis
-        
-        for param in [self.notice_param0, self.notice_param1, 
-                    self.notice_param2, self.notice_param3]:
-            # 更好的混合方式
-            result ^= hash(param)  # 异或操作
-            result = (result * prime) & 0x7FFFFFFFFFFFFFFF  # 乘法和截断
-        
-        # 结合notice_type但不使用位移
-        result = (result * (self.notice_type.value + 1)) & 0x7FFFFFFFFFFFFFFF
-        
-        return result
+    def __checksum(self) -> str:
+        hasher = hashlib.md5()
+
+        for param in [self.notice_param0, self.notice_param1,
+                      self.notice_param2, self.notice_param3]:
+            hasher.update(str(param).encode('utf-8'))
+        hasher.update(str(self.notice_type).encode('utf-8'))
+        return hasher.hexdigest()
 
     def isSameParams(self, other: "NoticeModel"):
         return (self.notice_param0 == other.notice_param0
@@ -56,6 +51,14 @@ class NoticeModel(BaseModel):
 
     def refreshChecksum(self):
         self.notice_checksum = self.__checksum()
+
+    def check(self):
+        true_checksum = self.__checksum()
+        if true_checksum != self.notice_checksum:
+            print(f"NoticeModel check failed! {self.notice_id} {self.notice_type} {self.notice_param0} {self.notice_param1} {self.notice_param2} {self.notice_param3} {self.notice_checksum} {true_checksum}")
+            return False
+
+        return True
 
     def toJson(self):
         json_data = {

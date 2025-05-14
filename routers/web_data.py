@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, auto
 from typing import TypedDict
 from pydantic import BaseModel
 
@@ -10,9 +10,10 @@ class TagUsedInfo(TypedDict):
 
 class SortType(Enum):
     Default = 0
-    Score = 1
-    TotalPostCount = 2
-    CategoryTime = 3
+    Score = auto()
+    TotalPostCount = auto()
+    CurPostCount = auto()
+    CategoryTime = auto()
 
 
 class SortItem(BaseModel):

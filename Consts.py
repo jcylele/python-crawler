@@ -15,6 +15,8 @@ class NoticeType(Enum):
     SameActorName = 3  # same name, different platform
     HasLinkedAccount = 4  # actor has linked accounts
     SimilarActorName = 5  # actor name is similar
+    SimilarActorName2 = 6  # actor name is similar, use common substring
+
 
 
 class ActorLogType(Enum):

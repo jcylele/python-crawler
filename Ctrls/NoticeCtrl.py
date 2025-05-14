@@ -87,3 +87,10 @@ def sortedDistinctNames(names: list[str]):
         if name != "" and (len(distinct_names) == 0 or name != distinct_names[-1]):
             distinct_names.append(name)
     return distinct_names
+
+
+def regenerateCheckSums(session: Session):
+    stmt = (select(NoticeModel))
+    notices = session.scalars(stmt)
+    for notice in notices:
+        notice.refreshChecksum()

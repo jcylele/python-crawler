@@ -46,8 +46,12 @@ def deleteNotice(session: Session, notice_id: int):
 def addNoticeStrict(session: Session, notice_type: NoticeType, params: list[str]):
     """
     add a notice, but params should be strictly sorted and distinct
+    do nothing if there is actually only one distinct param
     """
     strict_params = sortedDistinctNames(params)
+    # if there is only one param, SameActorName notice is already handled
+    if len(strict_params) <= 1:
+        return
     addNotice(session, notice_type, *strict_params)
 
 
@@ -66,8 +70,7 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
     )
     notice.setParams(*params)
     stmt = (select(NoticeModel)
-            .where(NoticeModel.notice_checksum == notice.notice_checksum)
-            .where(NoticeModel.notice_type == notice_type))
+            .where(NoticeModel.notice_checksum == notice.notice_checksum))
     notices = session.scalars(stmt)
     for n in notices:
         # check if the notice already exists
@@ -75,18 +78,13 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
             return
         # different params, same checksum
         LogUtil.warn(f"notice checksum conflict {notice.notice_checksum}")
-    
+
     session.add(notice)
     session.flush()
 
 
 def sortedDistinctNames(names: list[str]):
-    names.sort()
-    distinct_names = []
-    for name in names:
-        if name != "" and (len(distinct_names) == 0 or name != distinct_names[-1]):
-            distinct_names.append(name)
-    return distinct_names
+    return sorted(set(filter(lambda x: x != "", names)))
 
 
 def regenerateCheckSums(session: Session):

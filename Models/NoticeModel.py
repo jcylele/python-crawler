@@ -30,7 +30,6 @@ class NoticeModel(BaseModel):
         for param in [self.notice_param0, self.notice_param1,
                       self.notice_param2, self.notice_param3]:
             hasher.update(str(param).encode('utf-8'))
-        hasher.update(str(self.notice_type).encode('utf-8'))
         return hasher.hexdigest()
 
     def isSameParams(self, other: "NoticeModel"):

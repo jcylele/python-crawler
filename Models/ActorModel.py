@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import String, ForeignKey, DateTime, func, BigInteger
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
+from Configs import DB_STR_LEN_SHORT
 from Ctrls import RequestCtrl
 from Ctrls.FileInfoCacheCtrl import ActorFileInfo
 from Models.ActorInfo import ActorInfo
@@ -13,11 +14,11 @@ class ActorModel(BaseModel):
     __tablename__ = "tab_actor"
 
     actor_id: Mapped[int] = mapped_column(primary_key=True)
-    actor_name: Mapped[str] = mapped_column(String(30))
+    actor_name: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
     actor_group_id: Mapped[int] = mapped_column(
         ForeignKey("tab_actor_group.group_id"))
-    actor_platform: Mapped[str] = mapped_column(String(30))
-    actor_link: Mapped[str] = mapped_column(String(30))
+    actor_platform: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
+    actor_link: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
     total_post_count: Mapped[int] = mapped_column(default=0)
     main_actor_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("tab_actor_main.main_actor_id"),

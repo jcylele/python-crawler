@@ -1,6 +1,7 @@
 from sqlalchemy import String, ForeignKey, BigInteger
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
+from Configs import DB_STR_LEN_LONG
 from Models.BaseModel import BaseModel
 
 
@@ -13,7 +14,7 @@ class PostModel(BaseModel):
         ForeignKey("tab_actor.actor_id", ondelete="CASCADE"))
     is_dm: Mapped[bool] = mapped_column(default=False)
     completed: Mapped[bool] = mapped_column(default=False)
-    comment: Mapped[str] = mapped_column(String(100))
+    comment: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG))
 
     actor: Mapped["ActorModel"] = relationship(
         back_populates="post_list",

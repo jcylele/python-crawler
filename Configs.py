@@ -26,8 +26,19 @@ MAX_SCORE = 12
 # res between RES_SIZE_LIST[i-1] and RES_SIZE_LIST[i] will be put into RES_SIZE_LIST[i] segment
 RES_SIZE_LIST = [0, 16 * 1024 * 1024, 32 * 1024 * 1024, 64 * 1024 * 1024,
                  128 * 1024 * 1024, 256 * 1024 * 1024, 512 * 1024 * 1024, 1024 * 1024 * 1024]
-
+# port for file server, only icons now
 FILE_PORT = 1314
+
+
+DB_BYTES_LEN_SHA256 = 32
+
+DB_STR_LEN_COLOR = 7
+DB_STR_LEN_EXTENSION = 10
+DB_STR_LEN_SHORT = 30
+DB_STR_LEN_MD5 = 32
+DB_STR_LEN_DOMAIN = 50
+DB_STR_LEN_LONG = 100
+DB_STR_LEN_REMARK = 200
 
 
 def init():

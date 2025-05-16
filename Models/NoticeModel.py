@@ -1,8 +1,9 @@
 import hashlib
 
-from sqlalchemy import Index, String, BigInteger
+from sqlalchemy import Index, String
 from sqlalchemy.orm import mapped_column, Mapped
 
+from Configs import DB_STR_LEN_MD5, DB_STR_LEN_LONG
 from Consts import NoticeType
 from Models.BaseModel import BaseModel, IntEnum
 
@@ -12,11 +13,11 @@ class NoticeModel(BaseModel):
 
     notice_id: Mapped[int] = mapped_column(primary_key=True)
     notice_type: Mapped[NoticeType] = mapped_column(IntEnum(NoticeType))
-    notice_checksum: Mapped[str] = mapped_column(String(32))
-    notice_param0: Mapped[str] = mapped_column(String(100), default="")
-    notice_param1: Mapped[str] = mapped_column(String(100), default="")
-    notice_param2: Mapped[str] = mapped_column(String(100), default="")
-    notice_param3: Mapped[str] = mapped_column(String(100), default="")
+    notice_checksum: Mapped[str] = mapped_column(String(DB_STR_LEN_MD5))
+    notice_param0: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG), default="")
+    notice_param1: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG), default="")
+    notice_param2: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG), default="")
+    notice_param3: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG), default="")
     deleted: Mapped[bool] = mapped_column(default=False)
 
     # 添加复合索引
@@ -54,7 +55,8 @@ class NoticeModel(BaseModel):
     def check(self):
         true_checksum = self.__checksum()
         if true_checksum != self.notice_checksum:
-            print(f"NoticeModel check failed! {self.notice_id} {self.notice_type} {self.notice_param0} {self.notice_param1} {self.notice_param2} {self.notice_param3} {self.notice_checksum} {true_checksum}")
+            print(
+                f"NoticeModel check failed! {self.notice_id} {self.notice_type} {self.notice_param0} {self.notice_param1} {self.notice_param2} {self.notice_param3} {self.notice_checksum} {true_checksum}")
             return False
 
         return True

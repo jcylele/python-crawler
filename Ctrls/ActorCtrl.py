@@ -328,9 +328,11 @@ def changeActorScore(session: Session, actor_id: int, score: int) -> list[ActorM
 def changeActorRemark(session: Session, actor_id: int, remark: str) -> list[ActorModel]:
     # change remark for main_actor
     actor = getActor(session, actor_id)
-    main_actor = actor.main_actor
+    main_actor: ActorMainModel = actor.main_actor
+
     if main_actor.remark == remark:
         return []  # no change
+
     # set field
     main_actor.remark = remark
 
@@ -511,6 +513,7 @@ def linkActors(session: Session, form: LinkActorForm) -> tuple[bool, str]:
         remark=form.remark,
         score=form.score
     )
+
     rel_tags = []
     for tag_id in form.tag_list:
         rel_tag = ActorTagRelationship(

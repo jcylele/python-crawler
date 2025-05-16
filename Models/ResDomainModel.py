@@ -1,6 +1,7 @@
 from sqlalchemy import SmallInteger, String
 from sqlalchemy.orm import mapped_column, Mapped
 
+from Configs import DB_STR_LEN_DOMAIN
 from Models.BaseModel import BaseModel
 
 
@@ -9,4 +10,4 @@ class ResDomainModel(BaseModel):
 
     domain_id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     domain_name: Mapped[str] = mapped_column(
-        String(50), unique=True)  # domain name
+        String(DB_STR_LEN_DOMAIN), unique=True)  # domain name

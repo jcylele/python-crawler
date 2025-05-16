@@ -1,6 +1,7 @@
 from sqlalchemy import String
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
+from Configs import DB_STR_LEN_SHORT, DB_STR_LEN_LONG, DB_STR_LEN_COLOR
 from Models.BaseModel import BaseModel
 
 
@@ -8,9 +9,9 @@ class ActorGroupModel(BaseModel):
     __tablename__ = "tab_actor_group"
 
     group_id: Mapped[int] = mapped_column(primary_key=True)
-    group_name: Mapped[str] = mapped_column(String(30))
-    group_desc: Mapped[str] = mapped_column(String(100))
-    group_color: Mapped[str] = mapped_column(String(20))
+    group_name: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
+    group_desc: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG))
+    group_color: Mapped[str] = mapped_column(String(DB_STR_LEN_COLOR))
     has_folder: Mapped[bool] = mapped_column(default=False)
     group_priority: Mapped[int] = mapped_column(default=0)
 

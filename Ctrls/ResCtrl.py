@@ -6,7 +6,7 @@ from typing import List, Tuple
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
-from Configs import RES_SIZE_LIST
+from Configs import getResSizeList
 from Consts import ResState, ResType
 from Ctrls import FileInfoCacheCtrl
 from Models.PostModel import PostModel
@@ -107,15 +107,16 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
 
 def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
     _query = (select(ResModel.res_state, ResModel.res_size)
+              .join(PostModel, PostModel.post_id == ResModel.post_id)
               .where(ResModel.res_type == ResType.Video)
-              .where(ResModel.post_id == PostModel.post_id)
               .where(PostModel.actor_id == actor_id)
               .order_by(ResModel.res_size))
     ret = session.execute(_query).fetchall()
+    res_size_list = getResSizeList()
 
-    len_size = len(RES_SIZE_LIST)
+    len_size = len(res_size_list)
     cur_index = 0
-    cur_size = RES_SIZE_LIST[0]
+    cur_size = res_size_list[0]
     state_arr: list[dict[ResState, int]] = []
     state_map = {}
 
@@ -125,7 +126,7 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
             state_map = {}
             cur_index += 1
             if cur_index < len_size:
-                cur_size = RES_SIZE_LIST[cur_index]
+                cur_size = res_size_list[cur_index]
             else:
                 cur_size = -1
         state_map[res_state] = state_map.get(res_state, 0) + 1
@@ -141,12 +142,12 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
         item.setStateMap(state_map)
         if i == 0:
             item.min = 0
-            item.max = RES_SIZE_LIST[i]
+            item.max = res_size_list[i]
         elif i == len_size:
-            item.min = RES_SIZE_LIST[i - 1]
+            item.min = res_size_list[i - 1]
             item.max = -1
         else:
-            item.min = RES_SIZE_LIST[i - 1]
-            item.max = RES_SIZE_LIST[i]
+            item.min = res_size_list[i - 1]
+            item.max = res_size_list[i]
         rsc_list.append(item)
     return rsc_list

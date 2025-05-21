@@ -46,6 +46,7 @@ class ResValidWorker(BaseWorker):
                 shutil.move(tmp_file_path, true_file_path)
             except:
                 return False
+
             res2.setState(ResState.Down)
             # refresh downloaded file size
             self.DownloadLimit().onDownloaded(res2.res_size)

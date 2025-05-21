@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from Ctrls import DbCtrl, PostCtrl, ResCtrl
-from routers.web_data import PostConditionForm, PostCommentForm
+from routers.web_data import PostFilterForm, PostCommentForm
 
 router = APIRouter(
     prefix="/api/post",
@@ -11,14 +11,14 @@ router = APIRouter(
 
 
 @router.post("/post_count_list")
-def get_post_count_list(form: PostConditionForm):
+def get_post_count_list(form: PostFilterForm):
     with DbCtrl.getSession() as session, session.begin():
         count_list = PostCtrl.getPostCountList(session, form)
         return DbCtrl.CustomJsonResponse(count_list)
 
 
 @router.post("/post_list")
-def get_posts(form: PostConditionForm):
+def get_posts(form: PostFilterForm):
     with DbCtrl.getSession() as session, session.begin():
         posts = PostCtrl.getFilteredPosts(session, form)
         response = [post for post in posts]

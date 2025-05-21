@@ -1,7 +1,6 @@
 import os.path
 
 import Configs
-import Consts
 from Consts import WorkerType, QueueType
 from Download import FileManager, QueueUtil
 from Utils import LogUtil
@@ -34,12 +33,13 @@ class FileDownWorker(BaseRequestWorker):
 
         self.requestSession.headers["referer"] = item.from_url
 
-        # protection
+        # protection, skip if other thread is downloading
         while not FileManager.useFile(extra_info.file_path, self.native_id):
-            self._sleep()
+            return True
 
         # check for total file size, skip if not enough
         if not self.DownloadLimit().canDownload(extra_info.file_size):
+            FileManager.releaseFile(extra_info.file_path, self.native_id)
             return True
 
         file_mode = "wb"
@@ -48,8 +48,8 @@ class FileDownWorker(BaseRequestWorker):
             file_size = os.path.getsize(file_path)
             # rarely, but possible
             if file_size == extra_info.file_size:
-                QueueUtil.enqueueResValid(self.QueueMgr(), item)
                 FileManager.releaseFile(file_path, self.native_id)
+                QueueUtil.enqueueResValid(self.QueueMgr(), item)
                 return True
             # if there is an uncompleted file and its size is large enough
             # resume the download instead of starting from the beginning
@@ -67,8 +67,9 @@ class FileDownWorker(BaseRequestWorker):
         # remove the range attribute in header
         if "Range" in self.requestSession.headers:
             self.requestSession.headers.pop("Range")
+
+        FileManager.releaseFile(file_path, self.native_id)
         # enqueue for validation
         QueueUtil.enqueueResValid(self.QueueMgr(), item)
-        FileManager.releaseFile(file_path, self.native_id)
 
         return True

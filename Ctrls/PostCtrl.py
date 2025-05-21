@@ -1,14 +1,14 @@
 # PostModel related operations
 
 from sqlalchemy import ScalarResult, func, select, update, Select
-from sqlalchemy.orm import Session, Query
+from sqlalchemy.orm import Session
 
 from Consts import ResState
 from Ctrls import FileInfoCacheCtrl
 from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-from routers.web_data import PostConditionForm, ActorPostInfo
+from routers.web_data import PostFilterForm, ActorPostInfo
 
 
 def getPost(session: Session, post_id: int) -> PostModel:
@@ -69,20 +69,24 @@ def removeCurrentResFiles(session: Session, actor_id: int):
     session.execute(_query)
 
 
-def filterQuery(_query: Select, form: PostConditionForm) -> Query:
-    # actor_name
+def filterQuery(_query: Select, form: PostFilterForm) -> Select:
+    # actor
     if form.actor_id != 0:
         _query = _query.where(PostModel.actor_id == form.actor_id)
     # post_id_prefix
     if len(form.post_id_prefix) > 0:
-        _query = _query.where(PostModel.post_id.like(f"{form.post_id_prefix}%"))
-    # has_comment
+        _query = _query.where(PostModel.post_id_str.like(f"{form.post_id_prefix}%"))
+    # comment
     if form.has_comment:
-        _query = _query.where(PostModel.comment != "")
+        _query = _query.where(PostModel.has_comment == True)
+        comment = form.comment.strip()
+        if comment:
+            _query = _query.where(PostModel.comment.like(f"%{comment}%"))
+
     return _query
 
 
-def getPostCountList(session: Session, form: PostConditionForm):
+def getPostCountList(session: Session, form: PostFilterForm):
     _query = select(
         PostModel.actor_id,
         func.count(PostModel.post_id)
@@ -101,7 +105,7 @@ def getPostCountList(session: Session, form: PostConditionForm):
     return response
 
 
-def getFilteredPosts(session: Session, form: PostConditionForm) -> ScalarResult[PostModel]:
+def getFilteredPosts(session: Session, form: PostFilterForm) -> ScalarResult[PostModel]:
     _query = select(PostModel)
     _query = filterQuery(_query, form)
     # _query = _query.order_by(PostModel.actor_name)
@@ -110,9 +114,14 @@ def getFilteredPosts(session: Session, form: PostConditionForm) -> ScalarResult[
 
 
 def setPostComment(session: Session, post_id: int, comment: str):
+    comment = comment.strip()
+    if comment:
+        real_comment = comment
+    else:
+        real_comment = None
     _query = update(PostModel) \
         .where(PostModel.post_id == post_id) \
-        .values(comment=comment)
+        .values(comment=real_comment)
     session.execute(_query)
 
 

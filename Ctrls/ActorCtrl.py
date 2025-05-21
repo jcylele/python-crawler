@@ -5,8 +5,8 @@ import re
 import shutil
 from typing import Union, List, Dict, Tuple, Set
 
-from sqlalchemy import ScalarResult, exists, func, select, delete, update, Select
-from sqlalchemy.orm import Session
+from sqlalchemy import ScalarResult, and_, exists, func, select, delete, update, Select
+from sqlalchemy.orm import Session, aliased
 
 import Configs
 from Consts import NoticeType, ActorLogType, GroupCondType, ResState
@@ -17,7 +17,7 @@ from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.PostModel import PostModel
 from Utils import LogUtil
-from routers.web_data import ActorConditionForm, SortType, LinkActorForm
+from routers.web_data import ActorConditionForm, SortType, LinkActorForm, TagFilter
 
 
 # region single actor
@@ -151,6 +151,60 @@ def clearActorFolder(session: Session, actor: ActorModel):
 
 # region query
 
+def _initQuery(is_count: bool = False) -> Select:
+    if is_count:
+        query = select(func.count(ActorModel.actor_id))
+    else:
+        query = select(ActorModel.actor_id)
+    return query.join(
+        ActorMainModel,
+        onclause=ActorModel.main_actor_id == ActorMainModel.main_actor_id
+    )
+
+
+def _filterTagQuery(query: Select, form: TagFilter) -> Select:
+    if form.no_tag:
+        query = query.where(~ActorMainModel.rel_tags.any())
+    else:
+        # 必须包含的tag (AND)
+        if form.must_have:
+            for tag_id in form.must_have:
+                tag_alias = aliased(ActorTagRelationship)
+                query = query.join(
+                    tag_alias,
+                    onclause=and_(
+                        ActorMainModel.main_actor_id == tag_alias.main_actor_id,
+                        tag_alias.tag_id == tag_id
+                    )
+                )
+
+        # 每组至少包含一个的tag (OR)
+        for tag_group in form.any_of:
+            if not tag_group:
+                continue
+            tag_alias = aliased(ActorTagRelationship)
+            query = query.outerjoin(
+                tag_alias,
+                onclause=and_(
+                    ActorMainModel.main_actor_id == tag_alias.main_actor_id,
+                    tag_alias.tag_id.in_(tag_group)
+                )
+            ).where(tag_alias.main_actor_id.is_not(None))  # 确保至少匹配一个
+
+        # 不能包含的tag (NOT)
+        if form.must_not_have:
+            tag_alias = aliased(ActorTagRelationship)
+            query = query.outerjoin(
+                tag_alias,
+                onclause=and_(
+                    ActorMainModel.main_actor_id == tag_alias.main_actor_id,
+                    tag_alias.tag_id.in_(form.must_not_have)
+                )
+            ).where(tag_alias.main_actor_id.is_(None))  # 确保不匹配任何
+
+    return query
+
+
 def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
     form.name = form.name.strip()
     if form.name:
@@ -168,39 +222,25 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
     if form.group_id_list:
         query = query.where(ActorModel.actor_group_id.in_(form.group_id_list))
 
-    if form.no_tag:
-        query = query.where(~ActorModel.main_actor.has(
-            ActorMainModel.rel_tags.any()))
-    elif form.tag_list:
-        query = query.where(
-            ActorModel.main_actor.has(
-                ActorMainModel.rel_tags.any(
-                    ActorTagRelationship.tag_id.in_(form.tag_list))
-            )
-        )
+    # tag filter
+    query = _filterTagQuery(query, form.tag_filter)
 
     if form.min_score > 0:
-        query = query.where(ActorModel.main_actor.has(
-            ActorMainModel.score >= form.min_score))
+        query = query.where(ActorMainModel.score >= form.min_score)
     if form.max_score < Configs.MAX_SCORE:
-        query = query.where(ActorModel.main_actor.has(
-            ActorMainModel.score <= form.max_score))
+        query = query.where(ActorMainModel.score <= form.max_score)
 
-    form.remark_str = form.remark_str.strip()
-    if form.remark_str:
-        query = query.where(
-            ActorModel.main_actor.has(
-                ActorMainModel.remark.like(f"%{form.remark_str}%"))
-        )
-    elif form.remark_any:
-        query = query.where(ActorModel.main_actor.has(
-            ActorMainModel.remark != ""))
+    if form.has_remark:
+        query = query.where(ActorMainModel.has_remark == True)
+        remark = form.remark_str.strip()
+        if remark:
+            query = query.where(ActorMainModel.remark.like(f"%{remark}%"))
 
     return query
 
 
 def getActorCount(session: Session, form: ActorConditionForm) -> int:
-    _query = select(func.count(ActorModel.actor_id))
+    _query = _initQuery(True)
     _query = _filterQuery(_query, form)
     return session.scalar(_query)
 
@@ -254,7 +294,7 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
 
 
 def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> list[int]:
-    _query = _sortQuery(_filterQuery(select(ActorModel.actor_id), form), form)
+    _query = _sortQuery(_filterQuery(_initQuery(False), form), form)
     if start != 0:
         _query = _query.offset(start)
     if limit != 0:
@@ -326,15 +366,21 @@ def changeActorScore(session: Session, actor_id: int, score: int) -> list[ActorM
 
 
 def changeActorRemark(session: Session, actor_id: int, remark: str) -> list[ActorModel]:
+    # process remark
+    remark = remark.strip()
+    if remark:
+        real_remark = remark
+    else:
+        real_remark = None
     # change remark for main_actor
     actor = getActor(session, actor_id)
     main_actor: ActorMainModel = actor.main_actor
 
-    if main_actor.remark == remark:
+    if main_actor.remark == real_remark:
         return []  # no change
 
     # set field
-    main_actor.remark = remark
+    main_actor.remark = real_remark
 
     # add log for linked actors
     linked_actors = getLinkedActors(session, actor.main_actor_id)
@@ -810,9 +856,11 @@ def _find_common_substrings(strings: List[str], length: int) -> Dict[int, Tuple[
         # 使用滚动哈希计算后续子串
         for i in range(1, len(s) - length + 1):
             # 减去最左边字符的贡献
-            hash_value = (hash_value - (ord(s[i - 1]) * pow(31, length - 1, 0xFFFFFFFF))) & 0xFFFFFFFF
+            hash_value = (
+                                 hash_value - (ord(s[i - 1]) * pow(31, length - 1, 0xFFFFFFFF))) & 0xFFFFFFFF
             # 乘以31并加上新字符
-            hash_value = (hash_value * 31 + ord(s[i + length - 1])) & 0xFFFFFFFF
+            hash_value = (hash_value * 31 +
+                          ord(s[i + length - 1])) & 0xFFFFFFFF
             if hash_value not in hash_groups:
                 hash_groups[hash_value] = (s[i:i + length], set())
             hash_groups[hash_value][1].add(s)

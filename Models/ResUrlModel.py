@@ -1,4 +1,4 @@
-from sqlalchemy import String, ForeignKey, LargeBinary
+from sqlalchemy import String, ForeignKey, VARBINARY
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 from Configs import DB_BYTES_LEN_SHA256, DB_STR_LEN_EXTENSION
@@ -11,7 +11,7 @@ class ResUrlModel(BaseModel):
 
     url_id: Mapped[int] = mapped_column(primary_key=True)
     domain_id: Mapped[int] = mapped_column(ForeignKey("tab_res_domains.domain_id"))
-    hash_binary: Mapped[bytes] = mapped_column(LargeBinary(DB_BYTES_LEN_SHA256))  # 二进制存储哈希
+    hash_binary: Mapped[bytes] = mapped_column(VARBINARY(DB_BYTES_LEN_SHA256))  # 二进制存储哈希
     extension: Mapped[str] = mapped_column(String(DB_STR_LEN_EXTENSION))
 
     domain: Mapped["ResDomainModel"] = relationship()

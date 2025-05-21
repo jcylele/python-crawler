@@ -14,7 +14,7 @@ class ActorModel(BaseModel):
     __tablename__ = "tab_actor"
 
     actor_id: Mapped[int] = mapped_column(primary_key=True)
-    actor_name: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
+    actor_name: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT), index=True)
     actor_group_id: Mapped[int] = mapped_column(
         ForeignKey("tab_actor_group.group_id"))
     actor_platform: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))

@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import TypedDict
+from typing import TypedDict, Optional
 from pydantic import BaseModel
 
 
@@ -21,24 +21,31 @@ class SortItem(BaseModel):
     sort_asc: bool
 
 
+class TagFilter(BaseModel):
+    no_tag: bool
+    must_have: list[int]
+    any_of: list[list[int]]
+    must_not_have: list[int]
+
+
 class ActorConditionForm(BaseModel):
     name: str
     linked: bool
     group_id_list: list[int]
-    tag_list: list[int]
-    no_tag: bool
+    tag_filter: TagFilter
     min_score: int
     max_score: int
     remark_str: str
-    remark_any: bool
+    has_remark: bool
 
     sort_items: list[SortItem]
 
 
-class PostConditionForm(BaseModel):
+class PostFilterForm(BaseModel):
     actor_id: int
     post_id_prefix: str
     has_comment: bool
+    comment: str
 
 
 class ServerData(object):

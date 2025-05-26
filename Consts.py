@@ -78,3 +78,4 @@ class QueueType(IntEnum):
 class PostFilter(IntEnum):
     Normal = 0
     Current = 1
+    Completed = 2

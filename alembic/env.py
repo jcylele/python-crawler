@@ -18,7 +18,7 @@ from Models.PostModel import PostModel  # 导入您的模型
 from Models.ResModel import ResModel  # 导入您的模型
 from Models.ResDomainModel import ResDomainModel  # 导入您的模型
 from Models.ResUrlModel import ResUrlModel  # 导入您的模型
-
+from Models.ActorFileInfoModel import ActorFileInfoModel  # 导入您的模型
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -33,7 +33,8 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata =  BaseModel.metadata
+target_metadata = BaseModel.metadata
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

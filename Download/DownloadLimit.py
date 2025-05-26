@@ -16,8 +16,8 @@ class DownloadLimit(object):
     def moreActor(self) -> bool:
         return self.limit.actor_count == 0 or self.progress.actor_count < self.limit.actor_count
 
-    def isCurrentPost(self) -> bool:
-        return self.limit.post_filter == PostFilter.Current.value
+    def getPostFilter(self) -> PostFilter:
+        return PostFilter(self.limit.post_filter)
 
     def morePost(self, post_count: int) -> bool:
         return self.limit.post_count == 0 or post_count < self.limit.post_count

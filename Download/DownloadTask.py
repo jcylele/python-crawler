@@ -2,7 +2,7 @@ import os
 import re
 
 import Configs
-import Consts
+from Consts import PostFilter, WorkerType
 from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl
 from Download.DownloadLimit import DownloadLimit
 from Guarder import Guarder
@@ -27,7 +27,7 @@ class DownloadTask(object):
         """
         new all threads and start running
         """
-        for worker_type in Consts.WorkerType:
+        for worker_type in WorkerType:
             count = WorkerMgr.getWorkerCount(worker_type)
             for i in range(count):
                 worker = WorkerMgr.createWorker(worker_type, self)
@@ -59,6 +59,15 @@ class DownloadTask(object):
             QueueUtil.enqueueFetchActor(self.queueMgr, actor_id)
             QueueUtil.enqueueFetchActorLink(self.queueMgr, actor_id)
 
+    def completedPosts(self, actor_ids: list[int]):
+        with DbCtrl.getSession() as session, session.begin():
+            for actor_id in actor_ids:
+                actor = ActorCtrl.getActor(session, actor_id)
+                actor_info = ActorInfo(actor)
+                posts = PostCtrl.getCompletedPosts(session, actor_id)
+                for post in posts:
+                    QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.download_limit)
+
     def currentPosts(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
@@ -73,10 +82,15 @@ class DownloadTask(object):
 
     def downloadActors(self, actor_ids: list[int]):
         self.actor_ids = actor_ids
-        if self.download_limit.isCurrentPost():
-            self.currentPosts(actor_ids)
-        else:
+        post_filter = self.download_limit.getPostFilter()
+        if post_filter == PostFilter.Normal:
             self.normalPosts(actor_ids)
+        elif post_filter == PostFilter.Current:
+            self.currentPosts(actor_ids)
+        elif post_filter == PostFilter.Completed:
+            self.completedPosts(actor_ids)
+        else:
+            raise Exception(f"Unknown post filter {post_filter}")
 
         self.startDownload()
 
@@ -143,11 +157,11 @@ class DownloadTask(object):
             try:
                 for root, _, files in os.walk(download_folder):
                     for file in files:
-                        matchObj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
-                        if matchObj is None:
+                        match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
+                        if match_obj is None:
                             continue
-                        post_id = int(matchObj.group(2))
-                        res_index = int(matchObj.group(3))
+                        post_id = int(match_obj.group(2))
+                        res_index = int(match_obj.group(3))
                         res = ResCtrl.getResByIndex(session, post_id, res_index)
                         if res.shouldDownload(self.download_limit):
                             post = PostCtrl.getPost(session, post_id)

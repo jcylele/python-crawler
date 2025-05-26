@@ -1,9 +1,8 @@
-from sqlalchemy import String, ForeignKey, BigInteger
+from sqlalchemy import ForeignKey, BigInteger
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 import Configs
 from Consts import ResState, ResType
-from Ctrls import FileInfoCacheCtrl
 from Download.DownloadLimit import DownloadLimit
 from Models.BaseModel import BaseModel, IntEnum
 from Utils import LogUtil
@@ -84,7 +83,7 @@ class ResModel(BaseModel):
 
         return True
 
-    def setSize(self, size: int):
+    def setSize(self, size: int) -> bool:
         actor_name = self.actor().actor_name
         if self.res_size > 0:
             if self.res_size == size:
@@ -93,16 +92,16 @@ class ResModel(BaseModel):
             else:
                 LogUtil.error(
                     f"({self.res_id} of {self.post_id} of {actor_name}) size error, old {self.res_size}, new {size}")
-            return
+            return False
         self.res_size = size
-        # update actor file info
-        FileInfoCacheCtrl.OnFileSizeChanged(self.actor_id(), self)
 
-    def setState(self, state: ResState):
+        return True
+
+    def setState(self, state: ResState) -> bool:
         if self.res_state == state:
-            return
-        FileInfoCacheCtrl.OnFileStateChanged(self.actor_id(), self, state)
+            return False
         self.res_state = state
+        return True
 
     def __repr__(self) -> str:
         return f"Res(id={self.res_id!r}, " \

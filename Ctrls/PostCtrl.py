@@ -4,10 +4,10 @@ from sqlalchemy import ScalarResult, func, select, update, Select
 from sqlalchemy.orm import Session
 
 from Consts import ResState
-from Ctrls import FileInfoCacheCtrl
 from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
+from Utils import PyUtil
 from routers.web_data import PostFilterForm, ActorPostInfo
 
 
@@ -47,8 +47,6 @@ def addPost(session: Session, actor_id: int, post_id: int, is_dm: bool):
 
 
 def batchSetResStates(session: Session, actor_id: int, state: ResState):
-    FileInfoCacheCtrl.RemoveCachedFileSizes(actor_id)
-
     _query = (update(ResModel)
               .where(ResModel.post_id == PostModel.post_id)
               .where(PostModel.actor_id == actor_id)
@@ -58,9 +56,6 @@ def batchSetResStates(session: Session, actor_id: int, state: ResState):
 
 # set current downloaded res(file exists) to del
 def removeCurrentResFiles(session: Session, actor_id: int):
-    # remove cache first, prevent update to cache
-    FileInfoCacheCtrl.RemoveCachedFileSizes(actor_id)
-
     _query = (update(ResModel)
               .where(ResModel.post_id == PostModel.post_id)
               .where(PostModel.actor_id == actor_id)
@@ -114,11 +109,7 @@ def getFilteredPosts(session: Session, form: PostFilterForm) -> ScalarResult[Pos
 
 
 def setPostComment(session: Session, post_id: int, comment: str):
-    comment = comment.strip()
-    if comment:
-        real_comment = comment
-    else:
-        real_comment = None
+    real_comment = PyUtil.stripToNone(comment)
     _query = update(PostModel) \
         .where(PostModel.post_id == post_id) \
         .values(comment=real_comment)
@@ -129,5 +120,13 @@ def getNewPosts(session: Session, actor_id: int, last_post_id: int) -> ScalarRes
     _query = (select(PostModel)
               .where(PostModel.actor_id == actor_id)
               .where(PostModel.post_id > last_post_id)
+              .order_by(PostModel.post_id.desc()))
+    return session.scalars(_query)
+
+
+def getCompletedPosts(session, actor_id: int) -> ScalarResult[PostModel]:
+    _query = (select(PostModel)
+              .where(PostModel.actor_id == actor_id)
+              .where(PostModel.completed == True)
               .order_by(PostModel.post_id.desc()))
     return session.scalars(_query)

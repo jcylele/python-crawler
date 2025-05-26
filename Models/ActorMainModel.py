@@ -19,7 +19,7 @@ class ActorMainModel(BaseModel):
 
     @validates("remark")
     def validate_remark(self, key, remark):
-        if len(remark) > DB_STR_LEN_REMARK:
+        if remark is not None and len(remark) > DB_STR_LEN_REMARK:
             remark = remark[:DB_STR_LEN_REMARK]
         return remark
 

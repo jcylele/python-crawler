@@ -10,13 +10,13 @@ from sqlalchemy.orm import Session, aliased
 
 import Configs
 from Consts import NoticeType, ActorLogType, GroupCondType, ResState
-from Ctrls import PostCtrl, ResCtrl, FileInfoCacheCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl
+from Ctrls import PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl
 from Models.ActorInfo import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.PostModel import PostModel
-from Utils import LogUtil
+from Utils import LogUtil, PyUtil
 from routers.web_data import ActorConditionForm, SortType, LinkActorForm, TagFilter
 
 
@@ -92,13 +92,8 @@ def addActor(session: Session, actor_info: ActorInfo, group_id: int) -> ActorMod
 
 def getActorFileInfo(session: Session, actor_id: int):
     actor = getActor(session, actor_id)
-    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(actor_id)
-    if actor_file_info is None:
-        actor_file_info = actor.calc_res_file_info()
-        FileInfoCacheCtrl.CacheFileSizes(actor_id, actor_file_info)
-
     return {
-        'res_info': actor_file_info,
+        'res_info': ActorFileCtrl.getActorFileInfo(session, actor_id),
         'total_post_count': actor.total_post_count,
         'unfinished_post_count': PostCtrl.getPostCount(session, actor_id, False),
         'finished_post_count': PostCtrl.getPostCount(session, actor_id, True)
@@ -110,11 +105,11 @@ def removeOutdatedFiles(session: Session):
     try:
         for root, _, files in os.walk(download_folder):
             for file in files:
-                matchObj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
-                if matchObj is None:
+                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
+                if match_obj is None:
                     continue
-                post_id = int(matchObj.group(2))
-                res_index = int(matchObj.group(3))
+                post_id = int(match_obj.group(2))
+                res_index = int(match_obj.group(3))
                 res = ResCtrl.getResByIndex(session, post_id, res_index)
                 if res.res_state == ResState.Del:
                     LogUtil.info(f"remove downloading file {file}")
@@ -128,7 +123,7 @@ def deleteAllRes(session: Session, actor: ActorModel):
         actor.actor_id, actor.actor_name)
     if os.path.exists(actor_folder):
         shutil.rmtree(actor_folder)
-        FileInfoCacheCtrl.RemoveDownloadingFiles(actor.actor_name)
+        ActorFileCtrl.RemoveDownloadingFiles(session, actor)
 
     PostCtrl.batchSetResStates(session, actor.actor_id, ResState.Del)
 
@@ -254,14 +249,10 @@ def getAllActorCount(session: Session) -> int:
 def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
     for sort_item in form.sort_items:
         if sort_item.sort_type == SortType.Score:
-            # use related field to sort
-            subq = select(ActorMainModel.score).where(
-                ActorMainModel.main_actor_id == ActorModel.main_actor_id
-            ).scalar_subquery()
-
+            sort_clause = ActorMainModel.score
             if not sort_item.sort_asc:
-                subq = subq.desc()
-            _query = _query.order_by(subq)
+                sort_clause = sort_clause.desc()
+            _query = _query.order_by(sort_clause)
 
         elif sort_item.sort_type == SortType.TotalPostCount:
             sort_clause = ActorModel.total_post_count
@@ -367,11 +358,7 @@ def changeActorScore(session: Session, actor_id: int, score: int) -> list[ActorM
 
 def changeActorRemark(session: Session, actor_id: int, remark: str) -> list[ActorModel]:
     # process remark
-    remark = remark.strip()
-    if remark:
-        real_remark = remark
-    else:
-        real_remark = None
+    real_remark = PyUtil.stripToNone(remark)
     # change remark for main_actor
     actor = getActor(session, actor_id)
     main_actor: ActorMainModel = actor.main_actor

@@ -5,7 +5,6 @@ from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 from Configs import DB_STR_LEN_SHORT
 from Ctrls import RequestCtrl
-from Ctrls.FileInfoCacheCtrl import ActorFileInfo
 from Models.ActorInfo import ActorInfo
 from Models.BaseModel import BaseModel
 
@@ -66,13 +65,6 @@ class ActorModel(BaseModel):
         json_data.update(self.main_actor.toJson())
 
         return json_data
-
-    def calc_res_file_info(self) -> ActorFileInfo:
-        actor_file_info = ActorFileInfo()
-        for post in self.post_list:
-            for res in post.res_list:
-                actor_file_info.addRes(res)
-        return actor_file_info
 
     def __repr__(self) -> str:
         return f"Actor(name={self.actor_name!r}, group={self.actor_group.group_name!r})"

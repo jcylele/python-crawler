@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from Configs import getResSizeList
 from Consts import ResState, ResType
-from Ctrls import FileInfoCacheCtrl
 from Models.PostModel import PostModel
 from Models.ResDomainModel import ResDomainModel
 from Models.ResModel import ResModel
@@ -39,16 +38,6 @@ def getAllRes(session: Session, post_id: int) -> ScalarResult[ResModel]:
     """
     stmt = select(ResModel).where(ResModel.post_id == post_id)
     return session.scalars(stmt)
-
-
-def onResAdded(session: Session, post_id: int):
-    post = session.get(PostModel, post_id)
-    actor_file_info = FileInfoCacheCtrl.GetCachedFileSizes(post.actor_id)
-    if actor_file_info is None:
-        return
-    res_list = getAllRes(session, post_id)
-    for res in res_list:
-        actor_file_info.addRes(res)
 
 
 def addResUrl(session: Session, url: str) -> int:
@@ -102,7 +91,6 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
         session.add(res)
 
     session.flush()
-    onResAdded(session, post_id)
 
 
 def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:

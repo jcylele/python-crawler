@@ -12,6 +12,8 @@ from Models.ResModel import ResModel
 from Consts import ResType
 from Utils import LogUtil
 
+__dirty_actors = set()
+
 
 def __insert_actor_file_info(session, actor_id: int):
     # 构建 SELECT 语句
@@ -69,20 +71,68 @@ def __has_actor_file_info(session: Session, actor_id: int):
     return session.execute(stmt).scalar()
 
 
-def getActorFileInfo(session: Session, actor_id: int):
-    if __has_actor_file_info(session, actor_id):
-        return __get_actor_file_info(session, actor_id)
-    else:
-        __insert_actor_file_info(session, actor_id)
-        return __get_actor_file_info(session, actor_id)
-
-
-def deleteActorFileInfo(session: Session, actor_ids: set[int]):
-    LogUtil.info(f"deleteActorFileInfo: {actor_ids}")
+def __deleteActorFileInfo(session: Session, actor_id: int):
+    LogUtil.info(f"delete single actor: {actor_id}")
     stmt = delete(ActorFileInfoModel).where(
-        ActorFileInfoModel.actor_id.in_(actor_ids)
-    )
+        ActorFileInfoModel.actor_id == actor_id)
     session.execute(stmt)
+
+
+def ensureActorFileInfo(session: Session, actor_id: int, flush: bool = True):
+    if actor_id in __dirty_actors:
+        __deleteActorFileInfo(session, actor_id)
+        __dirty_actors.remove(actor_id)
+    elif __has_actor_file_info(session, actor_id):
+        return
+    __insert_actor_file_info(session, actor_id)
+    if flush:
+        session.flush()
+
+
+def getActorFileInfo(session: Session, actor_id: int):
+    ensureActorFileInfo(session, actor_id)
+    return __get_actor_file_info(session, actor_id)
+
+
+def deleteActorFileInfo(session: Session, actor_id: int):
+    __dirty_actors.add(actor_id)
+
+
+def clearAllActorFileInfo(session: Session):
+    LogUtil.info(f"clear all actor file info")
+    stmt = delete(ActorFileInfoModel)
+    session.execute(stmt)
+    __dirty_actors.clear()
+
+
+def getActorsByPosts(session: Session, post_ids: set[int]):
+    stmt = select(PostModel.actor_id.distinct()).where(
+        PostModel.post_id.in_(post_ids))
+    return session.execute(stmt).scalars()
+
+
+@event.listens_for(Session, 'after_flush')
+def update_actor_file_info_cache_batch(session, context):
+    # 收集需要更新的 actor_id
+
+    related_posts = set()
+    for obj in session.dirty:
+        if isinstance(obj, ResModel):
+            related_posts.add(obj.post_id)
+    for obj in session.new:
+        if isinstance(obj, ResModel):
+            related_posts.add(obj.post_id)
+    for obj in session.deleted:
+        if isinstance(obj, ResModel):
+            related_posts.add(obj.post_id)
+
+    if len(related_posts) == 0:
+        return
+    LogUtil.info(f"delete by posts: {related_posts}")
+    affected_actors = getActorsByPosts(session, related_posts)
+    for actor_id in affected_actors:
+        __dirty_actors.add(actor_id)
+    # deleteActorFileInfo(session, set(affected_actors))
 
 
 def RemoveDownloadingFiles(session: Session, actor: ActorModel):
@@ -105,30 +155,3 @@ def RemoveDownloadingFiles(session: Session, actor: ActorModel):
                 os.remove(os.path.join(root, file))
     except Exception as e:
         pass
-
-
-def getActorsByPosts(session: Session, post_ids: set[int]):
-    stmt = select(PostModel.actor_id.distinct()).where(PostModel.post_id.in_(post_ids))
-    return session.execute(stmt).scalars()
-
-
-@event.listens_for(Session, 'after_flush')
-def update_actor_file_info_cache_batch(session, context):
-    # 收集需要更新的 actor_id
-
-    related_posts = set()
-    for obj in session.dirty:
-        if isinstance(obj, ResModel):
-            related_posts.add(obj.post_id)
-    for obj in session.new:
-        if isinstance(obj, ResModel):
-            related_posts.add(obj.post_id)
-    for obj in session.deleted:
-        if isinstance(obj, ResModel):
-            related_posts.add(obj.post_id)
-
-    if len(related_posts) == 0:
-        return
-
-    affected_actors = getActorsByPosts(session, related_posts)
-    deleteActorFileInfo(session, set(affected_actors))

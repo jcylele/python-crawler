@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session, aliased
 import Configs
 from Consts import NoticeType, ActorLogType, GroupCondType, ResState
 from Ctrls import PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl
+from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorInfo import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.PostModel import PostModel
+from Models.ResModel import ResModel
 from Utils import LogUtil, PyUtil
 from routers.web_data import ActorConditionForm, SortType, LinkActorForm, TagFilter
 
@@ -246,6 +248,12 @@ def getAllActorCount(session: Session) -> int:
     return session.scalar(stmt)
 
 
+def getActorCountOfGroups(session: Session) -> list[tuple[int, int]]:
+    # 直接用select()和func.count()计数，最简洁高效
+    stmt = select(ActorModel.actor_group_id, func.count(ActorModel.actor_id)).group_by(ActorModel.actor_group_id)
+    return [(row[0], row[1]) for row in session.execute(stmt)]
+
+
 def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
     for sort_item in form.sort_items:
         if sort_item.sort_type == SortType.Score:
@@ -275,8 +283,18 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
                 sort_clause = sort_clause.desc()
             _query = _query.order_by(sort_clause)
 
-        else:
-            raise SystemError(f"invalid sort type {sort_item.sort_type}")
+        elif sort_item.sort_type == SortType.FileSize:
+            subq = (
+                select(func.sum(ActorFileInfoModel.res_size))
+                .where(
+                    ActorFileInfoModel.actor_id == ActorModel.actor_id,
+                    ActorFileInfoModel.res_state == ResState.Down
+                )
+                .scalar_subquery()
+            )
+            if not sort_item.sort_asc:
+                subq = subq.desc()
+            _query = _query.order_by(subq)
 
     # default
     _query = _query.order_by(ActorModel.actor_name)
@@ -284,7 +302,28 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
     return _query
 
 
+def getUnsortedActorList(session: Session, form: ActorConditionForm) -> list[int]:
+    _query = _filterQuery(_initQuery(False), form)
+    return list(session.scalars(_query))
+
+
+def ensureActorFileInfo(session: Session, form: ActorConditionForm):
+    actor_ids = getUnsortedActorList(session, form)
+    for actor_id in actor_ids:
+        ActorFileCtrl.ensureActorFileInfo(session, actor_id, False)
+
+    # flush
+    session.flush()
+
+
 def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> list[int]:
+    need_file_info = any(
+        sort_item.sort_type == SortType.FileSize
+        for sort_item in form.sort_items
+    )
+    if need_file_info:
+        ensureActorFileInfo(session, form)
+
     _query = _sortQuery(_filterQuery(_initQuery(False), form), form)
     if start != 0:
         _query = _query.offset(start)
@@ -300,6 +339,27 @@ def getActorsByGroup(session: Session, group_id: int) -> ScalarResult[ActorModel
     _query = (select(ActorModel)
               .where(ActorModel.actor_group_id == group_id))
     return session.scalars(_query)
+
+
+def isAllVideoDownloaded(session: Session, actor_id: int) -> bool:
+    actor = getActor(session, actor_id)
+    if actor.total_post_count == 0:
+        return False
+    completed_post_count = PostCtrl.getPostCount(session, actor_id, True)
+    if completed_post_count < actor.total_post_count:
+        return False
+    file_info_list = ActorFileCtrl.getActorFileInfo(session, actor_id)
+    for file_info in file_info_list:
+        if (file_info.res_state == ResState.Init or file_info.res_state == ResState.Skip) and \
+                file_info.video_count > 0:
+            return False
+    return True
+
+
+def getFinishedActorList(session: Session, form: ActorConditionForm) -> list[int]:
+    _query = _filterQuery(_initQuery(False), form)
+    id_list = list(session.scalars(_query))
+    return [id for id in id_list if isAllVideoDownloaded(session, id)]
 
 
 # endregion

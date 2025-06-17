@@ -3,9 +3,10 @@ import re
 
 import Configs
 from Consts import PostFilter, WorkerType
-from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl
+from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ActorFileCtrl
 from Download.DownloadLimit import DownloadLimit
 from Guarder import Guarder
+from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from Download.QueueMgr import QueueMgr
@@ -197,6 +198,8 @@ class DownloadTask(object):
         os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
         os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
         DbCtrl.init()
+        with DbCtrl.getSession() as session, session.begin():
+            ActorFileCtrl.clearAllActorFileInfo(session)
 
     def __repr__(self):
         return self.desc

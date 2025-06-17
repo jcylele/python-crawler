@@ -50,7 +50,7 @@ class FetchActorsWorker(BaseFetchWorker):
             return math.floor(actor_count / 50)
 
     def _loadSelector(self) -> str:
-        return '#paginator-top'
+        return '#paginator-top menu'
 
     def _url(self, item: FetchActorsQueueItem) -> str:
         self.start_page = self.getStartPage(item.from_start)

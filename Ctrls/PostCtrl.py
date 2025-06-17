@@ -4,6 +4,7 @@ from sqlalchemy import ScalarResult, func, select, update, Select
 from sqlalchemy.orm import Session
 
 from Consts import ResState
+from Ctrls import ActorFileCtrl
 from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
@@ -52,6 +53,8 @@ def batchSetResStates(session: Session, actor_id: int, state: ResState):
               .where(PostModel.actor_id == actor_id)
               .values(res_state=state))
     session.execute(_query)
+    # manually delete
+    ActorFileCtrl.deleteActorFileInfo(session, actor_id)
 
 
 # set current downloaded res(file exists) to del
@@ -62,6 +65,9 @@ def removeCurrentResFiles(session: Session, actor_id: int):
               .where(ResModel.res_state == ResState.Down)
               .values(res_state=ResState.Del))
     session.execute(_query)
+
+    # manually delete
+    ActorFileCtrl.deleteActorFileInfo(session, actor_id)
 
 
 def filterQuery(_query: Select, form: PostFilterForm) -> Select:
@@ -110,10 +116,10 @@ def getFilteredPosts(session: Session, form: PostFilterForm) -> ScalarResult[Pos
 
 def setPostComment(session: Session, post_id: int, comment: str):
     real_comment = PyUtil.stripToNone(comment)
-    _query = update(PostModel) \
-        .where(PostModel.post_id == post_id) \
-        .values(comment=real_comment)
-    session.execute(_query)
+    post = getPost(session, post_id)
+    if not post:
+        return
+    post.comment = real_comment
 
 
 def getNewPosts(session: Session, actor_id: int, last_post_id: int) -> ScalarResult[PostModel]:

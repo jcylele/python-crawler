@@ -23,11 +23,24 @@ def get_actor_count(form: ActorConditionForm):
         actor_count = ActorCtrl.getActorCount(session, form)
         return DbCtrl.CustomJsonResponse({'value': actor_count})
 
+@router.get("/group_count")
+def get_actor_count_of_groups():
+    with DbCtrl.getSession() as session, session.begin():
+        actor_count_list = ActorCtrl.getActorCountOfGroups(session)
+        return DbCtrl.CustomJsonResponse(actor_count_list)
+
 
 @router.post("/list")
 def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
     with DbCtrl.getSession() as session, session.begin():
         actor_ids = ActorCtrl.getActorList(session, form, limit, start)
+        return DbCtrl.CustomJsonResponse(actor_ids)
+
+
+@router.post("/finished_list")
+def get_finished_actor_list(*, form: ActorConditionForm):
+    with DbCtrl.getSession() as session, session.begin():
+        actor_ids = ActorCtrl.getFinishedActorList(session, form)
         return DbCtrl.CustomJsonResponse(actor_ids)
 
 

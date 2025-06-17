@@ -14,6 +14,7 @@ class SortType(Enum):
     TotalPostCount = auto()
     CurPostCount = auto()
     CategoryTime = auto()
+    FileSize = auto()
 
 
 class SortItem(BaseModel):

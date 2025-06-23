@@ -1,5 +1,8 @@
 import os
 import re
+from math import floor
+
+import ffmpeg
 
 from sqlalchemy import delete, exists, insert, select, func, case, event
 from sqlalchemy.orm import Session
@@ -128,7 +131,7 @@ def update_actor_file_info_cache_batch(session, context):
 
     if len(related_posts) == 0:
         return
-    LogUtil.info(f"delete by posts: {related_posts}")
+    # LogUtil.info(f"delete by posts: {related_posts}")
     affected_actors = getActorsByPosts(session, related_posts)
     for actor_id in affected_actors:
         __dirty_actors.add(actor_id)
@@ -155,3 +158,22 @@ def RemoveDownloadingFiles(session: Session, actor: ActorModel):
                 os.remove(os.path.join(root, file))
     except Exception as e:
         pass
+
+
+def get_media_info(file_path) -> tuple[int, int, int]:
+    """获取视频/图片文件的基本信息"""
+    try:
+        # 获取视频流信息
+        probe = ffmpeg.probe(file_path)
+        stream = probe['streams'][0]  # 取第一个流
+
+        if stream:
+            # 基本信息
+            width = int(stream['width'])  # 宽度
+            height = int(stream['height'])  # 高度
+            duration = floor(float(probe['format'].get('duration', 0)))
+
+            return width, height, duration
+    except Exception as e:
+        LogUtil.error(f"get media info failed: {e}")
+        return 0, 0, 0

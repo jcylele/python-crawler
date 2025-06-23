@@ -2,6 +2,7 @@ import os.path
 
 import Configs
 from Consts import WorkerType, QueueType
+from Ctrls import DbCtrl
 from Download import FileManager, QueueUtil
 from Utils import LogUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
@@ -28,8 +29,9 @@ class FileDownWorker(BaseRequestWorker):
         extra_info: ResFileExtraInfo = item.extra_info
 
         # skip if no folder
-        if not self.hasActorFolder(extra_info.actor_info.actor_id):
-            return True
+        with DbCtrl.getSession() as session, session.begin():
+            if not self.hasActorFolder(session, extra_info.actor_info.actor_id):
+                return True
 
         self.requestSession.headers["referer"] = item.from_url
 
@@ -60,7 +62,8 @@ class FileDownWorker(BaseRequestWorker):
                 LogUtil.warn(f"resume {file_path} from {file_size:,d}")
 
         # if timeout, start a new thread to download other files
-        self.setTimeout(Configs.BASE_TIME_OUT + extra_info.file_size / Configs.MIN_DOWN_SPEED)
+        self.setTimeout(Configs.BASE_TIME_OUT +
+                        extra_info.file_size / Configs.MIN_DOWN_SPEED)
 
         self._downloadStream(item.url, file_path, file_mode)
 

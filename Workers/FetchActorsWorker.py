@@ -5,6 +5,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from sqlalchemy.orm import Session
 
 from Consts import WorkerType, QueueType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl
@@ -57,7 +58,7 @@ class FetchActorsWorker(BaseFetchWorker):
         LogUtil.info(f"fetch actors from page {self.start_page + 1}")
         return RequestCtrl.formatActorsUrl(self.start_page * 50)
 
-    def _checkFetch(self, item: BaseQueueItem):
+    def _checkFetch(self, session: Session, item: BaseQueueItem):
         return True
 
     def _onFetched(self, item: FetchActorsQueueItem, driver: webdriver.Chrome) -> bool:

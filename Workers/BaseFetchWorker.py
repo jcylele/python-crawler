@@ -1,6 +1,7 @@
 import os
 import time
 
+from sqlalchemy.orm import Session
 from selenium import webdriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.common.by import By
@@ -77,12 +78,13 @@ class BaseFetchWorker(BaseWorker):
     def _url(self, item: BaseQueueItem) -> str:
         raise NotImplementedError("subclasses of BaseFetchWorker must implement method _url")
 
-    def _checkFetch(self, item: BaseQueueItem):
+    def _checkFetch(self, session: Session, item: BaseQueueItem):
         raise NotImplementedError("subclasses of BaseFetchWorker must implement method _checkFetch")
 
     def _process(self, item: BaseQueueItem) -> bool:
-        if not self._checkFetch(item):
-            return True
+        with DbCtrl.getSession() as session, session.begin():
+            if not self._checkFetch(session, item):
+                return True
         driver = WebPool.getDriver(self.workerType())
         driver.get(self._url(item))
         for i in range(30):

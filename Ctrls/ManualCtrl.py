@@ -1,24 +1,20 @@
 #! fix/update bugs/problems in database, mainly caused by existing actors skipping new features
 import os
 import re
-from collections import defaultdict
-from typing import List, Dict, Set, Tuple
-
-from sqlalchemy import func, select
-from sqlalchemy import update
+import ffmpeg
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
-from starlette.config import undefined
 
 import Configs
-from Consts import ResState, NoticeType
-from Ctrls import ActorCtrl
+from Ctrls import ActorCtrl, ActorFileCtrl, ResCtrl
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
-from Models.ActorTagModel import ActorTagModel
 from Models.NoticeModel import NoticeModel
-from Models.PostModel import PostModel
 from Models.ResModel import ResModel
+from Models.ResUrlModel import ResUrlModel
+from Models.PostModel import PostModel
+from Models.ActorTagModel import ActorTagModel
 from Utils import LogUtil
 
 
@@ -37,6 +33,37 @@ def removeActorFolders(session: Session):
                 LogUtil.info(f"remove folder {folder}")
                 os.rmdir(os.path.join(root, folder))
 
+def refreshResInfo(session: Session):
+    for root1, folders, _ in os.walk(Configs.RootFolder):
+        for folder in folders:
+            match_obj1 = re.match(r'^(\S+)_(\d+)$', folder)
+            if match_obj1 is None:
+                LogUtil.info(f"unknown folder {folder}")
+                continue
+            actor_name = match_obj1.group(1)
+            for root2, _, files in os.walk(os.path.join(root1, folder)):
+                for file in files:
+                    match_obj2 = re.match(r'^(\d+)_(\d+)\.\S+$', file)
+                    if match_obj2 is None:
+                        LogUtil.error(f"unknown file {file}")
+                        continue
+                    post_id = int(match_obj2.group(1))
+                    res_index = int(match_obj2.group(2))
+                    res = ResCtrl.getResByIndex(session, post_id, res_index)
+                    if res is None:
+                        LogUtil.error(f"res {post_id}_{res_index} not found")
+                        continue
+                    file_path = os.path.join(root2, file)
+                    width, height, duration = ActorFileCtrl.get_media_info(file_path)
+                    if width > 0 and height > 0:
+                        res.res_width = width
+                        res.res_height = height
+                        if duration > 0:
+                            res.res_duration = duration
+                    else:
+                        LogUtil.error(f"get media info failed: {file_path}")
+            print(actor_name)
+            session.flush()
 
 def resetManual(session: Session):
     stmt = (

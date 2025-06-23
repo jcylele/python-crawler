@@ -2,6 +2,8 @@ import threading
 import time
 import traceback
 
+from sqlalchemy.orm import Session
+
 import Consts
 from Consts import WorkerType, QueueType
 from Ctrls import DbCtrl, ActorCtrl
@@ -43,10 +45,9 @@ class BaseWorker(threading.Thread):
         """
         raise NotImplementedError("subclasses of BaseWorker must implement method _queueType")
 
-    def hasActorFolder(self, actor_id: int) -> bool:
-        with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_id)
-            return actor.actor_group.has_folder
+    def hasActorFolder(self, session: Session, actor_id: int) -> bool:
+        actor = ActorCtrl.getActor(session, actor_id)
+        return actor.actor_group.has_folder
 
     def run(self):
         while not self.__stop:

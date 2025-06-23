@@ -2,7 +2,7 @@ import os.path
 import shutil
 
 from Consts import WorkerType, QueueType, ResState
-from Ctrls import DbCtrl, ResCtrl
+from Ctrls import ActorFileCtrl, DbCtrl, ResCtrl
 from Utils import LogUtil
 from Download import QueueUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
@@ -46,6 +46,14 @@ class ResValidWorker(BaseWorker):
                 shutil.move(tmp_file_path, true_file_path)
             except:
                 return False
+
+            # get media info
+            width, height, duration = ActorFileCtrl.get_media_info(true_file_path)
+            if width > 0 and height > 0:
+                res2.res_width = width
+                res2.res_height = height
+                if duration > 0:
+                    res2.res_duration = duration
 
             res2.setState(ResState.Down)
             # refresh downloaded file size

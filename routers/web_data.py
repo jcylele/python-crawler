@@ -54,6 +54,24 @@ class ServerData(object):
         return self.__dict__
 
 
+class ActorVideoInfo(ServerData):
+    is_landscape: bool
+    duration: float
+    file_count: int
+    file_size: int
+
+    def __init__(self, is_landscape: bool):
+        self.is_landscape = is_landscape
+        self.duration = 0
+        self.file_count = 0
+        self.file_size = 0
+
+    def add_info(self, duration: float, file_size: int):
+        self.duration += duration
+        self.file_count += 1
+        self.file_size += file_size
+
+
 class ActorPostInfo(ServerData):
     actor_id: int
     actor_name: str

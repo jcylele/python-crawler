@@ -1,5 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from sqlalchemy.orm import Session
 
 from Consts import WorkerType, QueueType
 from Ctrls import DbCtrl, RequestCtrl, ActorCtrl
@@ -26,11 +27,6 @@ class FetchActorLinkWorker(BaseFetchWorker):
         with DbCtrl.getSession() as session, session.begin():
             ActorCtrl.setActorLinkChecked(session, actor_id)
 
-    @staticmethod
-    def isLinkChecked(actor_id: int):
-        with DbCtrl.getSession() as session, session.begin():
-            return ActorCtrl.isLinkChecked(session, actor_id)
-
     def processLinks(self, actor_infos: list[ActorInfo], cur_url: str):
         with DbCtrl.getSession() as session, session.begin():
             ActorCtrl.checkActorLink(session, actor_infos, self.init_category())
@@ -42,8 +38,8 @@ class FetchActorLinkWorker(BaseFetchWorker):
         actor_info = self.getActorInfo(item.actor_id)
         return RequestCtrl.formatActorLinksUrl(actor_info)
 
-    def _checkFetch(self, item: FetchActorQueueItem):
-        return not FetchActorLinkWorker.isLinkChecked(item.actor_id)
+    def _checkFetch(self, session: Session, item: FetchActorQueueItem):
+        return not ActorCtrl.isLinkChecked(session, item.actor_id)
 
     def _onFetched(self, item: FetchActorQueueItem, driver: webdriver.Chrome) -> bool:
         actor_info = self.getActorInfo(item.actor_id)

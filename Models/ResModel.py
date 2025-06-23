@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, BigInteger
+from sqlalchemy import ForeignKey, BigInteger, Index
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 import Configs
@@ -21,10 +21,17 @@ class ResModel(BaseModel):
         IntEnum(ResState), default=ResState.Init)
     res_type: Mapped[ResType] = mapped_column(IntEnum(ResType))
     res_size: Mapped[int] = mapped_column(BigInteger, default=0)
+    res_duration: Mapped[int] = mapped_column(default=0)
+    res_width: Mapped[int] = mapped_column(default=0)
+    res_height: Mapped[int] = mapped_column(default=0)
 
     post_id: Mapped[int] = mapped_column(
         ForeignKey("tab_post.post_id", ondelete="CASCADE"),
         index=True
+    )
+
+    __table_args__ = (
+        Index('idx_post_id_res_index', 'post_id', 'res_index', unique=True),
     )
 
     res_url_info: Mapped["ResUrlModel"] = relationship(

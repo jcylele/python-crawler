@@ -176,6 +176,14 @@ def get_actor_file_info(actor_id: int):
         return DbCtrl.CustomJsonResponse(ret)
 
 
+@router.get("/{actor_id}/video_duration")
+def get_actor_video_duration(actor_id: int):
+    with DbCtrl.getSession() as session, session.begin():
+        landscape_duration = ActorCtrl.getActorDurationStats(session, actor_id, True)
+        portrait_duration = ActorCtrl.getActorDurationStats(session, actor_id, False)
+        return DbCtrl.CustomJsonResponse([landscape_duration, portrait_duration])
+
+
 @router.get("/{actor_id}/linked")
 def get_linked_actors(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():

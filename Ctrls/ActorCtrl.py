@@ -144,9 +144,34 @@ def clearActorFolder(session: Session, actor: ActorModel):
     createActorFolder(actor)
 
 
+def getActorDurationStats(session: Session, actor_id: int, is_landscape: bool) -> int:
+    """获取actor的时长统计"""
+     # 根据is_landscape参数构建不同的条件
+    if is_landscape:
+        # 横屏：宽度大于高度
+        orientation_condition = ResModel.res_width > ResModel.res_height
+    else:
+        # 竖屏：高度大于等于宽度
+        orientation_condition = ResModel.res_height >= ResModel.res_width
+    stmt = select(
+        func.sum(ResModel.res_duration)
+    ).join(
+        PostModel, PostModel.post_id == ResModel.post_id
+    ).where(
+        PostModel.actor_id == actor_id,
+        ResModel.res_state == ResState.Down,
+        orientation_condition
+    )
+    
+    duration = session.scalar(stmt)
+    if duration is None:
+        return 0
+    return int(duration)
+
 # endregion
 
 # region query
+
 
 def _initQuery(is_count: bool = False) -> Select:
     if is_count:
@@ -250,7 +275,8 @@ def getAllActorCount(session: Session) -> int:
 
 def getActorCountOfGroups(session: Session) -> list[tuple[int, int]]:
     # 直接用select()和func.count()计数，最简洁高效
-    stmt = select(ActorModel.actor_group_id, func.count(ActorModel.actor_id)).group_by(ActorModel.actor_group_id)
+    stmt = select(ActorModel.actor_group_id, func.count(
+        ActorModel.actor_id)).group_by(ActorModel.actor_group_id)
     return [(row[0], row[1]) for row in session.execute(stmt)]
 
 
@@ -904,7 +930,7 @@ def _find_common_substrings(strings: List[str], length: int) -> Dict[int, Tuple[
         for i in range(1, len(s) - length + 1):
             # 减去最左边字符的贡献
             hash_value = (
-                                 hash_value - (ord(s[i - 1]) * pow(31, length - 1, 0xFFFFFFFF))) & 0xFFFFFFFF
+                hash_value - (ord(s[i - 1]) * pow(31, length - 1, 0xFFFFFFFF))) & 0xFFFFFFFF
             # 乘以31并加上新字符
             hash_value = (hash_value * 31 +
                           ord(s[i + length - 1])) & 0xFFFFFFFF

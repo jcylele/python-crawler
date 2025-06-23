@@ -6,7 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-
+from sqlalchemy.orm import Session
 from Consts import WorkerType, QueueType, NoticeType, ActorLogType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
 from Download import QueueUtil
@@ -85,8 +85,8 @@ class FetchActorWorker(BaseFetchWorker):
         actor_info = self.getActorInfo(item.actor_id)
         return RequestCtrl.formatActorUrl(actor_info)
 
-    def _checkFetch(self, item: FetchActorQueueItem):
-        return self.hasActorFolder(item.actor_id)
+    def _checkFetch(self, session: Session, item: FetchActorQueueItem):
+        return self.hasActorFolder(session, item.actor_id)
 
     def _onFetched(self, item: FetchActorQueueItem, driver: webdriver.Chrome) -> bool:
         self.actor_info = self.getActorInfo(item.actor_id)

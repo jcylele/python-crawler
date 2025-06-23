@@ -1,10 +1,12 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from sqlalchemy.orm import Session
 
 import Consts
 from Consts import WorkerType, QueueType, ResType
 from Ctrls import DbCtrl, RequestCtrl, PostCtrl, ResCtrl
 from Download import QueueUtil
+from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchPostQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
 
@@ -38,12 +40,27 @@ class FetchPostWorker(BaseFetchWorker):
     def _url(self, item: FetchPostQueueItem) -> str:
         return RequestCtrl.formatPostUrl(item.actor_info, item.post_id, item.is_dm)
 
-    def _checkFetch(self, item: FetchPostQueueItem):
-        return self.hasActorFolder(item.actor_info.actor_id)
+    def _checkFetch(self, session: Session, item: FetchPostQueueItem):
+        # check actor folder
+        if not self.hasActorFolder(session, item.actor_info.actor_id):
+            return False
+        # check post completed, no need to fetch
+        post = PostCtrl.getPost(session, item.post_id)
+        if post.completed:
+            return False
+        # check res exists, no need to fetch
+        res = ResCtrl.getResByIndex(session, item.post_id, 1)
+        if res is not None:
+            LogUtil.error(
+                f"post {item.post_id} of actor {item.actor_info.actor_name} already fetched, but not completed")
+            return False
+
+        return True
 
     def _onFetched(self, item: FetchPostQueueItem, driver: webdriver.Chrome) -> bool:
         # actor icon
-        self._saveActorIcon(item.actor_info, ".post__user-profile img", driver, False)
+        self._saveActorIcon(
+            item.actor_info, ".post__user-profile img", driver, False)
 
         # analyze res
         url_list = []
@@ -68,7 +85,8 @@ class FetchPostWorker(BaseFetchWorker):
                 # add records for the resources
                 ResCtrl.addAllRes(session, item.post_id, url_list)
                 # enqueue all resources of the post
-                QueueUtil.enqueueAllRes(self.QueueMgr(), item.actor_info, post, self.DownloadLimit())
+                QueueUtil.enqueueAllRes(
+                    self.QueueMgr(), item.actor_info, post, self.DownloadLimit())
 
             # mark the post as analysed
             post.completed = True

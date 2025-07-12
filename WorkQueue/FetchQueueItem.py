@@ -7,12 +7,12 @@ class FetchActorsQueueItem(BaseQueueItem):
     fetch actor list
     """
 
-    def __init__(self, from_start: bool):
+    def __init__(self, start_page: int):
         super().__init__()
-        self.from_start = from_start
+        self.start_page = start_page
 
     def __repr__(self):
-        return f"FetchActorsQueueItem {self.from_start}"
+        return f"FetchActorsQueueItem {self.start_page}"
 
 
 class FetchActorQueueItem(BaseQueueItem):

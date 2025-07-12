@@ -10,6 +10,7 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+
 @router.get("/count_map")
 def get_notice_count():
     with DbCtrl.getSession() as session, session.begin():
@@ -20,7 +21,8 @@ def get_notice_count():
 @router.get("/list/{notice_type}")
 def get_notices(notice_type: int, limit: int = 0, offset: int = 0):
     with DbCtrl.getSession() as session, session.begin():
-        notices = NoticeCtrl.getNoticesOfType(session, NoticeType(notice_type), limit, offset)
+        notices = NoticeCtrl.getNoticesOfType(
+            session, NoticeType(notice_type), limit, offset)
         return DbCtrl.CustomJsonResponse(notices)
 
 
@@ -36,3 +38,10 @@ def delete_notice(notice_id: int):
     with DbCtrl.getSession() as session, session.begin():
         NoticeCtrl.deleteNotice(session, notice_id)
         return DbCtrl.CustomJsonResponse({"value": "ok"})
+
+
+@router.get("/search/{actor_name}")
+def search_notice(actor_name: str):
+    with DbCtrl.getSession() as session, session.begin():
+        notices = NoticeCtrl.searchNotice(session, actor_name)
+        return DbCtrl.CustomJsonResponse(notices)

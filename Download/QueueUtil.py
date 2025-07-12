@@ -16,8 +16,8 @@ from WorkQueue.FetchQueueItem import FetchActorsQueueItem, FetchActorQueueItem, 
 from WorkQueue.UrlQueueItem import UrlQueueItem
 
 
-def enqueueFetchActors(queueMgr: QueueMgr, from_start: bool):
-    item = FetchActorsQueueItem(from_start)
+def enqueueFetchActors(queueMgr: QueueMgr, start_page: int):
+    item = FetchActorsQueueItem(start_page)
     queueMgr.put(QueueType.FetchActors, item)
 
 
@@ -55,9 +55,10 @@ def enqueueAllRes(queueMgr: QueueMgr, actor_info: ActorInfo, post: PostModel, do
 
         out_extra = ResInfoExtraInfo(actor_info, post.post_id, res.res_id, res.res_type)
         out_item = UrlQueueItem(res.full_url(), post_url, out_extra)
-        # 所有资源都Info
+        
         if res.res_size == 0:
-            queueMgr.put(QueueType.ResInfo, out_item)
+            if downloadLimit.allowResInfo(res.res_type):
+                queueMgr.put(QueueType.ResInfo, out_item)
         elif res.shouldDownload(downloadLimit):
             downloadResFile(queueMgr, out_item, res.tmpFilePath(), res.res_size)
 

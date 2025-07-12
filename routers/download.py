@@ -24,7 +24,7 @@ def download_new_actors(form: NewDownloadForm):
     task = NewTask()
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
-    task.downloadNewActors(form.from_start)
+    task.downloadNewActors(form.start_page)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
@@ -44,6 +44,14 @@ def resume_files(form: BaseDownloadForm):
     task = NewTask()
     task.setLimit(limit)
     task.resumeFiles()
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
+
+@router.patch("/resume/{actor_id}")
+def resume_actor(actor_id: int):
+    limit = DownloadLimit(DownloadLimitForm.resumeVideoLimit())
+    task = NewTask()
+    task.setLimit(limit)
+    task.resumeActor(actor_id)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 

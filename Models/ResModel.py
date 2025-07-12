@@ -82,7 +82,7 @@ class ResModel(BaseModel):
             return False
 
         # 类型
-        if not download_limit.allowRes(self.res_type):
+        if not download_limit.allowResDownload(self.res_type):
             return False
         # 超过大小
         if not download_limit.checkResSize(self.res_size):

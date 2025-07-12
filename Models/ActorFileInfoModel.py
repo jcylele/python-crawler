@@ -15,7 +15,9 @@ class ActorFileInfoModel(BaseModel):
     res_state: Mapped[ResState] = mapped_column(
         IntEnum(ResState), nullable=False, primary_key=True
     )
-    res_size: Mapped[int] = mapped_column(BigInteger)
+    # res_size: Mapped[int] = mapped_column(BigInteger)
+    img_size: Mapped[int] = mapped_column(BigInteger)
+    video_size: Mapped[int] = mapped_column(BigInteger)
     img_count: Mapped[int] = mapped_column()
     video_count: Mapped[int] = mapped_column()
 
@@ -23,7 +25,8 @@ class ActorFileInfoModel(BaseModel):
         return {
             "actor_id": self.actor_id,
             "res_state": self.res_state.value,
-            "res_size": self.res_size,
+            "img_size": self.img_size,
+            "video_size": self.video_size,
             "img_count": self.img_count,
             "video_count": self.video_count
         }

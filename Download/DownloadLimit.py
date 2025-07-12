@@ -22,8 +22,11 @@ class DownloadLimit(object):
     def morePost(self, post_count: int) -> bool:
         return self.limit.post_count == 0 or post_count < self.limit.post_count
 
-    def allowRes(self, res_type: ResType) -> bool:
+    def allowResDownload(self, res_type: ResType) -> bool:
         return self.limit.res_type == res_type.value
+
+    def allowResInfo(self, res_type: ResType) -> bool:
+        return self.limit.res_type == ResType.Image.value or res_type == ResType.Video
 
     def checkResSize(self, res_size: int) -> bool:
         return not (res_size > self.limit.single_file_size > 0)

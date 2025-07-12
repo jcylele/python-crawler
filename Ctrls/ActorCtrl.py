@@ -9,7 +9,7 @@ from sqlalchemy import ScalarResult, and_, exists, func, select, delete, update,
 from sqlalchemy.orm import Session, aliased
 
 import Configs
-from Consts import NoticeType, ActorLogType, GroupCondType, ResState
+from Consts import NoticeType, ActorLogType, GroupCondType, ResState, ResType
 from Ctrls import PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorInfo import ActorInfo
@@ -19,10 +19,17 @@ from Models.ActorTagRelationship import ActorTagRelationship
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from Utils import LogUtil, PyUtil
-from routers.web_data import ActorConditionForm, SortType, LinkActorForm, TagFilter
+from routers.web_data import ActorConditionForm, SortType, LinkActorForm, TagFilter, BoolEnum, ActorVideoInfo
+
+_sort_file_size_map: Dict[SortType, List[ResState]] = {
+    SortType.DownFileSize: [ResState.Down],
+    SortType.CurFileSize: [ResState.Init, ResState.Down, ResState.Skip],
+    SortType.TotalFileSize: [],
+}
 
 
 # region single actor
+
 
 def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
     actor = getActor(session, actor_id)
@@ -102,22 +109,15 @@ def getActorFileInfo(session: Session, actor_id: int):
     }
 
 
+def __removeDeletedFile(session: Session, file_path: str, post_id: int, res_index: int):
+    res = ResCtrl.getResByIndex(session, post_id, res_index)
+    if res.res_state == ResState.Del:
+        LogUtil.info(f"remove downloading file {file_path}")
+        os.remove(file_path)
+
+
 def removeOutdatedFiles(session: Session):
-    download_folder = Configs.formatTmpFolderPath()
-    try:
-        for root, _, files in os.walk(download_folder):
-            for file in files:
-                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
-                if match_obj is None:
-                    continue
-                post_id = int(match_obj.group(2))
-                res_index = int(match_obj.group(3))
-                res = ResCtrl.getResByIndex(session, post_id, res_index)
-                if res.res_state == ResState.Del:
-                    LogUtil.info(f"remove downloading file {file}")
-                    os.remove(os.path.join(root, file))
-    except Exception as e:
-        pass
+    ActorFileCtrl.traverseDownloadingFiles(session, __removeDeletedFile)
 
 
 def deleteAllRes(session: Session, actor: ActorModel):
@@ -144,29 +144,27 @@ def clearActorFolder(session: Session, actor: ActorModel):
     createActorFolder(actor)
 
 
-def getActorDurationStats(session: Session, actor_id: int, is_landscape: bool) -> int:
-    """获取actor的时长统计"""
-     # 根据is_landscape参数构建不同的条件
-    if is_landscape:
-        # 横屏：宽度大于高度
-        orientation_condition = ResModel.res_width > ResModel.res_height
-    else:
-        # 竖屏：高度大于等于宽度
-        orientation_condition = ResModel.res_height >= ResModel.res_width
+def getActorVideoStats(session: Session, actor_id: int) -> list[ActorVideoInfo]:
+    landscape_info = ActorVideoInfo(True)
+    portrait_info = ActorVideoInfo(False)
     stmt = select(
-        func.sum(ResModel.res_duration)
+        ResModel
     ).join(
         PostModel, PostModel.post_id == ResModel.post_id
     ).where(
         PostModel.actor_id == actor_id,
         ResModel.res_state == ResState.Down,
-        orientation_condition
+        ResModel.res_type == ResType.Video
     )
-    
-    duration = session.scalar(stmt)
-    if duration is None:
-        return 0
-    return int(duration)
+
+    ret = session.scalars(stmt)
+    for res in ret:
+        if res.res_width >= res.res_height:
+            landscape_info.add_info(res.res_duration, res.res_size)
+        else:
+            portrait_info.add_info(res.res_duration, res.res_size)
+    return [landscape_info, portrait_info]
+
 
 # endregion
 
@@ -252,11 +250,15 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
     if form.max_score < Configs.MAX_SCORE:
         query = query.where(ActorMainModel.score <= form.max_score)
 
-    if form.has_remark:
+    if form.has_remark == BoolEnum.TRUE:
         query = query.where(ActorMainModel.has_remark == True)
         remark = form.remark_str.strip()
         if remark:
             query = query.where(ActorMainModel.remark.like(f"%{remark}%"))
+    elif form.has_remark == BoolEnum.FALSE:
+        query = query.where(ActorMainModel.has_remark == False)
+    else:
+        pass
 
     return query
 
@@ -309,19 +311,25 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
                 sort_clause = sort_clause.desc()
             _query = _query.order_by(sort_clause)
 
-        elif sort_item.sort_type == SortType.FileSize:
+        elif sort_item.sort_type in _sort_file_size_map:
+            res_state_list = _sort_file_size_map[sort_item.sort_type]
             subq = (
-                select(func.sum(ActorFileInfoModel.res_size))
-                .where(
-                    ActorFileInfoModel.actor_id == ActorModel.actor_id,
-                    ActorFileInfoModel.res_state == ResState.Down
-                )
-                .scalar_subquery()
+                select(func.sum(ActorFileInfoModel.video_size))
+                .where(ActorFileInfoModel.actor_id == ActorModel.actor_id)
             )
+            state_count = len(res_state_list)
+            if state_count > 1:
+                subq = subq.where(
+                    ActorFileInfoModel.res_state.in_(res_state_list)
+                )
+            elif state_count == 1:
+                subq = subq.where(
+                    ActorFileInfoModel.res_state == res_state_list[0]
+                )
+            subq = subq.scalar_subquery()
             if not sort_item.sort_asc:
                 subq = subq.desc()
             _query = _query.order_by(subq)
-
     # default
     _query = _query.order_by(ActorModel.actor_name)
 
@@ -333,22 +341,14 @@ def getUnsortedActorList(session: Session, form: ActorConditionForm) -> list[int
     return list(session.scalars(_query))
 
 
-def ensureActorFileInfo(session: Session, form: ActorConditionForm):
-    actor_ids = getUnsortedActorList(session, form)
-    for actor_id in actor_ids:
-        ActorFileCtrl.ensureActorFileInfo(session, actor_id, False)
-
-    # flush
-    session.flush()
-
-
 def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> list[int]:
     need_file_info = any(
-        sort_item.sort_type == SortType.FileSize
+        sort_item.sort_type in _sort_file_size_map
         for sort_item in form.sort_items
     )
     if need_file_info:
-        ensureActorFileInfo(session, form)
+        actor_ids = getUnsortedActorList(session, form)
+        ActorFileCtrl.ensureBatchActorFileInfo(session, actor_ids)
 
     _query = _sortQuery(_filterQuery(_initQuery(False), form), form)
     if start != 0:

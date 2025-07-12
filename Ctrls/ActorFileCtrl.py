@@ -1,31 +1,41 @@
 import os
 import re
 from math import floor
-
+from typing import Callable
 import ffmpeg
 
-from sqlalchemy import delete, exists, insert, select, func, case, event
+from sqlalchemy import Select, delete, exists, insert, select, func, case, event
 from sqlalchemy.orm import Session
 
 import Configs
+from Ctrls import ResCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from Consts import ResType
 from Utils import LogUtil
+from routers.web_data import ResFileInfo
+
+# region actor file info abstract
 
 __dirty_actors = set()
 
 
-def __insert_actor_file_info(session, actor_id: int):
-    # 构建 SELECT 语句
-    select_stmt = select(
+def __build_basic_select_stmt() -> Select:
+    return select(
         # 固定值
         PostModel.actor_id.label('actor_id'),
         ResModel.res_state.label('res_state'),
         # 统计总大小
-        func.sum(ResModel.res_size).label('res_size'),
+        func.sum(case(
+            (ResModel.res_type == ResType.Image, ResModel.res_size),
+            else_=0
+        )).label('img_size'),
+        func.sum(case(
+            (ResModel.res_type == ResType.Video, ResModel.res_size),
+            else_=0
+        )).label('video_size'),
         # 统计图片数量
         func.sum(
             case(
@@ -43,20 +53,54 @@ def __insert_actor_file_info(session, actor_id: int):
     ).join(
         PostModel,
         PostModel.post_id == ResModel.post_id
+    )
+
+
+def __insert_result(session: Session, result):
+    # 转换为字典列表，避免ORM对象创建开销
+    insert_data = []
+    for row in result:
+        insert_data.append({
+            'actor_id': row.actor_id,
+            'res_state': row.res_state,
+            'img_size': row.img_size,
+            'video_size': row.video_size,
+            'img_count': row.img_count,
+            'video_count': row.video_count
+        })
+    # print([[d['actor_id'], d['res_state']] for d in insert_data])
+    # autoflush会导致奇怪的主键冲突
+    with session.no_autoflush:
+        # 批量插入，性能最佳
+        session.bulk_insert_mappings(ActorFileInfoModel, insert_data)
+        session.flush()
+
+
+def __insert_actor_file_info(session, actor_id: int):
+    # 构建 SELECT 语句
+    select_stmt = __build_basic_select_stmt(
     ).where(
         PostModel.actor_id == actor_id
     ).group_by(
         ResModel.res_state
     )
 
-    # 构建 INSERT 语句
-    insert_stmt = insert(ActorFileInfoModel).from_select(
-        ['actor_id', 'res_state', 'res_size', 'img_count', 'video_count'],
-        select_stmt
+    result = session.execute(select_stmt)
+    __insert_result(session, result)
+
+
+def __insert_batch_actor_file_info(session: Session, actor_ids: list[int]):
+    # 构建 SELECT 语句
+    select_stmt = __build_basic_select_stmt(
+    ).where(
+        PostModel.actor_id.in_(actor_ids)
+    ).group_by(
+        PostModel.actor_id,
+        ResModel.res_state
     )
 
-    # 执行插入
-    session.execute(insert_stmt)
+    result = session.execute(select_stmt)
+    __insert_result(session, result)
 
 
 def __get_actor_file_info(session: Session, actor_id: int) -> list[ActorFileInfoModel]:
@@ -74,22 +118,29 @@ def __has_actor_file_info(session: Session, actor_id: int):
     return session.execute(stmt).scalar()
 
 
-def __deleteActorFileInfo(session: Session, actor_id: int):
+def __deleteSingleActorFileInfo(session: Session, actor_id: int):
     LogUtil.info(f"delete single actor: {actor_id}")
     stmt = delete(ActorFileInfoModel).where(
         ActorFileInfoModel.actor_id == actor_id)
     session.execute(stmt)
 
 
-def ensureActorFileInfo(session: Session, actor_id: int, flush: bool = True):
+def __deleteDirtyActorFileInfos(session: Session):
+    LogUtil.info(f"delete dirty actors")
+    stmt = delete(ActorFileInfoModel).where(
+        ActorFileInfoModel.actor_id.in_(__dirty_actors))
+    session.execute(stmt)
+    session.flush()
+
+
+def ensureActorFileInfo(session: Session, actor_id: int):
     if actor_id in __dirty_actors:
-        __deleteActorFileInfo(session, actor_id)
+        __deleteSingleActorFileInfo(session, actor_id)
         __dirty_actors.remove(actor_id)
     elif __has_actor_file_info(session, actor_id):
         return
     __insert_actor_file_info(session, actor_id)
-    if flush:
-        session.flush()
+    session.flush()
 
 
 def getActorFileInfo(session: Session, actor_id: int):
@@ -112,6 +163,32 @@ def getActorsByPosts(session: Session, post_ids: set[int]):
     stmt = select(PostModel.actor_id.distinct()).where(
         PostModel.post_id.in_(post_ids))
     return session.execute(stmt).scalars()
+
+
+def __filter_actor_ids(session: Session, actor_ids: list[int]):
+    """查询哪些actor_ids没有ActorFileInfoModel记录"""
+    if not actor_ids:
+        return []
+
+    # 查询已存在的actor_ids
+    existing_stmt = select(ActorFileInfoModel.actor_id).where(
+        ActorFileInfoModel.actor_id.in_(actor_ids)
+    )
+    existing_ids = set(session.execute(existing_stmt).scalars().all())
+    # 返回不存在的actor_ids
+    missing_ids = [aid for aid in actor_ids if aid not in existing_ids]
+    return missing_ids
+
+
+def ensureBatchActorFileInfo(session: Session, actor_ids: list[int]):
+    if len(__dirty_actors) > 0:
+        __deleteDirtyActorFileInfos(session)
+        __dirty_actors.clear()
+    missing_ids = __filter_actor_ids(session, actor_ids)
+    if len(missing_ids) == 0:
+        return
+    __insert_batch_actor_file_info(session, missing_ids)
+    session.flush()
 
 
 @event.listens_for(Session, 'after_flush')
@@ -137,8 +214,27 @@ def update_actor_file_info_cache_batch(session, context):
         __dirty_actors.add(actor_id)
     # deleteActorFileInfo(session, set(affected_actors))
 
+# endregion
 
-def RemoveDownloadingFiles(session: Session, actor: ActorModel):
+# region downloading files
+
+
+def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str, int, int], None]):
+    download_folder = Configs.formatTmpFolderPath()
+    try:
+        for root, _, files in os.walk(download_folder):
+            for file in files:
+                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
+                if match_obj is None:
+                    continue
+                post_id = int(match_obj.group(2))
+                res_index = int(match_obj.group(3))
+                callback(session, os.path.join(root, file), post_id, res_index)
+    except Exception as e:
+        pass
+
+
+def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int], None]):
     download_folder = Configs.formatTmpFolderPath()
     try:
         for root, _, files in os.walk(download_folder):
@@ -148,6 +244,7 @@ def RemoveDownloadingFiles(session: Session, actor: ActorModel):
                     continue
                 actor_name = match_obj.group(1)
                 post_id = int(match_obj.group(2))
+                res_index = int(match_obj.group(3))
                 if actor_name != actor.actor_name:
                     continue
                 post = session.get(PostModel, post_id)
@@ -155,9 +252,51 @@ def RemoveDownloadingFiles(session: Session, actor: ActorModel):
                     continue
                 if post.actor_id != actor.actor_id:
                     continue
-                os.remove(os.path.join(root, file))
+                callback(session, os.path.join(root, file), post_id, res_index)
     except Exception as e:
-        pass
+        LogUtil.error(
+            f"traverseDownloadingFilesOfActor {actor.actor_name} failed, get {type(e)} {e.args}")
+
+
+def RemoveDownloadingFiles(session: Session, actor: ActorModel):
+    traverseDownloadingFilesOfActor(
+        session, actor, lambda session, file, post_id, res_index: os.remove(file))
+
+
+def __getResVideoInfo(session: Session, file_path: str, post_id: int, res_index: int) -> ResFileInfo:
+    res = ResCtrl.getResByIndex(session, post_id, res_index)
+    if res is None:
+        return None
+    if res.res_type == ResType.Image:
+        return None
+    file_size = os.path.getsize(file_path)
+    file_name = os.path.basename(file_path)
+
+    return ResFileInfo(file_path=file_name, file_size=file_size, res_size=res.res_size)
+
+
+def __getDownloadingFiles_Process(session: Session, file, post_id, res_index, ret: list[ResFileInfo]):
+    print(file)
+    info = __getResVideoInfo(session, file, post_id, res_index)
+    if info is not None:
+        ret.append(info)
+
+
+def getDownloadingFilesOfActor(session: Session, actor: ActorModel) -> list[ResFileInfo]:
+    ret = []
+    traverseDownloadingFilesOfActor(session, actor, lambda session, file, post_id,
+                                    res_index: __getDownloadingFiles_Process(session, file, post_id, res_index, ret))
+    return ret
+
+
+def removeDownloadingFilesOfActor(session: Session, actor: ActorModel):
+    ret = []
+    traverseDownloadingFilesOfActor(
+        session, actor, lambda _, file, post_id, res_index: os.remove(file))
+    return ret
+
+
+# endregion
 
 
 def get_media_info(file_path) -> tuple[int, int, int]:
@@ -165,15 +304,44 @@ def get_media_info(file_path) -> tuple[int, int, int]:
     try:
         # 获取视频流信息
         probe = ffmpeg.probe(file_path)
-        stream = probe['streams'][0]  # 取第一个流
+        streams = probe['streams']
+        video_stream = None
+        # 获取视频流
+        for stream in streams:
+            codec_type = stream.get('codec_type')
+            if codec_type == 'video' or codec_type == 'image':
+                video_stream = stream
+                break
+        # 没有视频流
+        if video_stream is None:
+            return 0, 0, 0
+        # 基本信息
+        width = int(video_stream['width'])  # 宽度
+        height = int(video_stream['height'])  # 高度
+        duration = floor(float(probe['format'].get('duration', 0)))
 
-        if stream:
-            # 基本信息
-            width = int(stream['width'])  # 宽度
-            height = int(stream['height'])  # 高度
-            duration = floor(float(probe['format'].get('duration', 0)))
-
-            return width, height, duration
+        return width, height, duration
     except Exception as e:
-        LogUtil.error(f"get media info failed: {e}")
+        LogUtil.error(f"get media info failed, get {type(e)} {e.args}")
         return 0, 0, 0
+
+
+def rename_actor_files(session: Session, actor: ActorModel):
+    actor_folder = Configs.formatActorFolderPath(
+        actor.actor_id, actor.actor_name)
+    for file in os.listdir(actor_folder):
+        match_obj = re.match(r'^(\d+)_(\d+)\.\w+$', file)
+        if match_obj is None:
+            continue
+        post_id = int(match_obj.group(1))
+        res_index = int(match_obj.group(2))
+        res = ResCtrl.getResByIndex(session, post_id, res_index)
+        if res is None:
+            continue
+        if res.res_type == ResType.Image:
+            continue
+        if res.res_width == 0 or res.res_height == 0 or res.res_duration == 0:
+            continue
+        prefix = res.res_width >= res.res_height and "l" or "p"
+        new_file_name = f"{prefix}_{match_obj.group(0)}"
+        os.rename(os.path.join(actor_folder, file), os.path.join(actor_folder, new_file_name))

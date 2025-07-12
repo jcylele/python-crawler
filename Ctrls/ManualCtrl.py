@@ -43,12 +43,16 @@ def refreshResInfo(session: Session):
             actor_name = match_obj1.group(1)
             for root2, _, files in os.walk(os.path.join(root1, folder)):
                 for file in files:
-                    match_obj2 = re.match(r'^(\d+)_(\d+)\.\S+$', file)
+                    match_obj2 = re.match(r'^(\d+)_(\d+)\.(\S+)$', file)
                     if match_obj2 is None:
                         LogUtil.error(f"unknown file {file}")
                         continue
                     post_id = int(match_obj2.group(1))
                     res_index = int(match_obj2.group(2))
+                    extension = match_obj2.group(3)
+                    # skip image files
+                    if extension == 'jpg' or extension == 'jpeg':
+                        continue
                     res = ResCtrl.getResByIndex(session, post_id, res_index)
                     if res is None:
                         LogUtil.error(f"res {post_id}_{res_index} not found")
@@ -60,8 +64,6 @@ def refreshResInfo(session: Session):
                         res.res_height = height
                         if duration > 0:
                             res.res_duration = duration
-                    else:
-                        LogUtil.error(f"get media info failed: {file_path}")
             print(actor_name)
             session.flush()
 
@@ -135,8 +137,3 @@ def get_tag_combinations_with_empty(session: Session) -> list[dict]:
         results.append(tag_combination)
 
     return results
-
-
-def checkNotice(session, notice_id):
-    notice:NoticeModel = session.get(NoticeModel, notice_id)
-    notice.check()

@@ -1,17 +1,17 @@
 import os
-import re
+
+from sqlalchemy.orm import Session
 
 import Configs
 from Consts import PostFilter, WorkerType
 from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ActorFileCtrl
+from Download import WorkerMgr, QueueUtil
 from Download.DownloadLimit import DownloadLimit
+from Download.QueueMgr import QueueMgr
 from Guarder import Guarder
-from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
-from Download.QueueMgr import QueueMgr
-from Download import WorkerMgr, QueueUtil
-from routers.web_data import ActorUrl, DownloadLimitForm
+from routers.web_data import ActorUrl
 
 
 class DownloadTask(object):
@@ -127,12 +127,12 @@ class DownloadTask(object):
             self.desc = f"Specific Actor {actor.actor_name}"
         self.downloadActors([actor_id])
 
-    def downloadNewActors(self, from_start: bool):
+    def downloadNewActors(self, start_page: int):
         """
         download new actors
         """
         self.desc = "New Actors."
-        QueueUtil.enqueueFetchActors(self.queueMgr, from_start)
+        QueueUtil.enqueueFetchActors(self.queueMgr, start_page)
         self.startDownload()
 
     def downloadByActorGroup(self, group_id: int):
@@ -149,27 +149,37 @@ class DownloadTask(object):
                 actor_ids.append(actor.actor_id)
         self.downloadActors(actor_ids)
 
+    def __resumeFiles_Process(self, session: Session, file: str, post_id: int, res_index: int):
+        res = ResCtrl.getResByIndex(session, post_id, res_index)
+        if res.shouldDownload(self.download_limit):
+            post = PostCtrl.getPost(session, post_id)
+            actor_info = ActorInfo(post.actor)
+            QueueUtil.enqueueResFile(self.queueMgr, actor_info, post, res)
+
     def resumeFiles(self):
         self.desc = f"resume files"
-        download_folder = Configs.formatTmpFolderPath()
         with DbCtrl.getSession() as session, session.begin():
             # remove outdated files
             ActorCtrl.removeOutdatedFiles(session)
-            try:
-                for root, _, files in os.walk(download_folder):
-                    for file in files:
-                        match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
-                        if match_obj is None:
-                            continue
-                        post_id = int(match_obj.group(2))
-                        res_index = int(match_obj.group(3))
-                        res = ResCtrl.getResByIndex(session, post_id, res_index)
-                        if res.shouldDownload(self.download_limit):
-                            post = PostCtrl.getPost(session, post_id)
-                            actor_info = ActorInfo(post.actor)
-                            QueueUtil.enqueueResFile(self.queueMgr, actor_info, post, res)
-            except Exception as e:
-                pass
+            ActorFileCtrl.traverseDownloadingFiles(session, self.__resumeFiles_Process)
+
+        self.startDownload()
+
+    def __resumeActor_Process(self, session: Session, file: str, post_id: int, res_index: int):
+        res = ResCtrl.getResByIndex(session, post_id, res_index)
+        if res.shouldDownload(self.download_limit):
+            post = PostCtrl.getPost(session, post_id)
+            actor_info = ActorInfo(post.actor)
+            QueueUtil.enqueueResFile(self.queueMgr, actor_info, post, res)
+
+    def resumeActor(self, actor_id: int):
+        with DbCtrl.getSession() as session, session.begin():
+            actor = ActorCtrl.getActor(session, actor_id)
+            if actor is None or not actor.actor_group.has_folder:
+                return
+            self.desc = f"resume actor {actor.actor_name}"
+
+            ActorFileCtrl.traverseDownloadingFilesOfActor(session, actor, self.__resumeActor_Process)
 
         self.startDownload()
 

@@ -43,10 +43,10 @@ class NoticeModel(BaseModel):
         """
         set parameters and calculate checksum
         """
-        self.notice_param0 = param0
-        self.notice_param1 = param1
-        self.notice_param2 = param2
-        self.notice_param3 = param3
+        self.notice_param0 = str.lower(param0)
+        self.notice_param1 = str.lower(param1)
+        self.notice_param2 = str.lower(param2)
+        self.notice_param3 = str.lower(param3)
         self.refreshChecksum()
 
     def refreshChecksum(self):
@@ -64,6 +64,7 @@ class NoticeModel(BaseModel):
     def toJson(self):
         json_data = {
             'notice_id': self.notice_id,
+            'notice_type': self.notice_type,
             'notice_param0': self.notice_param0,
             'notice_param1': self.notice_param1,
             'notice_param2': self.notice_param2,

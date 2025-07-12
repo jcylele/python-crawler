@@ -1,6 +1,15 @@
 from enum import Enum, auto
-from typing import TypedDict, Optional
+from typing import TypedDict
+
 from pydantic import BaseModel
+
+from Consts import ResType
+
+
+class BoolEnum(Enum):
+    ALL = auto()
+    TRUE = auto()
+    FALSE = auto()
 
 
 class TagUsedInfo(TypedDict):
@@ -11,11 +20,12 @@ class TagUsedInfo(TypedDict):
 class SortType(Enum):
     Default = 0
     Score = auto()
+    CategoryTime = auto()
     TotalPostCount = auto()
     CurPostCount = auto()
-    CategoryTime = auto()
-    FileSize = auto()
-
+    DownFileSize = auto()
+    CurFileSize = auto()
+    TotalFileSize = auto()
 
 class SortItem(BaseModel):
     sort_type: SortType
@@ -36,8 +46,8 @@ class ActorConditionForm(BaseModel):
     tag_filter: TagFilter
     min_score: int
     max_score: int
+    has_remark: BoolEnum
     remark_str: str
-    has_remark: bool
 
     sort_items: list[SortItem]
 
@@ -53,10 +63,19 @@ class ServerData(object):
     def toJson(self):
         return self.__dict__
 
+class ResFileInfo(ServerData):
+    file_path: str
+    file_size: int
+    res_size: int
+
+    def __init__(self, file_path: str, file_size: int, res_size: int):
+        self.file_path = file_path
+        self.file_size = file_size
+        self.res_size = res_size
 
 class ActorVideoInfo(ServerData):
     is_landscape: bool
-    duration: float
+    duration: int
     file_count: int
     file_size: int
 
@@ -158,6 +177,10 @@ class DownloadLimitForm(BaseModel):
     total_file_size: int
     single_file_size: int
 
+    @staticmethod
+    def resumeVideoLimit():
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=0)
+
     def toJson(self):
         return self.__dict__
 
@@ -189,7 +212,7 @@ class GroupDownloadForm(BaseDownloadForm):
 
 
 class NewDownloadForm(GroupDownloadForm):
-    from_start: bool
+    start_page: int
 
 
 class ActorUrl(BaseModel):

@@ -43,8 +43,10 @@ class FetchActorsWorker(BaseFetchWorker):
             QueueUtil.enqueueFetchActor(self.QueueMgr(), actor_id)
             QueueUtil.enqueueFetchActorLink(self.QueueMgr(), actor_id)
 
-    def getStartPage(self, from_start: bool) -> int:
-        if from_start:
+    def getFinishedPage(self, start_page: int) -> int:
+        if start_page > 0:
+            return start_page - 1
+        if start_page == 0:
             return 0
         with DbCtrl.getSession() as session, session.begin():
             actor_count = ActorCtrl.getAllActorCount(session)
@@ -54,9 +56,9 @@ class FetchActorsWorker(BaseFetchWorker):
         return '#paginator-top menu'
 
     def _url(self, item: FetchActorsQueueItem) -> str:
-        self.start_page = self.getStartPage(item.from_start)
-        LogUtil.info(f"fetch actors from page {self.start_page + 1}")
-        return RequestCtrl.formatActorsUrl(self.start_page * 50)
+        self.start_page = self.getFinishedPage(item.start_page) + 1
+        LogUtil.info(f"fetch actors from page {self.start_page}")
+        return RequestCtrl.formatActorsUrl((self.start_page - 1) * 50)
 
     def _checkFetch(self, session: Session, item: BaseQueueItem):
         return True
@@ -67,10 +69,10 @@ class FetchActorsWorker(BaseFetchWorker):
             try:
                 WebDriverWait(driver, 10).until(
                     EC.text_to_be_present_in_element((By.CSS_SELECTOR, ".pagination-button-current b"),
-                                                     str(self.start_page + 1))
+                                                     str(self.start_page))
                 )
             except:
-                LogUtil.error(f"actors page {self.start_page + 1} not found")
+                LogUtil.error(f"actors page {self.start_page} not found")
                 break
 
             current_page = driver.find_element(By.CSS_SELECTOR, ".pagination-button-current b")

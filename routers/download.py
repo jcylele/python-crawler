@@ -4,9 +4,11 @@ import subprocess
 
 from fastapi import APIRouter
 
+from Consts import CacheKey
 from Ctrls import DbCtrl, ActorCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
+from Utils import CacheUtil
 from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, \
     BaseDownloadForm, NewDownloadForm, DownloadLimitForm
 
@@ -16,6 +18,12 @@ router = APIRouter(
     # dependencies=[Depends(get_token_header)],
     responses={404: {"description": "Not found"}},
 )
+
+
+@router.get("/custom_page")
+def get_custom_page():
+    page = CacheUtil.getValue(CacheKey.CustomPage)
+    return DbCtrl.CustomJsonResponse(page)
 
 
 @router.post("/new")

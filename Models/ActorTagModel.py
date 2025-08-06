@@ -1,5 +1,5 @@
 from sqlalchemy import String
-from sqlalchemy.orm import mapped_column, Mapped, relationship
+from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
 from Configs import DB_STR_LEN_SHORT
 from Models.BaseModel import BaseModel
@@ -16,3 +16,7 @@ class ActorTagModel(BaseModel):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+
+    @validates("tag_name")
+    def validate_tag_name(self, key, value):
+        return self.truncate(key, value, DB_STR_LEN_SHORT)

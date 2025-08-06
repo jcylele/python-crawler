@@ -137,3 +137,9 @@ def get_tag_combinations_with_empty(session: Session) -> list[dict]:
         results.append(tag_combination)
 
     return results
+
+
+def validateActor(session: Session, actor_id: int):
+    actor = ActorCtrl.getActor(session, actor_id)
+    # set res state to downed if downloaded files exist
+    ActorFileCtrl.traverseDownloadedFilesOfActor(session, actor, ActorCtrl._setResStateToDowned)

@@ -65,7 +65,7 @@ class DownloadTask(object):
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
-                posts = PostCtrl.getCompletedPosts(session, actor_id)
+                posts = PostCtrl.getCompletedPosts(session, actor_id, actor.last_post_id)
                 for post in posts:
                     QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.download_limit)
 
@@ -84,7 +84,7 @@ class DownloadTask(object):
     def downloadActors(self, actor_ids: list[int]):
         self.actor_ids = actor_ids
         post_filter = self.download_limit.getPostFilter()
-        if post_filter == PostFilter.Normal:
+        if post_filter == PostFilter.Normal or post_filter == PostFilter.All:
             self.normalPosts(actor_ids)
         elif post_filter == PostFilter.Current:
             self.currentPosts(actor_ids)

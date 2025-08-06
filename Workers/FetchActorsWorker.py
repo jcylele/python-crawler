@@ -7,10 +7,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from sqlalchemy.orm import Session
 
-from Consts import WorkerType, QueueType
+from Consts import CacheKey, WorkerType, QueueType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl
 from Models.ActorInfo import ActorInfo
-from Utils import LogUtil
+from Utils import CacheUtil, LogUtil
 from Download import QueueUtil
 from WorkQueue.BaseQueueItem import BaseQueueItem
 from WorkQueue.FetchQueueItem import FetchActorsQueueItem
@@ -36,7 +36,8 @@ class FetchActorsWorker(BaseFetchWorker):
                 actor = ActorCtrl.getActorByInfo(session, actor_info)
                 if actor is None and self.DownloadLimit().moreActor():
                     self.DownloadLimit().onActor()
-                    actor = ActorCtrl.addActor(session, actor_info, self.init_category())
+                    actor = ActorCtrl.addActor(
+                        session, actor_info, self.init_category())
                     actor_ids.append(actor.actor_id)
 
         for actor_id in actor_ids:
@@ -75,7 +76,8 @@ class FetchActorsWorker(BaseFetchWorker):
                 LogUtil.error(f"actors page {self.start_page} not found")
                 break
 
-            current_page = driver.find_element(By.CSS_SELECTOR, ".pagination-button-current b")
+            current_page = driver.find_element(
+                By.CSS_SELECTOR, ".pagination-button-current b")
             LogUtil.info(f"fetch actors page {current_page.text}")
 
             # analyze content
@@ -88,9 +90,11 @@ class FetchActorsWorker(BaseFetchWorker):
             self.processActors(actor_infos, driver.current_url)
 
             # next page
-            next_btn = driver.find_element(By.CSS_SELECTOR, '.pagination-button-after-current')
+            next_btn = driver.find_element(
+                By.CSS_SELECTOR, '.pagination-button-after-current')
             if next_btn is None:
-                print(f"no next button, page {current_page.text} is the last page")
+                print(
+                    f"no next button, page {current_page.text} is the last page")
                 break
 
             if not self.DownloadLimit().moreActor():
@@ -103,6 +107,10 @@ class FetchActorsWorker(BaseFetchWorker):
             # wait
             # driver.implicitly_wait(2)
             time.sleep(3)
+
+        if item.start_page >= 0:
+            CacheUtil.setValue(CacheKey.CustomPage, self.start_page)
+            LogUtil.info(f"set custom page to {self.start_page}")
 
         # driver.quit()
         return True

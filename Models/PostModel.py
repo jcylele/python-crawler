@@ -1,5 +1,5 @@
-from sqlalchemy import Index, String, ForeignKey, BigInteger, event, text
-from sqlalchemy.orm import mapped_column, Mapped, relationship
+from sqlalchemy import Index, String, ForeignKey, BigInteger, event
+from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
 from Configs import DB_STR_LEN_LONG, DB_STR_LEN_BIG_INT
 from Models.BaseModel import BaseModel
@@ -41,6 +41,10 @@ class PostModel(BaseModel):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+
+    @validates("comment")
+    def validate_comment(self, key, value):
+        return self.truncate(key, value, DB_STR_LEN_LONG)
 
     def toJson(self):
         return {

@@ -27,13 +27,10 @@ __headers = {
     "accept-language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
     # "cache-control": "no-cache",
     "connection": "keep-alive",
-    # "host": "coomer.party",
     # "pragma": "no-cache",
     "referer": "",
     "user-agent": ""
 }
-
-__RootUrl = "https://coomer.su"
 
 
 def createRequestSession() -> Session:
@@ -54,7 +51,7 @@ def createRequestSession() -> Session:
 
 
 def formatActorsUrl(start_index: int) -> str:
-    return f"{__RootUrl}/artists?o={start_index}"
+    return f"{Configs.RootUrl}/artists?o={start_index}"
 
 
 def smartActorIconSrc(actor_info: ActorInfo) -> str:
@@ -71,11 +68,11 @@ def smartActorIconSrc(actor_info: ActorInfo) -> str:
 
 
 def formatActorIconUrl(actor_info: ActorInfo) -> str:
-    return f"{__RootUrl}/icons/{actor_info.actor_platform}/{actor_info.actor_link}"
+    return f"{Configs.RootUrl}/icons/{actor_info.actor_platform}/{actor_info.actor_link}"
 
 
 def formatActorHref(actor_info: ActorInfo) -> str:
-    return f"{__RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}"
+    return f"{Configs.RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}"
 
 
 def formatActorUrl(actor_info: ActorInfo) -> str:
@@ -88,11 +85,11 @@ def formatActorLinksUrl(actor_info: ActorInfo) -> str:
 
 def formatPostUrl(actor_info: ActorInfo, post_id: int, is_dm: bool) -> str:
     post_prefix = is_dm and "DM" or ""
-    return f"{__RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_prefix}{post_id}"
+    return f"{Configs.RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_prefix}{post_id}"
 
 
 def formatFullUrl(relative_url: str) -> str:
     if relative_url.startswith('/'):
-        return __RootUrl + relative_url
+        return Configs.RootUrl + relative_url
     else:
         return relative_url

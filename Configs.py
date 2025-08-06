@@ -5,6 +5,8 @@ from os import path
 
 # connection string
 DbConnectString = ""
+# root url
+RootUrl = ""
 # Root Folder for all downloaded resources(files)
 RootFolder = ""
 # tmp file inside RootFolder for downloading files which will be  moved to other locations when completed
@@ -44,10 +46,11 @@ DB_STR_LEN_REMARK = 200
 
 
 def init():
-    with open(formatStaticFile('configs/settings.json')) as setting_file:
+    with open(formatStaticFile('configs/settings.json'), 'r') as setting_file:
         setting_json = json.load(setting_file)
-        global DbConnectString, RootFolder, MIN_DOWN_SPEED, BASE_TIME_OUT, SHOW_BROWSER
+        global DbConnectString, RootUrl, RootFolder, MIN_DOWN_SPEED, BASE_TIME_OUT, SHOW_BROWSER
         DbConnectString = setting_json['DbConnectString']
+        RootUrl = setting_json['RootUrl']
         RootFolder = setting_json['RootFolder']
         MIN_DOWN_SPEED = setting_json['MIN_DOWN_SPEED']
         BASE_TIME_OUT = setting_json['BASE_TIME_OUT']

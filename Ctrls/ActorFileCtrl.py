@@ -1,10 +1,11 @@
 import os
 import re
 from math import floor
+import threading
 from typing import Callable
 import ffmpeg
 
-from sqlalchemy import Select, delete, exists, insert, select, func, case, event
+from sqlalchemy import Select, delete, exists, select, func, case, event
 from sqlalchemy.orm import Session
 
 import Configs
@@ -16,6 +17,9 @@ from Models.ResModel import ResModel
 from Consts import ResType
 from Utils import LogUtil
 from routers.web_data import ResFileInfo
+
+# 添加一个全局锁
+_actor_file_info_lock = threading.Lock()
 
 # region actor file info abstract
 
@@ -57,23 +61,23 @@ def __build_basic_select_stmt() -> Select:
 
 
 def __insert_result(session: Session, result):
-    # 转换为字典列表，避免ORM对象创建开销
-    insert_data = []
+    if not result:
+        return
+
+   # 转换为ORM对象列表
     for row in result:
-        insert_data.append({
-            'actor_id': row.actor_id,
-            'res_state': row.res_state,
-            'img_size': row.img_size,
-            'video_size': row.video_size,
-            'img_count': row.img_count,
-            'video_count': row.video_count
-        })
-    # print([[d['actor_id'], d['res_state']] for d in insert_data])
-    # autoflush会导致奇怪的主键冲突
-    with session.no_autoflush:
-        # 批量插入，性能最佳
-        session.bulk_insert_mappings(ActorFileInfoModel, insert_data)
-        session.flush()
+        actor_file_info = ActorFileInfoModel(
+            actor_id=row.actor_id,
+            res_state=row.res_state,
+            img_size=row.img_size,
+            video_size=row.video_size,
+            img_count=row.img_count,
+            video_count=row.video_count
+        )
+        # merge会自动处理插入或更新
+        session.merge(actor_file_info)
+
+    session.flush()
 
 
 def __insert_actor_file_info(session, actor_id: int):
@@ -126,7 +130,7 @@ def __deleteSingleActorFileInfo(session: Session, actor_id: int):
 
 
 def __deleteDirtyActorFileInfos(session: Session):
-    LogUtil.info(f"delete dirty actors")
+    # LogUtil.info(f"delete dirty actors")
     stmt = delete(ActorFileInfoModel).where(
         ActorFileInfoModel.actor_id.in_(__dirty_actors))
     session.execute(stmt)
@@ -134,13 +138,14 @@ def __deleteDirtyActorFileInfos(session: Session):
 
 
 def ensureActorFileInfo(session: Session, actor_id: int):
-    if actor_id in __dirty_actors:
-        __deleteSingleActorFileInfo(session, actor_id)
-        __dirty_actors.remove(actor_id)
-    elif __has_actor_file_info(session, actor_id):
-        return
-    __insert_actor_file_info(session, actor_id)
-    session.flush()
+    with _actor_file_info_lock:
+        if actor_id in __dirty_actors:
+            __deleteSingleActorFileInfo(session, actor_id)
+            __dirty_actors.remove(actor_id)
+        elif __has_actor_file_info(session, actor_id):
+            return
+        __insert_actor_file_info(session, actor_id)
+        session.flush()
 
 
 def getActorFileInfo(session: Session, actor_id: int):
@@ -175,20 +180,25 @@ def __filter_actor_ids(session: Session, actor_ids: list[int]):
         ActorFileInfoModel.actor_id.in_(actor_ids)
     )
     existing_ids = set(session.execute(existing_stmt).scalars().all())
+    LogUtil.info(f"existing actors: {existing_ids}")
     # 返回不存在的actor_ids
     missing_ids = [aid for aid in actor_ids if aid not in existing_ids]
     return missing_ids
 
 
 def ensureBatchActorFileInfo(session: Session, actor_ids: list[int]):
-    if len(__dirty_actors) > 0:
-        __deleteDirtyActorFileInfos(session)
-        __dirty_actors.clear()
-    missing_ids = __filter_actor_ids(session, actor_ids)
-    if len(missing_ids) == 0:
-        return
-    __insert_batch_actor_file_info(session, missing_ids)
-    session.flush()
+    with _actor_file_info_lock:
+        LogUtil.info(f"ensure actors: {actor_ids}")
+        if len(__dirty_actors) > 0:
+            LogUtil.info(f"delete dirty actors: {__dirty_actors}")
+            __deleteDirtyActorFileInfos(session)
+            __dirty_actors.clear()
+        missing_ids = __filter_actor_ids(session, actor_ids)
+        if len(missing_ids) == 0:
+            return
+        LogUtil.info(f"insert missing actors: {missing_ids}")
+        __insert_batch_actor_file_info(session, missing_ids)
+        session.flush()
 
 
 @event.listens_for(Session, 'after_flush')
@@ -218,6 +228,16 @@ def update_actor_file_info_cache_batch(session, context):
 
 # region downloading files
 
+def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int], None]):
+    actor_folder = Configs.formatActorFolderPath(actor.actor_id, actor.actor_name)
+    for root, _, files in os.walk(actor_folder):
+        for file in files:
+            match_obj = re.match(r'^(\d+)_(\d+)\.\w+$', file)
+            if match_obj is None:
+                continue
+            post_id = int(match_obj.group(1))
+            res_index = int(match_obj.group(2))
+            callback(session, os.path.join(root, file), post_id, res_index)
 
 def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str, int, int], None]):
     download_folder = Configs.formatTmpFolderPath()
@@ -344,4 +364,5 @@ def rename_actor_files(session: Session, actor: ActorModel):
             continue
         prefix = res.res_width >= res.res_height and "l" or "p"
         new_file_name = f"{prefix}_{match_obj.group(0)}"
-        os.rename(os.path.join(actor_folder, file), os.path.join(actor_folder, new_file_name))
+        os.rename(os.path.join(actor_folder, file),
+                  os.path.join(actor_folder, new_file_name))

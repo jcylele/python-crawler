@@ -2,11 +2,10 @@ import subprocess
 from typing import List
 
 from fastapi import APIRouter
-from fastapi.params import Query
+from fastapi.params import Query, Body
 
 import Configs
 from Ctrls import ActorFileCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl
-from Utils import PyUtil
 from routers.web_data import ActorConditionForm, ActorListResult, BatchActorGroup, ActorResult, LinkActorForm
 
 router = APIRouter(
@@ -133,13 +132,18 @@ def change_actor_score(actor_id: int, score: int = Query(alias='val')):
         return DbCtrl.CustomJsonResponse(alr)
 
 
-@router.patch("/{actor_id}/remark")
-def set_actor_remark(actor_id: int, remark: str = Query(alias='val')):
+@router.post("/{actor_id}/remark")
+def set_actor_remark(actor_id: int, remark: str = Body(media_type="text/plain")):
     with DbCtrl.getSession() as session, session.begin():
-        real_remark = PyUtil.decodeBase64(remark)
-        actors = ActorCtrl.changeActorRemark(session, actor_id, real_remark)
+        actors = ActorCtrl.changeActorRemark(session, actor_id, remark)
         return DbCtrl.CustomJsonResponse(ActorListResult(True, f"actor remark changed", actors))
 
+
+@router.post("/{actor_id}/comment")
+def set_actor_comment(actor_id: int, comment: str = Body(media_type="text/plain")):
+    with DbCtrl.getSession() as session, session.begin():
+        actor = ActorCtrl.changeActorComment(session, actor_id, comment)
+        return DbCtrl.CustomJsonResponse(ActorResult(True, f"actor comment changed", actor))
 
 @router.post("/{actor_id}/tag")
 def change_actor_tag(actor_id: int, tag_list: List[int]):

@@ -1,5 +1,7 @@
 from enum import Enum, auto, IntEnum
 
+class CacheKey(Enum):
+    CustomPage = 'Custom Page'
 
 class GroupCondType(Enum):
     MinScore = 0  # param: score
@@ -75,6 +77,7 @@ class QueueType(IntEnum):
 
 
 class PostFilter(IntEnum):
-    Normal = 0
-    Current = 1
-    Completed = 2
+    All = 0
+    Normal = 1
+    Current = 2
+    Completed = 3

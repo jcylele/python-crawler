@@ -61,5 +61,7 @@ class BaseModel(DeclarativeBase):
 
         return json_data
 
-
-
+    def truncate(self, key, value, length):
+        if value and len(value) > length:
+            return value[:length]
+        return value

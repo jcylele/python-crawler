@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session, aliased
 import Configs
 from Consts import NoticeType, ActorLogType, GroupCondType, ResState, ResType
 from Ctrls import PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl
+from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorInfo import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from Models.FavoriteFolderModel import FavoriteFolderModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from Utils import LogUtil, PyUtil
@@ -42,6 +44,8 @@ def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
 def getActor(session: Session, actor_id: int) -> ActorModel:
     return session.get(ActorModel, actor_id)
 
+def getActors(session: Session, actor_ids: list[int]) -> list[ActorModel]:
+    return list(session.scalars(select(ActorModel).where(ActorModel.actor_id.in_(actor_ids))))
 
 def getMainActor(session: Session, main_actor_id: int) -> ActorMainModel:
     return session.get(ActorMainModel, main_actor_id)
@@ -241,6 +245,16 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
 
     if form.group_id_list:
         query = query.where(ActorModel.actor_group_id.in_(form.group_id_list))
+
+    if form.folder_id:
+        query = query.where(
+            exists().where(
+                and_(
+                    ActorFavoriteRelationship.actor_id == ActorModel.actor_id,
+                    ActorFavoriteRelationship.folder_id == form.folder_id
+                )
+            )
+        )
 
     # tag filter
     query = _filterTagQuery(query, form.tag_filter)
@@ -442,6 +456,14 @@ def changeActorScore(session: Session, actor_id: int, score: int) -> list[ActorM
     return linked_actors
 
 
+def changeActorComment(session: Session, actor_id: int, comment: str) -> ActorModel:
+    # change comment for main_actor
+    actor = getActor(session, actor_id)
+    actor.comment = comment
+    session.flush()
+    return actor
+
+
 def changeActorRemark(session: Session, actor_id: int, remark: str) -> list[ActorModel]:
     # process remark
     real_remark = PyUtil.stripToNone(remark)
@@ -464,12 +486,19 @@ def changeActorRemark(session: Session, actor_id: int, remark: str) -> list[Acto
     session.flush()
     return linked_actors
 
+def _setResStateToDowned(session: Session, file_path: str, post_id: int, res_index: int):
+    res = ResCtrl.getResByIndex(session, post_id, res_index)
+    if res is None:
+        return
+    res.res_state = ResState.Down
 
 def ResetActorPosts(session: Session, actor_id: int):
     actor = getActor(session, actor_id)
     actor.last_post_id = 0
 
     PostCtrl.batchSetResStates(session, actor_id, ResState.Init)
+    # set res state to downed if downloaded files exist
+    ActorFileCtrl.traverseDownloadedFilesOfActor(session, actor, _setResStateToDowned)
 
     ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetPost)
 

@@ -1,5 +1,5 @@
 from sqlalchemy import String
-from sqlalchemy.orm import mapped_column, Mapped, relationship
+from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
 from Configs import DB_STR_LEN_SHORT, DB_STR_LEN_LONG, DB_STR_LEN_COLOR
 from Models.BaseModel import BaseModel
@@ -20,6 +20,14 @@ class ActorGroupModel(BaseModel):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+
+    @validates("group_name")
+    def validate_group_name(self, key, value):
+        return self.truncate(key, value, DB_STR_LEN_SHORT)
+
+    @validates("group_desc")
+    def validate_group_desc(self, key, value):
+        return self.truncate(key, value, DB_STR_LEN_LONG)
 
     def toJson(self):
         json_data = {

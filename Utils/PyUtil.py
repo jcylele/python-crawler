@@ -21,6 +21,8 @@ def bytes2hex(bytes_data):
 
 
 def stripToNone(value: str):
+    if value is None:
+        return None
     value = value.strip()
     if len(value) == 0:
         return None

@@ -6,7 +6,7 @@ from starlette.staticfiles import StaticFiles
 
 import Configs
 from Download.DownloadTask import DownloadTask
-from routers import actor, actor_tag, download, file, vue, actor_group, chart, post, notice
+from routers import actor, actor_tag, download, file, vue, actor_group, chart, post, notice, favorite_folder
 
 app = FastAPI()
 
@@ -26,6 +26,7 @@ app.mount("/assets", StaticFiles(directory=assets_folder), name="assets")
 app.include_router(actor.router)
 app.include_router(actor_tag.router)
 app.include_router(actor_group.router)
+app.include_router(favorite_folder.router)
 app.include_router(chart.router)
 app.include_router(download.router)
 app.include_router(post.router)

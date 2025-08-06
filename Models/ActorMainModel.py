@@ -20,9 +20,7 @@ class ActorMainModel(BaseModel):
     @validates("remark")
     def validate_remark(self, key, remark):
         remark = PyUtil.stripToNone(remark)
-        if remark is not None and len(remark) > DB_STR_LEN_REMARK:
-            remark = remark[:DB_STR_LEN_REMARK]
-        return remark
+        return self.truncate(key, remark, DB_STR_LEN_REMARK)
 
     rel_tags: Mapped[list["ActorTagRelationship"]] = relationship(
         back_populates="main_actor",
@@ -34,7 +32,7 @@ class ActorMainModel(BaseModel):
         json_data = {
             'score': self.score,
             'tag_ids': [tag.tag_id for tag in self.rel_tags],
-            'remark': PyUtil.encodeBase64(self.remark or "")
+            'remark': self.remark or ""
         }
         return json_data
 

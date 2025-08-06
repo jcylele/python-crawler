@@ -53,6 +53,7 @@ def batchSetResStates(session: Session, actor_id: int, state: ResState):
               .where(PostModel.actor_id == actor_id)
               .values(res_state=state))
     session.execute(_query)
+    session.flush()
     # manually delete
     ActorFileCtrl.deleteActorFileInfo(session, actor_id)
 
@@ -65,7 +66,7 @@ def removeCurrentResFiles(session: Session, actor_id: int):
               .where(ResModel.res_state == ResState.Down)
               .values(res_state=ResState.Del))
     session.execute(_query)
-
+    session.flush()
     # manually delete
     ActorFileCtrl.deleteActorFileInfo(session, actor_id)
 
@@ -130,9 +131,10 @@ def getNewPosts(session: Session, actor_id: int, last_post_id: int) -> ScalarRes
     return session.scalars(_query)
 
 
-def getCompletedPosts(session, actor_id: int) -> ScalarResult[PostModel]:
+def getCompletedPosts(session, actor_id: int, last_post_id: int) -> ScalarResult[PostModel]:
     _query = (select(PostModel)
               .where(PostModel.actor_id == actor_id)
               .where(PostModel.completed == True)
+              .where(PostModel.post_id > last_post_id)
               .order_by(PostModel.post_id.desc()))
     return session.scalars(_query)

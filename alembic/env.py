@@ -19,6 +19,8 @@ from Models.ResModel import ResModel  # 导入您的模型
 from Models.ResDomainModel import ResDomainModel  # 导入您的模型
 from Models.ResUrlModel import ResUrlModel  # 导入您的模型
 from Models.ActorFileInfoModel import ActorFileInfoModel  # 导入您的模型
+from Models.FavoriteFolderModel import FavoriteFolderModel
+from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

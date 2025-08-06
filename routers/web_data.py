@@ -43,6 +43,7 @@ class ActorConditionForm(BaseModel):
     name: str
     linked: bool
     group_id_list: list[int]
+    folder_id: int
     tag_filter: TagFilter
     min_score: int
     max_score: int
@@ -222,3 +223,7 @@ class ActorUrl(BaseModel):
 
 class UrlDownloadForm(GroupDownloadForm):
     urls: list[ActorUrl]
+
+class FavoriteFolderForm(BaseModel):
+    folder_name: str
+    folder_desc: str

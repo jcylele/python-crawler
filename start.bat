@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 echo 激活Conda环境...
 call conda activate crawler
 

@@ -74,15 +74,21 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
         notice_type=notice_type,
     )
     notice.setParams(*params)
+    less_important = notice.notice_type in _LESS_IMPORTANT_NOTICE_TYPES
+
     stmt = (select(NoticeModel)
             .where(NoticeModel.notice_checksum == notice.notice_checksum))
     notices = session.scalars(stmt)
     for n in notices:
-        # check if the notice already exists, skip if it is a less important notice
-        if notice.notice_type in _LESS_IMPORTANT_NOTICE_TYPES and notice.isSameParams(n):
+        if not n.isSameParams(notice):
+            LogUtil.warn(f"same checksum but different notice params, {notice.notice_checksum}")
+            continue
+        # identical notice
+        if n.notice_type == notice_type:
             return
-        # different params, same checksum
-        LogUtil.warn(f"notice checksum conflict {notice.notice_checksum}")
+        # skip if it is a less important notice type
+        if less_important:
+            return
 
     session.add(notice)
     session.flush()

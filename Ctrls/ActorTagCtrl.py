@@ -71,16 +71,6 @@ def addActorTag(session: Session, tag: ActorTagModel) -> ActorTagModel:
     return tag
 
 
-def getMinPriority(session: Session, group: int) -> int:
-    # func.min()
-    max_priority = (group + 1) * 100 - 1
-    min_priority = group * 100
-    _query = select(func.min(ActorTagModel.tag_priority)) \
-        .where(ActorTagModel.tag_priority >= min_priority) \
-        .where(ActorTagModel.tag_priority <= max_priority)
-    return session.scalar(_query)
-
-
 def deleteActorTag(session: Session, tag_id: int):
     tag = getActorTag(session, tag_id)
     if tag is None:

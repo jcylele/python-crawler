@@ -1,4 +1,4 @@
-from sqlalchemy import ScalarResult, func, select, delete
+from sqlalchemy import ScalarResult, select, delete, exists
 from sqlalchemy.orm import Session
 
 from Consts import GroupCondType
@@ -16,41 +16,38 @@ def getAllActorGroups(session: Session) -> ScalarResult[ActorGroupModel]:
 def getActorGroup(session: Session, group_id: int) -> ActorGroupModel:
     return session.get(ActorGroupModel, group_id)
 
+def __assign_form_to_group(group: ActorGroupModel, form: ActorGroupForm):
+    group.group_name = form.name
+    group.group_desc = form.desc
+    group.group_priority = form.priority
+    group.group_color = form.group_color
+    group.has_folder = form.has_folder
 
 def addNewActorGroup(session: Session, form: ActorGroupForm) -> ActorGroupModel:
     group = ActorGroupModel()
-    group.group_name = form.group_name
-    group.group_desc = form.group_desc
-    group.group_color = form.group_color
-    group.group_priority = form.group_priority
-    group.has_folder = form.has_folder
+    __assign_form_to_group(group, form)
     session.add(group)
     session.flush()
     return group
 
 
-def updateActorGroup(session: Session, group: ActorGroupForm):
-    real_group: ActorGroupModel = session.get(ActorGroupModel, group.group_id)
-    real_group.group_name = group.group_name
-    real_group.group_desc = group.group_desc
-    real_group.group_priority = group.group_priority
-    real_group.group_color = group.group_color
-    real_group.has_folder = group.has_folder
+def updateActorGroup(session: Session, group_id: int, form: ActorGroupForm):
+    real_group: ActorGroupModel = session.get(ActorGroupModel, group_id)
+    __assign_form_to_group(real_group, form)
     session.flush()
     return real_group
 
 
 def deleteActorGroup(session: Session, group_id: int) -> bool:
-    # 使用Query API直接计数
-    stmt = (select(func.count(ActorModel.actor_id))
-                   .where(
+    # check if there are actors in the group
+    exists_query = select(exists().where(
         ActorModel.actor_group_id == group_id
     ))
-    actor_count = session.scalar(stmt)
-    if actor_count > 0:
+    actor_exists = session.scalar(exists_query)
+    if actor_exists:
         return False
 
-    # 删除演员组
+    # delete the group
     session.execute(
         delete(ActorGroupModel).where(ActorGroupModel.group_id == group_id)
     )

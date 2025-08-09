@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from Ctrls import FavoriteFolderCtrl, DbCtrl
-from routers.web_data import FavoriteFolderForm
+from routers.web_data import CommonGroupForm, CommonPriority
 
 
 router = APIRouter(
@@ -20,14 +20,21 @@ def get_folder_list():
 
 
 @router.post("/add")
-def add_folder(form: FavoriteFolderForm):
+def add_folder(form: CommonGroupForm):
     with DbCtrl.getSession() as session, session.begin():
         ff = FavoriteFolderCtrl.createFolder(session, form)
         return DbCtrl.CustomJsonResponse(ff)
 
+@router.post("/priority")
+def update_priorities(priority_list: list[CommonPriority]):
+    with DbCtrl.getSession() as session, session.begin():
+        for p in priority_list:
+            ff = FavoriteFolderCtrl.getFolder(session, p.id)
+            ff.folder_priority = p.priority
+        return DbCtrl.CustomJsonResponse({'value': True})
 
 @router.post("/{folder_id}/update")
-def update_folder(folder_id: int, form: FavoriteFolderForm):
+def update_folder(folder_id: int, form: CommonGroupForm):
     with DbCtrl.getSession() as session, session.begin():
         ff = FavoriteFolderCtrl.updateFolder(session, folder_id, form)
         return DbCtrl.CustomJsonResponse(ff)
@@ -45,21 +52,6 @@ def get_folder_detail(folder_id: int):
     with DbCtrl.getSession() as session, session.begin():
         ff = FavoriteFolderCtrl.getFolder(session, folder_id)
         return DbCtrl.CustomJsonResponse(ff)
-
-
-@router.post("/{folder_id}/reorder")
-def reorder_folder(folder_id: int, actor_ids: list[int]):
-    with DbCtrl.getSession() as session, session.begin():
-        FavoriteFolderCtrl.reorderActors(session, folder_id, actor_ids)
-        actors = FavoriteFolderCtrl.getActorsInFolder(session, folder_id)
-        return DbCtrl.CustomJsonResponse(actors)
-
-
-@router.get("/{folder_id}/actors")
-def get_actors_in_folder(folder_id: int):
-    with DbCtrl.getSession() as session, session.begin():
-        actors = FavoriteFolderCtrl.getActorsInFolder(session, folder_id)
-        return DbCtrl.CustomJsonResponse(actors)
 
 
 @router.post("/{folder_id}/add_actor/{actor_id}")

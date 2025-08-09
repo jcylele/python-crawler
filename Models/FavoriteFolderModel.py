@@ -13,6 +13,7 @@ class FavoriteFolderModel(BaseModel):
     folder_name: Mapped[str] = mapped_column(
         String(DB_STR_LEN_SHORT), unique=True)
     folder_desc: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG))
+    folder_priority: Mapped[int] = mapped_column(default=0)
 
     rel_actors: Mapped[list["ActorFavoriteRelationship"]] = relationship(
         back_populates="folder",
@@ -32,5 +33,6 @@ class FavoriteFolderModel(BaseModel):
         return {
             "folder_id": self.folder_id,
             "folder_name": self.folder_name,
-            "folder_desc": self.folder_desc
+            "folder_desc": self.folder_desc,
+            "folder_priority": self.folder_priority
         }

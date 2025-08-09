@@ -1,17 +1,20 @@
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from routers.web_data import FavoriteFolderForm
+from routers.web_data import CommonGroupForm
 from Models.FavoriteFolderModel import FavoriteFolderModel
 from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
-from Models.ActorModel import ActorModel
 
 
-def createFolder(session: Session, form: FavoriteFolderForm) -> FavoriteFolderModel:
-    ff = FavoriteFolderModel(
-        folder_name=form.folder_name,
-        folder_desc=form.folder_desc
-    )
+def __assign_form_to_folder(folder: FavoriteFolderModel, form: CommonGroupForm):
+    folder.folder_name = form.name
+    folder.folder_desc = form.desc
+    folder.folder_priority = form.priority
+
+
+def createFolder(session: Session, form: CommonGroupForm) -> FavoriteFolderModel:
+    ff = FavoriteFolderModel()
+    __assign_form_to_folder(ff, form)
     session.add(ff)
     session.flush()
     return ff
@@ -21,16 +24,16 @@ def getFolder(session: Session, folder_id: int) -> FavoriteFolderModel:
     return session.get(FavoriteFolderModel, folder_id)
 
 
-def updateFolder(session: Session, folder_id: int, form: FavoriteFolderForm) -> FavoriteFolderModel:
+def updateFolder(session: Session, folder_id: int, form: CommonGroupForm) -> FavoriteFolderModel:
     ff = session.get(FavoriteFolderModel, folder_id)
-    ff.folder_name = form.folder_name
-    ff.folder_desc = form.folder_desc
+    __assign_form_to_folder(ff, form)
     session.flush()
     return ff
 
 
 def getFolders(session: Session) -> list[FavoriteFolderModel]:
-    stmt = select(FavoriteFolderModel).order_by(FavoriteFolderModel.folder_id)
+    stmt = select(FavoriteFolderModel).order_by(
+        FavoriteFolderModel.folder_priority)
     return list(session.scalars(stmt))
 
 
@@ -40,24 +43,6 @@ def deleteFolder(session: Session, folder_id: int):
     )
     session.execute(stmt)
     session.flush()
-
-
-def getActorsInFolder(session: Session, folder_id: int):
-    stmt = select(ActorModel).join(
-        ActorFavoriteRelationship,
-        ActorModel.actor_id == ActorFavoriteRelationship.actor_id
-    ).where(
-        ActorFavoriteRelationship.folder_id == folder_id
-    ).order_by(
-        ActorFavoriteRelationship.folder_order
-    )
-    return list(session.scalars(stmt))
-
-
-def getMaxOrder(session: Session, folder_id: int) -> int:
-    return session.query(func.max(ActorFavoriteRelationship.folder_order)).filter(
-        ActorFavoriteRelationship.folder_id == folder_id
-    ).scalar() or 0
 
 
 def addActorToFolder(session: Session, folder_id: int, actor_id: int):
@@ -71,15 +56,9 @@ def addActorToFolder(session: Session, folder_id: int, actor_id: int):
     if exists:
         return
 
-    # get max order
-    max_order = getMaxOrder(session, folder_id)
-
-    max_order += 1
-
     alr = ActorFavoriteRelationship(
         folder_id=folder_id,
-        actor_id=actor_id,
-        folder_order=max_order
+        actor_id=actor_id
     )
     session.add(alr)
     session.flush()
@@ -105,15 +84,10 @@ def batchAddActorToFolder(session: Session, folder_id: int, actor_ids: list[int]
     if not actor_id_set:
         return
 
-    # get max order
-    max_order = getMaxOrder(session, folder_id)
-
     for actor_id in actor_id_set:
-        max_order += 1
         alr = ActorFavoriteRelationship(
             folder_id=folder_id,
-            actor_id=actor_id,
-            folder_order=max_order
+            actor_id=actor_id
         )
         session.add(alr)
 
@@ -126,23 +100,4 @@ def batchRemoveActorFromFolder(session: Session, folder_id: int, actor_ids: list
         ActorFavoriteRelationship.actor_id.in_(actor_ids)
     )
     session.execute(stmt)
-    session.flush()
-
-
-def reorderActors(session: Session, folder_id: int, actor_ids: list[int]):
-    # delete all existing relationships
-    stmt = delete(ActorFavoriteRelationship).where(
-        ActorFavoriteRelationship.folder_id == folder_id
-    )
-    session.execute(stmt)
-    session.flush()
-
-    # add new relationships
-    for i, actor_id in enumerate(actor_ids):
-        alr = ActorFavoriteRelationship(
-            folder_id=folder_id,
-            actor_id=actor_id,
-            folder_order=i+1
-        )
-        session.add(alr)
     session.flush()

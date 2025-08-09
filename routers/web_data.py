@@ -146,13 +146,9 @@ class LinkActorForm(BaseModel):
     remark: str
 
 
-class ActorTagPriority(BaseModel):
-    tag_id: int
-    tag_priority: int
-
-
-class AllActorTagPriorities(BaseModel):
-    tag_priorities: list[ActorTagPriority]
+class CommonPriority(BaseModel):
+    id: int
+    priority: int
 
 
 class DownloadProgress(ServerData):
@@ -186,15 +182,6 @@ class DownloadLimitForm(BaseModel):
         return self.__dict__
 
 
-class ActorGroupForm(BaseModel):
-    group_id: int
-    group_name: str
-    group_desc: str
-    group_color: str
-    has_folder: bool
-    group_priority: int
-
-
 class ActorGroupCond(BaseModel):
     cond_type: int
     cond_param: int
@@ -224,6 +211,11 @@ class ActorUrl(BaseModel):
 class UrlDownloadForm(GroupDownloadForm):
     urls: list[ActorUrl]
 
-class FavoriteFolderForm(BaseModel):
-    folder_name: str
-    folder_desc: str
+class CommonGroupForm(BaseModel):
+    name: str
+    desc: str
+    priority: int
+
+class ActorGroupForm(CommonGroupForm):
+    group_color: str
+    has_folder: bool

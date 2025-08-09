@@ -1,6 +1,7 @@
 from fastapi import APIRouter
+from fastapi.params import Body
 from Ctrls import DbCtrl, PostCtrl, ResCtrl
-from routers.web_data import PostFilterForm, PostCommentForm
+from routers.web_data import PostFilterForm
 
 router = APIRouter(
     prefix="/api/post",
@@ -25,8 +26,8 @@ def get_posts(form: PostFilterForm):
         return DbCtrl.CustomJsonResponse(response)
 
 
-@router.post("/set_comment")
-def set_comment(form: PostCommentForm):
+@router.post("/{post_id}/comment")
+def set_comment(post_id: int, comment: str = Body(media_type="text/plain")):
     with DbCtrl.getSession() as session, session.begin():
-        PostCtrl.setPostComment(session, int(form.post_id), form.comment)
+        PostCtrl.setPostComment(session, post_id, comment)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})

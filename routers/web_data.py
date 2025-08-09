@@ -123,12 +123,6 @@ class ActorListResult(BaseResult):
         self.actor_list = actor_list
 
 
-class PostCommentForm(BaseModel):
-    # large number may be corrupted in js, so use string instead
-    post_id: str
-    comment: str
-
-
 class ActorTagForm(BaseModel):
     tag_name: str
     tag_priority: int

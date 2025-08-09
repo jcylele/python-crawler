@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi.params import Body
 
 from Ctrls import DbCtrl, ActorTagCtrl
 from Models.ActorTagModel import ActorTagModel
@@ -75,8 +76,8 @@ def delete_actor_tag(tag_id: int):
 
 
 
-@router.put("/{tag_id}")
-def update_actor_tag_name(tag_id: int, tag_name: str):
+@router.post("/{tag_id}/name")
+def update_actor_tag_name(tag_id: int, tag_name: str = Body(media_type="text/plain")):
     with DbCtrl.getSession() as session, session.begin():
         ActorTagCtrl.setTagName(session, tag_id, tag_name)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})

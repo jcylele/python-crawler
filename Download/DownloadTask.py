@@ -208,8 +208,8 @@ class DownloadTask(object):
         os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
         os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
         DbCtrl.init()
-        with DbCtrl.getSession() as session, session.begin():
-            ActorFileCtrl.clearAllActorFileInfo(session)
+        # with DbCtrl.getSession() as session, session.begin():
+        #     ActorFileCtrl.clearAllActorFileInfo(session)
 
     def __repr__(self):
         return self.desc

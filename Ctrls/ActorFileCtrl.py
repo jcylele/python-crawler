@@ -6,6 +6,7 @@ from typing import Callable
 import ffmpeg
 
 from sqlalchemy import Select, delete, exists, select, func, case, event
+from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
 import Configs
@@ -18,12 +19,13 @@ from Consts import ResType
 from Utils import LogUtil
 from routers.web_data import ResFileInfo
 
-# 添加一个全局锁
-_actor_file_info_lock = threading.Lock()
-
 # region actor file info abstract
 
-__dirty_actors = set()
+# 添加一个全局锁
+_dirty_lock = threading.Lock()
+
+__dirty_actor_ids = set()
+__dirty_post_ids = set()
 
 
 def __build_basic_select_stmt() -> Select:
@@ -61,22 +63,34 @@ def __build_basic_select_stmt() -> Select:
 
 
 def __insert_result(session: Session, result):
-    if not result:
+    rows = list(result)
+    if not rows:
         return
 
-   # 转换为ORM对象列表
-    for row in result:
-        actor_file_info = ActorFileInfoModel(
-            actor_id=row.actor_id,
-            res_state=row.res_state,
-            img_size=row.img_size,
-            video_size=row.video_size,
-            img_count=row.img_count,
-            video_count=row.video_count
-        )
-        # merge会自动处理插入或更新
-        session.merge(actor_file_info)
+    # 将 result 转换为字典列表
+    insert_values = [
+        {
+            'actor_id': row.actor_id,
+            'res_state': row.res_state,
+            'img_size': row.img_size,
+            'video_size': row.video_size,
+            'img_count': row.img_count,
+            'video_count': row.video_count
+        } for row in rows
+    ]
 
+    if not insert_values:
+        return
+
+    # 构建 insert ... on duplicate key update 语句
+    stmt = insert(ActorFileInfoModel).values(insert_values)
+    update_stmt = stmt.on_duplicate_key_update(
+        img_size=stmt.inserted.img_size,
+        video_size=stmt.inserted.video_size,
+        img_count=stmt.inserted.img_count,
+        video_count=stmt.inserted.video_count
+    )
+    session.execute(update_stmt)
     session.flush()
 
 
@@ -132,20 +146,17 @@ def __deleteSingleActorFileInfo(session: Session, actor_id: int):
 def __deleteDirtyActorFileInfos(session: Session):
     # LogUtil.info(f"delete dirty actors")
     stmt = delete(ActorFileInfoModel).where(
-        ActorFileInfoModel.actor_id.in_(__dirty_actors))
+        ActorFileInfoModel.actor_id.in_(__dirty_actor_ids))
     session.execute(stmt)
     session.flush()
 
 
 def ensureActorFileInfo(session: Session, actor_id: int):
-    with _actor_file_info_lock:
-        if actor_id in __dirty_actors:
-            __deleteSingleActorFileInfo(session, actor_id)
-            __dirty_actors.remove(actor_id)
-        elif __has_actor_file_info(session, actor_id):
-            return
-        __insert_actor_file_info(session, actor_id)
-        session.flush()
+    process_dirty(session)
+    if __has_actor_file_info(session, actor_id):
+        return
+    __insert_actor_file_info(session, actor_id)
+    session.flush()
 
 
 def getActorFileInfo(session: Session, actor_id: int):
@@ -154,82 +165,76 @@ def getActorFileInfo(session: Session, actor_id: int):
 
 
 def deleteActorFileInfo(session: Session, actor_id: int):
-    __dirty_actors.add(actor_id)
+    __dirty_actor_ids.add(actor_id)
 
 
 def clearAllActorFileInfo(session: Session):
     LogUtil.info(f"clear all actor file info")
     stmt = delete(ActorFileInfoModel)
     session.execute(stmt)
-    __dirty_actors.clear()
-
-
-def getActorsByPosts(session: Session, post_ids: set[int]):
-    stmt = select(PostModel.actor_id.distinct()).where(
-        PostModel.post_id.in_(post_ids))
-    return session.execute(stmt).scalars()
+    __dirty_actor_ids.clear()
 
 
 def __filter_actor_ids(session: Session, actor_ids: list[int]):
     """查询哪些actor_ids没有ActorFileInfoModel记录"""
-    if not actor_ids:
-        return []
 
     # 查询已存在的actor_ids
     existing_stmt = select(ActorFileInfoModel.actor_id).where(
         ActorFileInfoModel.actor_id.in_(actor_ids)
     )
     existing_ids = set(session.execute(existing_stmt).scalars().all())
-    LogUtil.info(f"existing actors: {existing_ids}")
+    # LogUtil.info(f"existing actors: {existing_ids}")
     # 返回不存在的actor_ids
     missing_ids = [aid for aid in actor_ids if aid not in existing_ids]
     return missing_ids
 
 
 def ensureBatchActorFileInfo(session: Session, actor_ids: list[int]):
-    with _actor_file_info_lock:
-        LogUtil.info(f"ensure actors: {actor_ids}")
-        if len(__dirty_actors) > 0:
-            LogUtil.info(f"delete dirty actors: {__dirty_actors}")
-            __deleteDirtyActorFileInfos(session)
-            __dirty_actors.clear()
-        missing_ids = __filter_actor_ids(session, actor_ids)
-        if len(missing_ids) == 0:
-            return
-        LogUtil.info(f"insert missing actors: {missing_ids}")
+    process_dirty(session)
+    if len(actor_ids) == 0:
+        return
+    missing_ids = __filter_actor_ids(session, actor_ids)
+    if len(missing_ids) > 0:
         __insert_batch_actor_file_info(session, missing_ids)
         session.flush()
 
+def getActorsByPosts(session: Session, post_ids: set[int]):
+    stmt = select(PostModel.actor_id.distinct()).where(
+        PostModel.post_id.in_(post_ids))
+    return session.execute(stmt).scalars()
+
+def process_dirty(session: Session):
+    with _dirty_lock:
+        if len(__dirty_post_ids) > 0:
+            affected_actors = getActorsByPosts(session, __dirty_post_ids)
+            for actor_id in affected_actors:
+                __dirty_actor_ids.add(actor_id)
+            __dirty_post_ids.clear()
+        if len(__dirty_actor_ids) > 0:
+            __deleteDirtyActorFileInfos(session)
+            __dirty_actor_ids.clear()
+
 
 @event.listens_for(Session, 'after_flush')
-def update_actor_file_info_cache_batch(session, context):
-    # 收集需要更新的 actor_id
-
-    related_posts = set()
+def collect_dirty_posts(session, context):
     for obj in session.dirty:
         if isinstance(obj, ResModel):
-            related_posts.add(obj.post_id)
+            __dirty_post_ids.add(obj.post_id)
     for obj in session.new:
         if isinstance(obj, ResModel):
-            related_posts.add(obj.post_id)
+            __dirty_post_ids.add(obj.post_id)
     for obj in session.deleted:
         if isinstance(obj, ResModel):
-            related_posts.add(obj.post_id)
-
-    if len(related_posts) == 0:
-        return
-    # LogUtil.info(f"delete by posts: {related_posts}")
-    affected_actors = getActorsByPosts(session, related_posts)
-    for actor_id in affected_actors:
-        __dirty_actors.add(actor_id)
-    # deleteActorFileInfo(session, set(affected_actors))
+            __dirty_post_ids.add(obj.post_id)
 
 # endregion
 
 # region downloading files
 
+
 def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int], None]):
-    actor_folder = Configs.formatActorFolderPath(actor.actor_id, actor.actor_name)
+    actor_folder = Configs.formatActorFolderPath(
+        actor.actor_id, actor.actor_name)
     for root, _, files in os.walk(actor_folder):
         for file in files:
             match_obj = re.match(r'^(\d+)_(\d+)\.\w+$', file)
@@ -238,6 +243,7 @@ def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback
             post_id = int(match_obj.group(1))
             res_index = int(match_obj.group(2))
             callback(session, os.path.join(root, file), post_id, res_index)
+
 
 def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str, int, int], None]):
     download_folder = Configs.formatTmpFolderPath()

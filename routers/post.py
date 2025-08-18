@@ -27,7 +27,7 @@ def get_posts(form: PostFilterForm):
 
 
 @router.post("/{post_id}/comment")
-def set_comment(post_id: int, comment: str = Body(media_type="text/plain")):
+def set_comment(post_id: int, comment: str = Body(default="", media_type="text/plain")):
     with DbCtrl.getSession() as session, session.begin():
         PostCtrl.setPostComment(session, post_id, comment)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})

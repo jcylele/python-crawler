@@ -21,6 +21,12 @@ class ActorFileInfoModel(BaseModel):
     img_count: Mapped[int] = mapped_column()
     video_count: Mapped[int] = mapped_column()
 
+    def equal(self, other: 'ActorFileInfoModel') -> bool:
+        return self.img_size == other.img_size and \
+            self.video_size == other.video_size and \
+            self.img_count == other.img_count and \
+            self.video_count == other.video_count
+
     def toJson(self):
         return {
             "actor_id": self.actor_id,

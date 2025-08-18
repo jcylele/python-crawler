@@ -7,8 +7,6 @@ from Utils import LogUtil
 from Download import WorkerMgr
 from Workers.BaseWorker import BaseWorker
 
-ReportQueueInterval = 10
-
 
 class Guarder(threading.Thread):
     """
@@ -25,11 +23,9 @@ class Guarder(threading.Thread):
         # start all worker threads
         for worker in self.workers:
             worker.start()
-        # thread put log messages in a list instead of printing them out
-        # maybe it can boost the speed of threads
         # loop
         while not self.done:
-            sleep(0.0333)  # 30fps
+            sleep(1)  # check interval
             self.checkWorkerTimeout()
             if self.isJobDone():
                 self.done = True
@@ -48,9 +44,11 @@ class Guarder(threading.Thread):
         :return:
         """
         if not self.task.queueMgr.empty():  # all queues are empty
+            # print("queue not empty")
             return False
         for worker in self.workers:
             if not worker.isWaiting():  # all workers are waiting for job
+                # print(f"{worker.workerType()} is working")
                 return False
         return True
 

@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from fastapi.params import Query, Body
 
 import Configs
-from Ctrls import ActorFileCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl
+from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, ActorSimilarCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl, ResFileCtrl
 from routers.web_data import ActorConditionForm, ActorListResult, BatchActorGroup, ActorResult, LinkActorForm
 
 router = APIRouter(
@@ -19,28 +19,21 @@ router = APIRouter(
 @router.post("/count")
 def get_actor_count(form: ActorConditionForm):
     with DbCtrl.getSession() as session, session.begin():
-        actor_count = ActorCtrl.getActorCount(session, form)
+        actor_count = ActorQueryCtrl.getActorCount(session, form)
         return DbCtrl.CustomJsonResponse({'value': actor_count})
 
 
 @router.get("/group_count")
 def get_actor_count_of_groups():
     with DbCtrl.getSession() as session, session.begin():
-        actor_count_list = ActorCtrl.getActorCountOfGroups(session)
+        actor_count_list = ActorQueryCtrl.getActorCountOfGroups(session)
         return DbCtrl.CustomJsonResponse(actor_count_list)
 
 
 @router.post("/list")
 def get_actor_list(*, form: ActorConditionForm, limit: int, start: int):
     with DbCtrl.getSession() as session, session.begin():
-        actor_ids = ActorCtrl.getActorList(session, form, limit, start)
-        return DbCtrl.CustomJsonResponse(actor_ids)
-
-
-@router.post("/finished_list")
-def get_finished_actor_list(*, form: ActorConditionForm):
-    with DbCtrl.getSession() as session, session.begin():
-        actor_ids = ActorCtrl.getFinishedActorList(session, form)
+        actor_ids = ActorQueryCtrl.getActorList(session, form, limit, start)
         return DbCtrl.CustomJsonResponse(actor_ids)
 
 
@@ -48,7 +41,7 @@ def get_finished_actor_list(*, form: ActorConditionForm):
 def link_actors(form: LinkActorForm):
     # complex logic, ensure transaction is done
     with DbCtrl.getSession() as session, session.begin():
-        succeed, msg = ActorCtrl.linkActors(session, form)
+        succeed, msg = ActorLinkCtrl.linkActors(session, form)
 
     if not succeed:
         return DbCtrl.CustomJsonResponse(ActorListResult(False, msg))
@@ -62,7 +55,7 @@ def link_actors(form: LinkActorForm):
 @router.post("/unlink")
 def unlink_actors(actor_ids: List[int]):
     with DbCtrl.getSession() as session, session.begin():
-        succeed, msg = ActorCtrl.unlinkActors(session, actor_ids)
+        succeed, msg = ActorLinkCtrl.unlinkActors(session, actor_ids)
 
     if not succeed:
         return DbCtrl.CustomJsonResponse(ActorListResult(False, msg))
@@ -94,19 +87,26 @@ def reset_manual():
 @router.get("/similar_names")
 def similar_names():
     with DbCtrl.getSession() as session, session.begin():
-        ActorCtrl.findAllSimilarActors(session)
+        ActorSimilarCtrl.check_similar_names(session)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
 @router.get("/clear_group_folder/{group_id}")
 def clear_folder_by_group(group_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        actors = ActorCtrl.getActorsByGroup(session, group_id)
+        actors = ActorQueryCtrl.getActorsByGroup(session, group_id)
         for actor in actors:
-            ActorCtrl.clearActorFolder(session, actor)
+            ActorFileCtrl.clearActorFolder(session, actor)
 
+
+@router.get("/validate_all_file_info")
+def validate_all_file_info():
+    with DbCtrl.getSession() as session, session.begin():
+        count = ActorFileCtrl.validate_all_file_info(session)
+        return DbCtrl.CustomJsonResponse({'value': count})
 
 # 同方法(get)按顺序匹配, 固定前缀在前，{actor_id}在后, 以下皆为单个匹配
+
 
 @router.get("/{actor_id}")
 def get_actor(actor_id: int):
@@ -133,17 +133,18 @@ def change_actor_score(actor_id: int, score: int = Query(alias='val')):
 
 
 @router.post("/{actor_id}/remark")
-def set_actor_remark(actor_id: int, remark: str = Body(media_type="text/plain")):
+def set_actor_remark(actor_id: int, remark: str = Body(default="", media_type="text/plain")):
     with DbCtrl.getSession() as session, session.begin():
         actors = ActorCtrl.changeActorRemark(session, actor_id, remark)
         return DbCtrl.CustomJsonResponse(ActorListResult(True, f"actor remark changed", actors))
 
 
 @router.post("/{actor_id}/comment")
-def set_actor_comment(actor_id: int, comment: str = Body(media_type="text/plain")):
+def set_actor_comment(actor_id: int, comment: str = Body(default="", media_type="text/plain")):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.changeActorComment(session, actor_id, comment)
         return DbCtrl.CustomJsonResponse(ActorResult(True, f"actor comment changed", actor))
+
 
 @router.post("/{actor_id}/tag")
 def change_actor_tag(actor_id: int, tag_list: List[int]):
@@ -163,9 +164,9 @@ def open_actor_folder(actor_id: int):
 @router.patch("/{actor_id}/reset_posts")
 def reset_actor_posts(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        ActorCtrl.ResetActorPosts(session, actor_id)
+        ActorCtrl.resetActorPosts(session, actor_id)
         session.flush()
-        ret = ActorCtrl.getActorFileInfo(session, actor_id)
+        ret = ActorFileCtrl.getActorFileDetail(session, actor_id)
         return DbCtrl.CustomJsonResponse(ret)
 
 
@@ -173,23 +174,23 @@ def reset_actor_posts(actor_id: int):
 def clear_actor_folder(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.getActor(session, actor_id)
-        ActorCtrl.clearActorFolder(session, actor)
+        ActorFileCtrl.clearActorFolder(session, actor)
         session.flush()
-        ret = ActorCtrl.getActorFileInfo(session, actor_id)
+        ret = ActorFileCtrl.getActorFileDetail(session, actor_id)
         return DbCtrl.CustomJsonResponse(ret)
 
 
 @router.get("/{actor_id}/file_info")
 def get_actor_file_info(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        ret = ActorCtrl.getActorFileInfo(session, actor_id)
+        ret = ActorFileCtrl.getActorFileDetail(session, actor_id)
         return DbCtrl.CustomJsonResponse(ret)
 
 
 @router.get("/{actor_id}/video_stats")
 def get_actor_video_stats(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        ret = ActorCtrl.getActorVideoStats(session, actor_id)
+        ret = ActorFileCtrl.getActorVideoStats(session, actor_id)
         return DbCtrl.CustomJsonResponse(ret)
 
 
@@ -197,7 +198,7 @@ def get_actor_video_stats(actor_id: int):
 def get_downloading_files(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.getActor(session, actor_id)
-        ret = ActorFileCtrl.getDownloadingFilesOfActor(session, actor)
+        ret = ResFileCtrl.getDownloadingFilesOfActor(session, actor)
         return DbCtrl.CustomJsonResponse(ret)
 
 
@@ -205,7 +206,7 @@ def get_downloading_files(actor_id: int):
 def remove_downloading_files(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.getActor(session, actor_id)
-        ActorFileCtrl.removeDownloadingFilesOfActor(session, actor)
+        ResFileCtrl.removeDownloadingFilesOfActor(session, actor)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
@@ -213,7 +214,7 @@ def remove_downloading_files(actor_id: int):
 def rename_actor_files(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
         actor = ActorCtrl.getActor(session, actor_id)
-        ActorFileCtrl.rename_actor_files(session, actor)
+        ResFileCtrl.rename_actor_files(session, actor)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 
@@ -230,7 +231,7 @@ def get_linked_actors(actor_id: int):
 @router.get("/{actor_id}/linked_groups")
 def get_linked_groups(actor_id: int):
     with DbCtrl.getSession() as session, session.begin():
-        group_ids = ActorCtrl.getLinkedActorGroups(session, actor_id)
+        group_ids = ActorLinkCtrl.getGroupsOfLinkedActors(session, actor_id)
         return DbCtrl.CustomJsonResponse(group_ids)
 
 

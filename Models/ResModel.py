@@ -76,9 +76,11 @@ class ResModel(BaseModel):
         ext = self.res_url_info.extension
         return f"{Configs.formatTmpFolderPath()}/{self.actor().actor_name}_{self.post_id}_{self.res_index}.{ext}"
 
+    def isCompleted(self) -> bool:
+        return self.res_state == ResState.Down or self.res_state == ResState.Del
+
     def shouldDownload(self, download_limit: DownloadLimit) -> bool:
-        # 已下载/删除
-        if self.res_state == ResState.Down or self.res_state == ResState.Del:
+        if self.isCompleted():
             return False
 
         # 类型

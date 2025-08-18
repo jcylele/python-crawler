@@ -3,7 +3,7 @@ import os.path
 import Configs
 from Consts import WorkerType, QueueType
 from Ctrls import DbCtrl
-from Download import FileManager, QueueUtil
+from Download import FileManager
 from Utils import LogUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
@@ -51,7 +51,7 @@ class FileDownWorker(BaseRequestWorker):
             # rarely, but possible
             if file_size == extra_info.file_size:
                 FileManager.releaseFile(file_path, self.native_id)
-                QueueUtil.enqueueResValid(self.QueueMgr(), item)
+                self.QueueMgr().enqueueResValid(item)
                 return True
             # if there is an uncompleted file and its size is large enough
             # resume the download instead of starting from the beginning
@@ -73,6 +73,6 @@ class FileDownWorker(BaseRequestWorker):
 
         FileManager.releaseFile(file_path, self.native_id)
         # enqueue for validation
-        QueueUtil.enqueueResValid(self.QueueMgr(), item)
+        self.QueueMgr().enqueueResValid(item)
 
         return True

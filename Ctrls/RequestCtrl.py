@@ -58,17 +58,17 @@ def smartActorIconSrc(actor_info: ActorInfo) -> str:
     # real icon
     file_path = actor_info.icon_file_path()
     if os.path.exists(file_path):
-        return f"{Configs.formatIconFolderUrl()}/{actor_info.icon_file_name()}"
+        return f"{Configs.FileWebPath}/{Configs.IconFolder}/{actor_info.icon_file_name()}"
     # screenshot icon
     ss_file_path = actor_info.icon_ss_file_path()
     if os.path.exists(ss_file_path):
-        return f"{Configs.formatIconFolderUrl()}/{actor_info.icon_ss_file_name()}"
+        return f"{Configs.FileWebPath}/{Configs.IconFolder}/{actor_info.icon_ss_file_name()}"
     # remote url
     return formatActorIconUrl(actor_info)
 
 
 def formatActorIconUrl(actor_info: ActorInfo) -> str:
-    return f"{Configs.RootUrl}/icons/{actor_info.actor_platform}/{actor_info.actor_link}"
+    return f"{Configs.IconUrl}/{actor_info.actor_platform}/{actor_info.actor_link}"
 
 
 def formatActorHref(actor_info: ActorInfo) -> str:

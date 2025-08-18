@@ -86,7 +86,7 @@ class BaseWorker(threading.Thread):
         raise NotImplementedError("subclasses of BaseWorker must implement method _process")
 
     def _onException(self, item, e: BaseException):
-        msg = ''.join(traceback.format_exception(etype=type(e), value=e, tb=e.__traceback__))
+        msg = ''.join(traceback.format_exception(e))
         LogUtil.error(f"{self} process {item} and encounter \n {msg}")
 
     def setTimeout(self, delta) -> int:

@@ -1,6 +1,8 @@
 {
   "DbConnectString": "mysql+pymysql://jcylele:123456@localhost:3406/onlyfans",
   "RootUrl": "https://coomer.st",
+  "IconUrl": "https://img.coomer.st/icons",
+  "ServerPort": 7878,
   "RootFolder": "D:\\OnlyFans",
   "MIN_DOWN_SPEED": 102400,
   "BASE_TIME_OUT": 30,

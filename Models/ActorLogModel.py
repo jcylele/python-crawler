@@ -24,6 +24,7 @@ class ActorLogModel(BaseModel):
         json_data = {
             'log_type': self.log_type,
             'log_param': self.log_param,
+            'log_time': self.log_time.isoformat(sep=' '),
         }
 
         return json_data

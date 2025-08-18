@@ -11,5 +11,5 @@ if __name__ == "__main__":
         reload=True,
         reload_delay=0.25,
         workers=1,
-        log_level="debug"
+        log_level="debug",
     )

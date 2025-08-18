@@ -31,6 +31,7 @@ class ActorLogType(Enum):
     Unlink = 8
     PostCount = 9
     ClearFolder = 10
+    Comment = 11
 
 
 class ResType(Enum):
@@ -41,7 +42,7 @@ class ResType(Enum):
 class ResState(Enum):
     Init = 1
     Down = 2
-    Skip = 3
+    Skip = 3  # obsolete but keep for compatibility
     Del = 4
 
 
@@ -81,3 +82,21 @@ class PostFilter(IntEnum):
     Normal = 1
     Current = 2
     Completed = 3
+
+class BoolEnum(Enum):
+    ALL = auto()
+    TRUE = auto()
+    FALSE = auto()
+
+
+class SortType(Enum):
+    Default = 0
+    Score = auto()
+    CategoryTime = auto()
+    TotalPostCount = auto()
+    CurPostCount = auto()
+    InitFileSize = auto()
+    DownFileSize = auto()
+    TotalFileSize = auto()
+    LastPostFetchTime = auto()
+    LastResDownloadTime = auto()

@@ -1,8 +1,6 @@
 # Resource related operations
-
 import re
 from typing import List, Tuple
-
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
@@ -13,6 +11,7 @@ from Models.ResDomainModel import ResDomainModel
 from Models.ResModel import ResModel
 from Models.ResSizeCount import ResSizeCount
 from Models.ResUrlModel import ResUrlModel
+from Models.ActorFileInfoModel import ActorFileInfoModel
 from Utils import LogUtil, PyUtil
 
 
@@ -92,6 +91,13 @@ def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]
 
     session.flush()
 
+def resetSkipToInit(session: Session, actor_id: int):
+    stmt = select(ActorFileInfoModel).where(ActorFileInfoModel.actor_id == actor_id)
+    actor_file_info = session.scalar(stmt)
+    if actor_file_info is None:
+        actor_file_info = ActorFileInfoModel(actor_id=actor_id)
+        session.add(actor_file_info)
+    actor_file_info.res_state = ResState.Init
 
 def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
     _query = (select(ResModel.res_state, ResModel.res_size)
@@ -139,3 +145,4 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
             item.max = res_size_list[i]
         rsc_list.append(item)
     return rsc_list
+

@@ -72,3 +72,31 @@ def setGroupCondition(session: Session, group_id: int, cond_list: list[ActorGrou
 def getGroupConditions(session: Session, group_id: int):
     stmt = select(ActorGroupCondModel).where(ActorGroupCondModel.group_id == group_id)
     return session.scalars(stmt)
+
+def checkGroupCondition(session: Session, actor: ActorModel, group_id: int) -> tuple[bool, str]:
+    main_actor = actor.main_actor
+    cond_list = getGroupConditions(session, group_id)
+    for cond in cond_list:
+        if cond.cond_type == GroupCondType.MinScore:
+            if main_actor.score < cond.cond_param:
+                return False, f"actor {actor.actor_name} score < {cond.cond_param / 2}"
+        elif cond.cond_type == GroupCondType.MaxScore:
+            if main_actor.score > cond.cond_param:
+                return False, f"actor {actor.actor_name} score > {cond.cond_param / 2}"
+        elif cond.cond_type == GroupCondType.HasAnyTag:
+            tag_count = len(main_actor.rel_tags)
+            if (cond.cond_param == 0) != (tag_count == 0):
+                if tag_count == 0:
+                    err_msg = f"actor {actor.actor_name} has no tag"
+                else:
+                    err_msg = f"actor {actor.actor_name} has {tag_count} tags"
+                return False, err_msg
+        elif cond.cond_type == GroupCondType.Linked:
+            if (actor.isLinked()) != (cond.cond_param == 1):
+                if actor.isLinked():
+                    err_msg = f"actor {actor.actor_name} is linked"
+                else:
+                    err_msg = f"actor {actor.actor_name} is not linked"
+                return False, err_msg
+
+    return True, ""

@@ -19,15 +19,6 @@ def getPost(session: Session, post_id: int) -> PostModel:
     return session.get(PostModel, post_id)
 
 
-def getPostCount(session: Session, actor_id: int, completed: bool) -> int:
-    stmt = select(func.count()).select_from(PostModel).where(
-        PostModel.actor_id == actor_id,
-        PostModel.completed == completed
-    )
-    count = session.execute(stmt).scalar_one()
-    return count
-
-
 def getMaxPostId(session: Session, actor_id: int) -> int:
     _query = select(func.max(PostModel.post_id)) \
         .where(PostModel.actor_id == actor_id)
@@ -55,7 +46,7 @@ def batchSetResStates(session: Session, actor_id: int, state: ResState):
     session.execute(_query)
     session.flush()
     # manually delete
-    ActorFileCtrl.deleteActorFileInfo(session, actor_id)
+    ActorFileCtrl.deleteActorFileInfo(actor_id)
 
 
 # set current downloaded res(file exists) to del
@@ -68,7 +59,7 @@ def removeCurrentResFiles(session: Session, actor_id: int):
     session.execute(_query)
     session.flush()
     # manually delete
-    ActorFileCtrl.deleteActorFileInfo(session, actor_id)
+    ActorFileCtrl.deleteActorFileInfo(actor_id)
 
 
 def filterQuery(_query: Select, form: PostFilterForm) -> Select:
@@ -77,7 +68,8 @@ def filterQuery(_query: Select, form: PostFilterForm) -> Select:
         _query = _query.where(PostModel.actor_id == form.actor_id)
     # post_id_prefix
     if len(form.post_id_prefix) > 0:
-        _query = _query.where(PostModel.post_id_str.like(f"{form.post_id_prefix}%"))
+        _query = _query.where(
+            PostModel.post_id_str.like(f"{form.post_id_prefix}%"))
     # comment
     if form.has_comment:
         _query = _query.where(PostModel.has_comment == True)
@@ -138,3 +130,18 @@ def getCompletedPosts(session, actor_id: int, last_post_id: int) -> ScalarResult
               .where(PostModel.post_id > last_post_id)
               .order_by(PostModel.post_id.desc()))
     return session.scalars(_query)
+
+
+def getPostCountsOfActor(session: Session, actor_id: int) -> tuple[int, int]:
+    _query = (select(PostModel.completed, func.count(PostModel.post_id))
+              .where(PostModel.actor_id == actor_id)
+              .group_by(PostModel.completed))
+    result = session.execute(_query).fetchall()
+    completed_count = 0
+    uncompleted_count = 0
+    for completed, count in result:
+        if completed:
+            completed_count = count
+        else:
+            uncompleted_count = count
+    return completed_count, uncompleted_count

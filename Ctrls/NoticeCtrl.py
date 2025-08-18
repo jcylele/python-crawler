@@ -1,3 +1,4 @@
+from typing import Iterable
 from sqlalchemy.orm import Session
 from sqlalchemy import update, func, select, or_
 from Consts import NoticeType
@@ -43,7 +44,7 @@ def deleteNotice(session: Session, notice_id: int):
     session.execute(_query)
 
 
-def addNoticeStrict(session: Session, notice_type: NoticeType, params: list[str]):
+def addNoticeStrict(session: Session, notice_type: NoticeType, params: Iterable[str]):
     """
     add a notice, but params should be strictly sorted and distinct
     do nothing if there is actually only one distinct param
@@ -110,7 +111,7 @@ def searchNotice(session: Session, actor_name: str):
     return [notice for notice in notices]
 
 
-def sortedDistinctNames(names: list[str]):
+def sortedDistinctNames(names: Iterable[str]):
     return sorted(set(filter(lambda x: x != "", map(str.lower, names))))
 
 

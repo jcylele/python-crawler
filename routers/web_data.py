@@ -1,31 +1,16 @@
-from enum import Enum, auto
+
 from typing import TypedDict
 
 from pydantic import BaseModel
 
-from Consts import ResType
-
-
-class BoolEnum(Enum):
-    ALL = auto()
-    TRUE = auto()
-    FALSE = auto()
+from Consts import BoolEnum, ResType, SortType
+from Models.ActorFileInfoModel import ActorFileInfoModel
 
 
 class TagUsedInfo(TypedDict):
     used_count: int
     avg_score: float
 
-
-class SortType(Enum):
-    Default = 0
-    Score = auto()
-    CategoryTime = auto()
-    TotalPostCount = auto()
-    CurPostCount = auto()
-    DownFileSize = auto()
-    CurFileSize = auto()
-    TotalFileSize = auto()
 
 class SortItem(BaseModel):
     sort_type: SortType
@@ -49,6 +34,8 @@ class ActorConditionForm(BaseModel):
     max_score: int
     has_remark: BoolEnum
     remark_str: str
+    post_completed: BoolEnum
+    res_completed: BoolEnum
 
     sort_items: list[SortItem]
 
@@ -91,6 +78,24 @@ class ActorVideoInfo(ServerData):
         self.file_count += 1
         self.file_size += file_size
 
+class DownloadingVideoStats(ServerData):
+    actor_id: int
+    actor_name: str
+    file_count: int
+    file_size: int
+    res_size: int
+
+    def __init__(self, actor_id: int, actor_name: str):
+        self.actor_id = actor_id
+        self.actor_name = actor_name
+        self.file_count = 0
+        self.file_size = 0
+        self.res_size = 0
+
+    def add_info(self, file_size: int, res_size: int):
+        self.file_count += 1
+        self.file_size += file_size
+        self.res_size += res_size
 
 class ActorPostInfo(ServerData):
     actor_id: int
@@ -172,6 +177,10 @@ class DownloadLimitForm(BaseModel):
     def resumeVideoLimit():
         return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=0)
 
+    @staticmethod
+    def fixPostsLimit():
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=1)
+
     def toJson(self):
         return self.__dict__
 
@@ -213,3 +222,11 @@ class CommonGroupForm(BaseModel):
 class ActorGroupForm(CommonGroupForm):
     group_color: str
     has_folder: bool
+
+
+class ActorFileDetail(TypedDict):
+    res_info: list[ActorFileInfoModel]
+    total_post_count: int
+    unfinished_post_count: int
+    finished_post_count: int
+    is_completed: bool

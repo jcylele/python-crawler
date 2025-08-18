@@ -13,7 +13,7 @@ from Consts import WorkerType
 from Ctrls import DbCtrl, ActorCtrl
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
-from Download import WebPool, QueueUtil
+from Download import WebPool
 from WorkQueue.BaseQueueItem import BaseQueueItem
 from Workers.BaseWorker import BaseWorker
 from Workers.ImageCompleteWait import ImageCompleteWait
@@ -56,7 +56,7 @@ class BaseFetchWorker(BaseWorker):
 
         # fetch real icon
         if enqueue:
-            QueueUtil.enqueueActorIcon(self.QueueMgr(), actor_info, driver.current_url)
+            self.QueueMgr().enqueueActorIcon(actor_info, driver.current_url)
 
         # screenshot icon
         icon_ss_file_path = actor_info.icon_ss_file_path()

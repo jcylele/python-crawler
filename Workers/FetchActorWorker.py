@@ -6,10 +6,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from Consts import WorkerType, QueueType, NoticeType, ActorLogType
-from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
-from Download import QueueUtil
+from Ctrls import ActorCtrl, ActorFileCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
@@ -30,12 +30,12 @@ class FetchActorWorker(BaseFetchWorker):
         return QueueType.FetchActor
 
     def processPosts(self, post_list: list[(int, bool)], from_url: str) -> bool:
-        # print("processPosts " +",".join([str(i) for i in post_list]))
+        reach_last = False
+        posts_to_enqueue = []
         with DbCtrl.getSession() as session, session.begin():
             actor_id = self.actor_info.actor_id
             actor = ActorCtrl.getActor(session, actor_id)
-            last_post_id = actor.last_post_id
-            reach_last = False
+            last_post_id = 0 if self.task.is_all_posts() else actor.last_post_id
             for tup_post in post_list:
                 (post_id, is_dm) = tup_post
                 if post_id <= last_post_id:
@@ -44,35 +44,46 @@ class FetchActorWorker(BaseFetchWorker):
                 post = PostCtrl.getPost(session, post_id)
                 if post is None:
                     PostCtrl.addPost(session, actor_id, post_id, is_dm)
-                    # QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
-                    QueueUtil.enqueueFetchPost(self.QueueMgr(), self.actor_info, post_id, is_dm)
+                    posts_to_enqueue.append(
+                        {'post_id': post_id, 'is_dm': is_dm})
                 else:
                     if post.actor_id != actor_id:
-                        owner_actor = post.actor
-                        if actor.main_actor_id != owner_actor.main_actor_id or actor.main_actor_id == 0:
-                            NoticeCtrl.addNoticeStrict(session, NoticeType.UnlinkedActor,
-                                                       [actor.actor_name, owner_actor.actor_name])
-                            LogUtil.error(
-                                f"same post {post.post_id} for {post.actor.actor_name} and {actor.actor_name}")
+                        owner_actor = ActorCtrl.getActor(
+                            session, post.actor_id)
+                        ActorCtrl.fixPostBelong(
+                            session, post, owner_actor, actor)
+                        if self.task.is_fix_posts:
+                            self.task.fix_more_posts(owner_actor.actor_id)
+
                     elif not post.completed:  # the post is not analysed yet
-                        # QueueUtil.enqueuePost(self.QueueMgr(), self.actor_info, post_id, is_dm, from_url)
-                        QueueUtil.enqueueFetchPost(self.QueueMgr(), self.actor_info, post_id, is_dm)
+                        self.QueueMgr().enqueueFetchPost(
+                            self.actor_info, post_id, is_dm)
                     else:  # all resources of the post are already added
-                        QueueUtil.enqueueAllRes(self.QueueMgr(), self.actor_info, post, self.DownloadLimit())
-            return reach_last
+                        self.QueueMgr().enqueueAllRes(
+                            self.actor_info, post, self.DownloadLimit())
+
+        # 在事务提交后，再将所有任务推入队列
+        for item in posts_to_enqueue:
+            self.QueueMgr().enqueueFetchPost(
+                self.actor_info, item['post_id'], item['is_dm'])
+
+        return reach_last
 
     @staticmethod
     def updateActorPostCount(actor_id: int, post_count: int):
         with DbCtrl.getSession() as session, session.begin():
             actor = ActorCtrl.getActor(session, actor_id)
+            actor.last_post_fetch_time = func.now()
             if actor.total_post_count != post_count:
                 actor.total_post_count = post_count
-                ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.PostCount, post_count)
+                ActorLogCtrl.addActorLog(
+                    session, actor_id, ActorLogType.PostCount, post_count)
 
     @staticmethod
     def addInvalidPostNotice(actor_name: str, page: int, post_id_str: str):
         with DbCtrl.getSession() as session, session.begin():
-            NoticeCtrl.addNotice(session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
+            NoticeCtrl.addNotice(
+                session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
 
     @staticmethod
     def elementInClass(element: WebElement, class_name: str):
@@ -86,17 +97,19 @@ class FetchActorWorker(BaseFetchWorker):
         return RequestCtrl.formatActorUrl(actor_info)
 
     def _checkFetch(self, session: Session, item: FetchActorQueueItem):
-        return self.hasActorFolder(session, item.actor_id)
+        # return self.hasActorFolder(session, item.actor_id)
+        return True
 
     def _onFetched(self, item: FetchActorQueueItem, driver: webdriver.Chrome) -> bool:
         self.actor_info = self.getActorInfo(item.actor_id)
         actor_name = self.actor_info.actor_name
 
         # create folder
-        ActorCtrl.createActorFolder(self.actor_info)
+        ActorFileCtrl.createActorFolder(self.actor_info)
 
         # actor icon
-        self._saveActorIcon(self.actor_info, ".user-header__avatar img", driver, True)
+        self._saveActorIcon(
+            self.actor_info, ".user-header__avatar img", driver, True)
 
         # update post count
         post_count = 0
@@ -105,15 +118,18 @@ class FetchActorWorker(BaseFetchWorker):
         # webpage is new in every iteration, so keep elements inside the loop
         for i in range(1, 1000000):
             try:
-                paginator_top = driver.find_element(By.CSS_SELECTOR, "#paginator-top")
+                paginator_top = driver.find_element(
+                    By.CSS_SELECTOR, "#paginator-top")
             except:
                 paginator_top = None
 
             if paginator_top is not None and not post_count_updated:
                 try:
-                    ele_count = paginator_top.find_element(By.CSS_SELECTOR, 'small')
+                    ele_count = paginator_top.find_element(
+                        By.CSS_SELECTOR, 'small')
                     nums = re.findall(r"\d+", ele_count.text)
-                    FetchActorWorker.updateActorPostCount(item.actor_id, int(nums[-1]))
+                    FetchActorWorker.updateActorPostCount(
+                        item.actor_id, int(nums[-1]))
                     post_count_updated = True
                 except:
                     pass
@@ -128,7 +144,8 @@ class FetchActorWorker(BaseFetchWorker):
             if page_menu is not None:
                 try:
                     WebDriverWait(driver, 10).until(
-                        EC.text_to_be_present_in_element((By.CSS_SELECTOR, ".pagination-button-current b"), f"{i}")
+                        EC.text_to_be_present_in_element(
+                            (By.CSS_SELECTOR, ".pagination-button-current b"), f"{i}")
                     )
                 except:
                     LogUtil.error(f"actor {actor_name} page {i} not found")
@@ -137,7 +154,8 @@ class FetchActorWorker(BaseFetchWorker):
                 LogUtil.info(f"actor {actor_name} page {i} no page menu")
 
             # analyze content
-            article_list = driver.find_elements(By.CSS_SELECTOR, 'article.post-card')
+            article_list = driver.find_elements(
+                By.CSS_SELECTOR, 'article.post-card')
             post_list = []
             for article in article_list:
                 post_id_str = article.get_attribute("data-id")
@@ -152,8 +170,10 @@ class FetchActorWorker(BaseFetchWorker):
                     if post_id > MAX_POST_ID:
                         raise ValueError
                 except:
-                    FetchActorWorker.addInvalidPostNotice(actor_name, i, post_id_str)
-                    LogUtil.error(f"actor {actor_name} page {i} post {post_id_str} invalid")
+                    FetchActorWorker.addInvalidPostNotice(
+                        actor_name, i, post_id_str)
+                    LogUtil.error(
+                        f"actor {actor_name} page {i} post {post_id_str} invalid")
                     continue
                 post_list.append((post_id, is_dm))
             reach_last_post = self.processPosts(post_list, driver.current_url)
@@ -161,7 +181,8 @@ class FetchActorWorker(BaseFetchWorker):
 
             # only one page
             if not post_count_updated:
-                FetchActorWorker.updateActorPostCount(item.actor_id, len(post_list))
+                FetchActorWorker.updateActorPostCount(
+                    item.actor_id, len(post_list))
                 post_count_updated = True
 
             # download no more
@@ -172,7 +193,8 @@ class FetchActorWorker(BaseFetchWorker):
             next_btn = None
             if page_menu is not None:
                 try:
-                    next_btn = page_menu.find_element(By.CSS_SELECTOR, '.pagination-button-after-current')
+                    next_btn = page_menu.find_element(
+                        By.CSS_SELECTOR, '.pagination-button-after-current')
 
                 except:
                     pass

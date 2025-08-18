@@ -2,7 +2,7 @@ from typing import List
 
 from fastapi import APIRouter
 from fastapi.params import Query
-from Ctrls import ChartCtrl, DbCtrl
+from Ctrls import ChartCtrl, DbCtrl, ResFileCtrl
 
 router = APIRouter(
     prefix="/api/chart",
@@ -39,4 +39,10 @@ def tags_of_score(min_score: int = Query(alias='min'), max_score: int = Query(al
 def down_size_of_groups():
     with DbCtrl.getSession() as session, session.begin():
         ret = ChartCtrl.getResSizeStats(session)
+        return DbCtrl.CustomJsonResponse(ret)
+
+@router.get("/downloading_video_stats")
+def downloading_video_stats():
+    with DbCtrl.getSession() as session, session.begin():
+        ret = ResFileCtrl.get_downloading_video_stats(session)
         return DbCtrl.CustomJsonResponse(ret)

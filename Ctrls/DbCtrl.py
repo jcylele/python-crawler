@@ -34,6 +34,10 @@ def getSession() -> Session:
     return __Session()
 
 
+def newSession(connection) -> Session:
+    return sessionmaker(bind=connection)()
+
+
 def CustomJsonResponse(json_data) -> Response:
     str_data = json.dumps(json_data, cls=BaseModelEncoder)
     return Response(content=str_data, media_type="application/text")

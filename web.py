@@ -1,14 +1,26 @@
-# web server for more convenient operations
+import asyncio
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
 import Configs
+from Download import TaskManager
+from Ctrls import ActorFileCtrl
 from Download.DownloadTask import DownloadTask
-from routers import actor, actor_tag, download, file, vue, actor_group, chart, post, notice, favorite_folder, actor_tag_group
+from routers import actor, actor_tag, download, vue, actor_group, chart, post, notice, favorite_folder, actor_tag_group
 
-app = FastAPI()
+DownloadTask.initEnv()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # await asyncio.to_thread(ActorFileCtrl.process_dirty_on_shutdown)
+    await asyncio.to_thread(TaskManager.StopAllTasks)
+
+app = FastAPI(lifespan=lifespan)
 
 origins = ["*"]
 
@@ -21,7 +33,11 @@ app.add_middleware(
 )
 
 assets_folder = Configs.formatStaticFile("assets")
+# html files
 app.mount("/assets", StaticFiles(directory=assets_folder), name="assets")
+# static files
+app.mount(f"/{Configs.FileWebPath}",
+          StaticFiles(directory=Configs.RootFolder), name="files")
 
 app.include_router(actor.router)
 app.include_router(actor_tag.router)
@@ -34,15 +50,9 @@ app.include_router(post.router)
 app.include_router(notice.router)
 app.include_router(vue.router)
 
-# start file server
-# TODO redirect from fastAPI
-file.start()
-
-DownloadTask.initEnv()
-
 if __name__ == "__main__":
     uvicorn.run(
         app,
-        host="127.0.0.1",
-        port=7878
+        host="0.0.0.0",
+        port=Configs.ServerPort
     )

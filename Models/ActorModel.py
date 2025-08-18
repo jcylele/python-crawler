@@ -20,6 +20,13 @@ class ActorModel(BaseModel):
     actor_platform: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
     actor_link: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
     total_post_count: Mapped[int] = mapped_column(default=0)
+    current_post_count: Mapped[int] = mapped_column(default=0)
+    completed_post_count: Mapped[int] = mapped_column(default=0)
+    last_post_fetch_time: Mapped[Optional[DateTime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    last_res_download_time: Mapped[Optional[DateTime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+
     main_actor_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("tab_actor_main.main_actor_id"),
         nullable=True

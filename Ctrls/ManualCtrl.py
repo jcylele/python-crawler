@@ -1,20 +1,19 @@
 #! fix/update bugs/problems in database, mainly caused by existing actors skipping new features
 import os
 import re
-import ffmpeg
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 import Configs
-from Ctrls import ActorCtrl, ActorFileCtrl, ResCtrl
+from Ctrls import ActorCtrl, ActorFileCtrl, ActorSimilarCtrl, ResCtrl, ResFileCtrl
+from Models.FavoriteFolderModel import FavoriteFolderModel
+from Models.ActorGroupModel import ActorGroupModel
+from Models.ActorFileInfoModel import ActorFileInfoModel
+from Models.ActorTagGroupModel import ActorTagGroupModel
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
-from Models.ActorTagRelationship import ActorTagRelationship
-from Models.NoticeModel import NoticeModel
-from Models.ResModel import ResModel
-from Models.ResUrlModel import ResUrlModel
-from Models.PostModel import PostModel
 from Models.ActorTagModel import ActorTagModel
+from Models.ActorTagRelationship import ActorTagRelationship
 from Utils import LogUtil
 
 
@@ -58,7 +57,7 @@ def refreshResInfo(session: Session):
                         LogUtil.error(f"res {post_id}_{res_index} not found")
                         continue
                     file_path = os.path.join(root2, file)
-                    width, height, duration = ActorFileCtrl.get_media_info(file_path)
+                    width, height, duration = ResFileCtrl.get_media_info(file_path)
                     if width > 0 and height > 0:
                         res.res_width = width
                         res.res_height = height
@@ -142,4 +141,9 @@ def get_tag_combinations_with_empty(session: Session) -> list[dict]:
 def validateActor(session: Session, actor_id: int):
     actor = ActorCtrl.getActor(session, actor_id)
     # set res state to downed if downloaded files exist
-    ActorFileCtrl.traverseDownloadedFilesOfActor(session, actor, ActorCtrl._setResStateToDowned)
+    ResFileCtrl.traverseDownloadedFilesOfActor(session, actor, ActorCtrl._setResStateToDowned)
+
+
+def new_check_similar(session: Session):
+    ActorSimilarCtrl.check_similar_names(session)
+    # ActorSimilarCtrl.findAllSimilarActors(session)

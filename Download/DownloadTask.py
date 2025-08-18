@@ -4,10 +4,10 @@ from sqlalchemy.orm import Session
 
 import Configs
 from Consts import PostFilter, WorkerType
-from Ctrls import DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ActorFileCtrl
-from Download import WorkerMgr, QueueUtil
+from Ctrls import ActorQueryCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ResFileCtrl
+from Download import WorkerMgr
 from Download.DownloadLimit import DownloadLimit
-from Download.QueueMgr import QueueMgr
+from Download.TaskQueueMgr import TaskQueueMgr
 from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
@@ -18,11 +18,15 @@ class DownloadTask(object):
     def __init__(self, task_uid):
         self.uid = task_uid
         self.guarder = Guarder(self)
-        self.queueMgr = QueueMgr()
+        self.queueMgr = TaskQueueMgr()
         self.download_limit: DownloadLimit = None
         self.init_group_id = 0
         self.desc = ""
         self.actor_ids = []
+        self.is_fix_posts = False
+
+    def is_all_posts(self):
+        return self.download_limit.getPostFilter() == PostFilter.All
 
     def startDownload(self):
         """
@@ -57,29 +61,34 @@ class DownloadTask(object):
 
     def normalPosts(self, actor_ids: list[int]):
         for actor_id in actor_ids:
-            QueueUtil.enqueueFetchActor(self.queueMgr, actor_id)
-            QueueUtil.enqueueFetchActorLink(self.queueMgr, actor_id)
+            self.queueMgr.enqueueFetchActor(actor_id)
+            self.queueMgr.enqueueFetchActorLink(actor_id)
 
     def completedPosts(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
-                posts = PostCtrl.getCompletedPosts(session, actor_id, actor.last_post_id)
+                posts = PostCtrl.getCompletedPosts(
+                    session, actor_id, actor.last_post_id)
                 for post in posts:
-                    QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.download_limit)
+                    self.queueMgr.enqueueAllRes(
+                        actor_info, post, self.download_limit)
 
     def currentPosts(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
-                posts = PostCtrl.getNewPosts(session, actor_id, actor.last_post_id)
+                posts = PostCtrl.getNewPosts(
+                    session, actor_id, actor.last_post_id)
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
-                        QueueUtil.enqueueFetchPost(self.queueMgr, actor_info, post.post_id, post.is_dm)
+                        self.queueMgr.enqueueFetchPost(
+                            actor_info, post.post_id, post.is_dm)
                     else:  # all resources of the post are already added
-                        QueueUtil.enqueueAllRes(self.queueMgr, actor_info, post, self.download_limit)
+                        self.queueMgr.enqueueAllRes(
+                            actor_info, post, self.download_limit)
 
     def downloadActors(self, actor_ids: list[int]):
         self.actor_ids = actor_ids
@@ -110,11 +119,13 @@ class DownloadTask(object):
                 # enqueue actor if not exists
                 actor = ActorCtrl.getActorByInfo(session, actor_info)
                 if actor is None:
-                    actor = ActorCtrl.addActor(session, actor_info, self.init_group_id)
+                    actor = ActorCtrl.addActor(
+                        session, actor_info, self.init_group_id)
                     actor_ids.append(actor.actor_id)
                 else:
-                    LogUtil.info(f"actor {actor_info.actor_name} already exists")
-        print(actor_ids)
+                    LogUtil.info(
+                        f"actor {actor_info.actor_name} already exists")
+        # print(actor_ids)
         self.downloadActors(actor_ids)
 
     def downloadSpecificActor(self, actor_id: int):
@@ -123,6 +134,7 @@ class DownloadTask(object):
         """
         with DbCtrl.getSession() as session, session.begin():
             actor = ActorCtrl.getActor(session, actor_id)
+            # in case linked actors found, set the group id to the actor's group id
             self.setInitGroup(actor.actor_group_id)
             self.desc = f"Specific Actor {actor.actor_name}"
         self.downloadActors([actor_id])
@@ -132,7 +144,7 @@ class DownloadTask(object):
         download new actors
         """
         self.desc = "New Actors."
-        QueueUtil.enqueueFetchActors(self.queueMgr, start_page)
+        self.queueMgr.enqueueFetchActors(start_page)
         self.startDownload()
 
     def downloadByActorGroup(self, group_id: int):
@@ -144,33 +156,15 @@ class DownloadTask(object):
             group = ActorGroupCtrl.getActorGroup(session, group_id)
             self.desc = f"Actors in group {group.group_name}."
 
-            actors = ActorCtrl.getActorsByGroup(session, group_id)
+            actors = ActorQueryCtrl.getActorsByGroup(session, group_id)
             for actor in actors:
                 actor_ids.append(actor.actor_id)
         self.downloadActors(actor_ids)
 
-    def __resumeFiles_Process(self, session: Session, file: str, post_id: int, res_index: int):
-        res = ResCtrl.getResByIndex(session, post_id, res_index)
-        if res.shouldDownload(self.download_limit):
-            post = PostCtrl.getPost(session, post_id)
-            actor_info = ActorInfo(post.actor)
-            QueueUtil.enqueueResFile(self.queueMgr, actor_info, post, res)
-
-    def resumeFiles(self):
-        self.desc = f"resume files"
-        with DbCtrl.getSession() as session, session.begin():
-            # remove outdated files
-            ActorCtrl.removeOutdatedFiles(session)
-            ActorFileCtrl.traverseDownloadingFiles(session, self.__resumeFiles_Process)
-
-        self.startDownload()
-
     def __resumeActor_Process(self, session: Session, file: str, post_id: int, res_index: int):
         res = ResCtrl.getResByIndex(session, post_id, res_index)
         if res.shouldDownload(self.download_limit):
-            post = PostCtrl.getPost(session, post_id)
-            actor_info = ActorInfo(post.actor)
-            QueueUtil.enqueueResFile(self.queueMgr, actor_info, post, res)
+            self.queueMgr.enqueueResFile(res)
 
     def resumeActor(self, actor_id: int):
         with DbCtrl.getSession() as session, session.begin():
@@ -178,22 +172,38 @@ class DownloadTask(object):
             if actor is None or not actor.actor_group.has_folder:
                 return
             self.desc = f"resume actor {actor.actor_name}"
+            self.actor_ids = [actor_id]
 
-            ActorFileCtrl.traverseDownloadingFilesOfActor(session, actor, self.__resumeActor_Process)
+            ResFileCtrl.traverseDownloadingFilesOfActor(
+                session, actor, self.__resumeActor_Process)
 
         self.startDownload()
+
+    def fix_more_posts(self, actor_id: int):
+        if actor_id not in self.actor_ids:
+            LogUtil.info(f"fix more actor {actor_id}")
+            self.actor_ids.append(actor_id)
+            self.normalPosts([actor_id])
+
+    def fix_posts_of_actor(self, actor_id: int):
+        with DbCtrl.getSession() as session, session.begin():
+            actor = ActorCtrl.getActor(session, actor_id)
+            if actor is None:
+                return
+            ActorCtrl.refreshActorPostCount(session, actor_id)
+
+            self.is_fix_posts = True
+            self.desc = f"fix posts of actor {actor.actor_name}"
+            self.actor_ids = [actor_id]
+            self.normalPosts(self.actor_ids)
+            self.startDownload()
 
     def manual(self):
         """
         custom logic to fix bugs etc
         """
         self.desc = f"manual op"
-        # with DbCtrl.getSession() as session, session.begin():
-        #     actor_ids = ManualCtrl.getManualActorIds(session, self.downloadLimit.actor_count)
-        #     for actor_id in actor_ids:
-        #         QueueUtil.enqueueFetchActorLink(self.queueMgr, actor_id)
-        #
-        # self.startDownload()
+        # TODO: implement manual logic
 
     @staticmethod
     def initEnv():
@@ -208,8 +218,6 @@ class DownloadTask(object):
         os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
         os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
         DbCtrl.init()
-        # with DbCtrl.getSession() as session, session.begin():
-        #     ActorFileCtrl.clearAllActorFileInfo(session)
 
     def __repr__(self):
         return self.desc

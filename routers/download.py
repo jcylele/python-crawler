@@ -5,12 +5,12 @@ import subprocess
 from fastapi import APIRouter
 
 from Consts import CacheKey
-from Ctrls import DbCtrl, ActorCtrl
+from Ctrls import ActorFileCtrl, DbCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
 from Utils import CacheUtil
 from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, \
-    BaseDownloadForm, NewDownloadForm, DownloadLimitForm
+    NewDownloadForm, DownloadLimitForm
 
 router = APIRouter(
     prefix="/api/download",
@@ -45,15 +45,6 @@ def download_by_group(form: GroupDownloadForm):
     task.downloadByActorGroup(form.actor_group_id)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
-
-@router.post("/resume")
-def resume_files(form: BaseDownloadForm):
-    limit = DownloadLimit(form.download_limit)
-    task = NewTask()
-    task.setLimit(limit)
-    task.resumeFiles()
-    return DbCtrl.CustomJsonResponse({'value': 'ok'})
-
 @router.patch("/resume/{actor_id}")
 def resume_actor(actor_id: int):
     limit = DownloadLimit(DownloadLimitForm.resumeVideoLimit())
@@ -62,6 +53,13 @@ def resume_actor(actor_id: int):
     task.resumeActor(actor_id)
     return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
+@router.patch("/fix_posts/{actor_id}")
+def fix_posts(actor_id: int):
+    limit = DownloadLimit(DownloadLimitForm.fixPostsLimit())
+    task = NewTask()
+    task.setLimit(limit)
+    task.fix_posts_of_actor(actor_id)
+    return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 @router.post("/manual")
 def manual(form: GroupDownloadForm):
@@ -132,7 +130,7 @@ def stop_task(task_uid: int):
 @router.get("/clean")
 def cleanFiles():
     with DbCtrl.getSession() as session, session.begin():
-        ActorCtrl.removeOutdatedFiles(session)
+        ActorFileCtrl.removeOutdatedFiles(session)
         return DbCtrl.CustomJsonResponse({'value': 'ok'})
 
 

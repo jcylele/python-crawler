@@ -3,8 +3,7 @@ from selenium.webdriver.common.by import By
 from sqlalchemy.orm import Session
 
 from Consts import WorkerType, QueueType
-from Ctrls import DbCtrl, RequestCtrl, ActorCtrl
-from Download import QueueUtil
+from Ctrls import ActorLinkCtrl, DbCtrl, RequestCtrl
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
@@ -25,11 +24,11 @@ class FetchActorLinkWorker(BaseFetchWorker):
     @staticmethod
     def linkChecked(actor_id: int):
         with DbCtrl.getSession() as session, session.begin():
-            ActorCtrl.setActorLinkChecked(session, actor_id)
+            ActorLinkCtrl.setActorLinkChecked(session, actor_id)
 
     def processLinks(self, actor_infos: list[ActorInfo], cur_url: str):
         with DbCtrl.getSession() as session, session.begin():
-            ActorCtrl.checkActorLink(session, actor_infos, self.init_category())
+            ActorLinkCtrl.checkActorLink(session, actor_infos, self.init_category())
 
     def _loadSelector(self) -> str:
         return ".card-list__items"
@@ -39,7 +38,7 @@ class FetchActorLinkWorker(BaseFetchWorker):
         return RequestCtrl.formatActorLinksUrl(actor_info)
 
     def _checkFetch(self, session: Session, item: FetchActorQueueItem):
-        return not ActorCtrl.isLinkChecked(session, item.actor_id)
+        return not ActorLinkCtrl.isLinkChecked(session, item.actor_id)
 
     def _onFetched(self, item: FetchActorQueueItem, driver: webdriver.Chrome) -> bool:
         actor_info = self.getActorInfo(item.actor_id)

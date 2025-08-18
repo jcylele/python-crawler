@@ -6,4 +6,4 @@ from Utils import CacheUtil
 if __name__ == '__main__':
     DownloadTask.initEnv()
     with DbCtrl.getSession() as session, session.begin():
-        ManualCtrl.validateActor(session, 9082)
+        ManualCtrl.new_check_similar(session)

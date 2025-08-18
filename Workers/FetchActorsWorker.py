@@ -8,10 +8,9 @@ from selenium.webdriver.support.wait import WebDriverWait
 from sqlalchemy.orm import Session
 
 from Consts import CacheKey, WorkerType, QueueType
-from Ctrls import ActorCtrl, DbCtrl, RequestCtrl
+from Ctrls import ActorCtrl, ActorQueryCtrl, DbCtrl, RequestCtrl
 from Models.ActorInfo import ActorInfo
 from Utils import CacheUtil, LogUtil
-from Download import QueueUtil
 from WorkQueue.BaseQueueItem import BaseQueueItem
 from WorkQueue.FetchQueueItem import FetchActorsQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
@@ -41,8 +40,8 @@ class FetchActorsWorker(BaseFetchWorker):
                     actor_ids.append(actor.actor_id)
 
         for actor_id in actor_ids:
-            QueueUtil.enqueueFetchActor(self.QueueMgr(), actor_id)
-            QueueUtil.enqueueFetchActorLink(self.QueueMgr(), actor_id)
+            self.QueueMgr().enqueueFetchActor(actor_id)
+            self.QueueMgr().enqueueFetchActorLink(actor_id)
 
     def getFinishedPage(self, start_page: int) -> int:
         if start_page > 0:
@@ -50,7 +49,7 @@ class FetchActorsWorker(BaseFetchWorker):
         if start_page == 0:
             return 0
         with DbCtrl.getSession() as session, session.begin():
-            actor_count = ActorCtrl.getAllActorCount(session)
+            actor_count = ActorQueryCtrl.getAllActorCount(session)
             return math.floor(actor_count / 50)
 
     def _loadSelector(self) -> str:

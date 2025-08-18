@@ -5,14 +5,18 @@ from os import path
 
 # connection string
 DbConnectString = ""
-# root url
+# root url from where to download
 RootUrl = ""
+IconUrl = ""
+ServerPort = 7878
 # Root Folder for all downloaded resources(files)
 RootFolder = ""
 # tmp file inside RootFolder for downloading files which will be  moved to other locations when completed
 TmpFolder = "_downloading"
 # folder for downloading icons of actors
 IconFolder = "_icon"
+# web path for files, app mount prefix
+FileWebPath = "files"
 
 # minimum download speed
 MIN_DOWN_SPEED = 0
@@ -48,9 +52,11 @@ DB_STR_LEN_REMARK = 200
 def init():
     with open(formatStaticFile('configs/settings.json'), 'r') as setting_file:
         setting_json = json.load(setting_file)
-        global DbConnectString, RootUrl, RootFolder, MIN_DOWN_SPEED, BASE_TIME_OUT, SHOW_BROWSER
+        global DbConnectString, RootUrl, IconUrl, ServerPort, RootFolder, MIN_DOWN_SPEED, BASE_TIME_OUT, SHOW_BROWSER
         DbConnectString = setting_json['DbConnectString']
         RootUrl = setting_json['RootUrl']
+        IconUrl = setting_json['IconUrl']
+        ServerPort = setting_json['ServerPort']
         RootFolder = setting_json['RootFolder']
         MIN_DOWN_SPEED = setting_json['MIN_DOWN_SPEED']
         BASE_TIME_OUT = setting_json['BASE_TIME_OUT']
@@ -98,10 +104,6 @@ def formatIconFolderPath() -> str:
     :return:
     """
     return f"{RootFolder}\\{IconFolder}"
-
-
-def formatIconFolderUrl() -> str:
-    return f"http://localhost:{FILE_PORT}/{IconFolder}"
 
 
 def formatActorFolderPath(actor_id: int, actor_name: str) -> str:

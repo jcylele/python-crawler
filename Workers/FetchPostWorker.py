@@ -1,11 +1,10 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-import Consts
 from Consts import WorkerType, QueueType, ResType
 from Ctrls import DbCtrl, RequestCtrl, PostCtrl, ResCtrl
-from Download import QueueUtil
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchPostQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
@@ -46,6 +45,10 @@ class FetchPostWorker(BaseFetchWorker):
             return False
         # check post completed, no need to fetch
         post = PostCtrl.getPost(session, item.post_id)
+        if post is None:  # queue push before sql commit?
+            LogUtil.error(
+                f"post {item.post_id} of actor {item.actor_info.actor_name} not found")
+            return False
         if post.completed:
             return False
         # check res exists, no need to fetch
@@ -85,10 +88,10 @@ class FetchPostWorker(BaseFetchWorker):
                 # add records for the resources
                 ResCtrl.addAllRes(session, item.post_id, url_list)
                 # enqueue all resources of the post
-                QueueUtil.enqueueAllRes(
-                    self.QueueMgr(), item.actor_info, post, self.DownloadLimit())
+                self.QueueMgr().enqueueAllRes(item.actor_info, post, self.DownloadLimit())
 
             # mark the post as analysed
             post.completed = True
+            post.actor.last_post_fetch_time = func.now()
 
         return True

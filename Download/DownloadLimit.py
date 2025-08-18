@@ -1,4 +1,4 @@
-from enum import IntEnum
+from sqlalchemy import Select
 
 from Consts import ResType, PostFilter
 from routers.web_data import DownloadLimitForm, DownloadProgress
@@ -26,7 +26,17 @@ class DownloadLimit(object):
         return self.limit.res_type == res_type.value
 
     def allowResInfo(self, res_type: ResType) -> bool:
-        return self.limit.res_type == ResType.Image.value or res_type == ResType.Video
+        return self.limit.res_type <= res_type.value
+
+    def canResInfo(self, res_type: ResType) -> bool:
+        """
+        skip unneeded res info
+        """
+        if res_type == ResType.Video:
+            return True
+        if self.progress.file_count >= self.limit.file_count > 0:
+            return False
+        return True
 
     def checkResSize(self, res_size: int) -> bool:
         return not (res_size > self.limit.single_file_size > 0)

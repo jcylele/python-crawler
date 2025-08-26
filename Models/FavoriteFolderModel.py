@@ -28,11 +28,3 @@ class FavoriteFolderModel(BaseModel):
     @validates("folder_desc")
     def validate_folder_desc(self, key, value):
         return self.truncate(key, value, DB_STR_LEN_LONG)
-
-    def toJson(self):
-        return {
-            "folder_id": self.folder_id,
-            "folder_name": self.folder_name,
-            "folder_desc": self.folder_desc,
-            "folder_priority": self.folder_priority
-        }

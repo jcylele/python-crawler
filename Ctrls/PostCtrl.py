@@ -9,7 +9,8 @@ from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from Utils import PyUtil
-from routers.web_data import PostFilterForm, ActorPostInfo
+from routers.web_data import PostFilterForm
+from routers.schemas_others import ActorPostInfo
 
 
 def getPost(session: Session, post_id: int) -> PostModel:
@@ -80,7 +81,7 @@ def filterQuery(_query: Select, form: PostFilterForm) -> Select:
     return _query
 
 
-def getPostCountList(session: Session, form: PostFilterForm):
+def getPostCountList(session: Session, form: PostFilterForm) -> list[ActorPostInfo]:
     _query = select(
         PostModel.actor_id,
         func.count(PostModel.post_id)
@@ -89,22 +90,18 @@ def getPostCountList(session: Session, form: PostFilterForm):
     result = session.execute(_query).fetchall()
     response = []
     for data in result:
-        info = ActorPostInfo()
-        info.actor_id = data[0]
-        info.post_count = data[1]
-        actor = session.get(ActorModel, info.actor_id)
-        info.actor_name = actor.actor_name
-
+        actor = session.get(ActorModel, data[0])
+        info = ActorPostInfo(actor_id=data[0], actor_name=actor.actor_name, post_count=data[1])
         response.append(info)
     return response
 
 
-def getFilteredPosts(session: Session, form: PostFilterForm) -> ScalarResult[PostModel]:
+def getFilteredPosts(session: Session, form: PostFilterForm) -> list[PostModel]:
     _query = select(PostModel)
     _query = filterQuery(_query, form)
     # _query = _query.order_by(PostModel.actor_name)
     # _query = _query.order_by(desc(PostModel.post_id))
-    return session.scalars(_query)
+    return list(session.scalars(_query))
 
 
 def setPostComment(session: Session, post_id: int, comment: str):

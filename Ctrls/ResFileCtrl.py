@@ -2,7 +2,7 @@ import os
 import re
 import ffmpeg
 from math import floor
-from typing import Callable
+from collections.abc import Callable
 from sqlalchemy.orm import Session
 
 import Configs
@@ -11,8 +11,7 @@ from Ctrls import ResCtrl
 from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Utils import LogUtil
-from routers.web_data import DownloadingVideoStats, ResFileInfo
-
+from routers.schemas_others import ResFileInfo, DownloadingVideoStats
 # region downloading files
 
 
@@ -100,17 +99,8 @@ def getDownloadingFilesOfActor(session: Session, actor: ActorModel) -> list[ResF
 
 
 def removeDownloadingFilesOfActor(session: Session, actor: ActorModel):
-    ret = []
     traverseDownloadingFilesOfActor(
         session, actor, lambda _1, file, _2, _3: os.remove(file))
-    return ret
-
-
-def removeDownloadingFilesOfActor(session: Session, actor: ActorModel):
-    ret = []
-    traverseDownloadingFilesOfActor(
-        session, actor, lambda _1, file, _2, _3: os.remove(file))
-    return ret
 
 
 def _get_downloading_video_stats_process(session: Session, file, post_id, res_index, ret: dict[int, DownloadingVideoStats]):
@@ -122,7 +112,9 @@ def _get_downloading_video_stats_process(session: Session, file, post_id, res_in
     actor = res.post.actor
     if actor.actor_id not in ret:
         ret[actor.actor_id] = DownloadingVideoStats(
-            actor.actor_id, actor.actor_name)
+            actor_id=actor.actor_id,
+            actor_name=actor.actor_name
+        )
     ret[actor.actor_id].add_info(os.path.getsize(file), res.res_size)
 
 

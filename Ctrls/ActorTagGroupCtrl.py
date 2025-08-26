@@ -1,15 +1,16 @@
 from sqlalchemy import ScalarResult, select, delete
 from sqlalchemy.orm import Session
 
+from Consts import ErrorCode
 from Models.ActorTagGroupModel import ActorTagGroupModel
 from Models.ActorTagModel import ActorTagModel
 from routers.web_data import CommonGroupForm
 
 
-def getAllActorTagGroups(session: Session) -> ScalarResult[ActorTagGroupModel]:
+def getAllActorTagGroups(session: Session) -> list[ActorTagGroupModel]:
     stmt = select(ActorTagGroupModel).order_by(
         ActorTagGroupModel.group_priority)
-    return session.scalars(stmt)
+    return list(session.scalars(stmt))
 
 
 def getActorTagGroup(session: Session, group_id: int) -> ActorTagGroupModel:
@@ -37,40 +38,38 @@ def updateActorTagGroup(session: Session, group_id: int, form: CommonGroupForm):
     return real_group
 
 
-def deleteActorTagGroup(session: Session, group_id: int) -> bool:
+def deleteActorTagGroup(session: Session, group_id: int):
     # delete the group
     session.execute(
         delete(ActorTagGroupModel).where(
             ActorTagGroupModel.group_id == group_id)
     )
 
-    return True
 
-
-def addTagToGroup(session: Session, group_id: int, tag_id: int) -> bool:
+def addTagToGroup(session: Session, group_id: int, tag_id: int) -> ErrorCode:
     tag = session.get(ActorTagModel, tag_id)
     if tag is None:
-        return False
+        return ErrorCode.TagNotFound
 
     if tag.tag_group_id is not None:
         if tag.tag_group_id == group_id:
-            return True
+            return ErrorCode.Success
         else:
-            return False
+            return ErrorCode.TagInOtherGroup
 
     tag.tag_group_id = group_id
     session.flush()
-    return True
+    return ErrorCode.Success
 
 
-def removeTagFromGroup(session: Session, group_id: int, tag_id: int) -> bool:
+def removeTagFromGroup(session: Session, group_id: int, tag_id: int) -> ErrorCode:
     tag = session.get(ActorTagModel, tag_id)
     if tag is None:
-        return False
+        return ErrorCode.TagNotFound
 
     if tag.tag_group_id != group_id:
-        return False
+        return ErrorCode.TagNotInGroup
 
     tag.tag_group_id = None
     session.flush()
-    return True
+    return ErrorCode.Success

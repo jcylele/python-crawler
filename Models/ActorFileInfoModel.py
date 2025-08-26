@@ -27,12 +27,3 @@ class ActorFileInfoModel(BaseModel):
             self.img_count == other.img_count and \
             self.video_count == other.video_count
 
-    def toJson(self):
-        return {
-            "actor_id": self.actor_id,
-            "res_state": self.res_state.value,
-            "img_size": self.img_size,
-            "video_size": self.video_size,
-            "img_count": self.img_count,
-            "video_count": self.video_count
-        }

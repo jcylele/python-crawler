@@ -1,16 +1,16 @@
 from sqlalchemy import ScalarResult, select, delete, exists
 from sqlalchemy.orm import Session
 
-from Consts import GroupCondType
+from Consts import ErrorCode, GroupCondType
 from Models.ActorGroupCondModel import ActorGroupCondModel
 from Models.ActorGroupModel import ActorGroupModel
 from Models.ActorModel import ActorModel
 from routers.web_data import ActorGroupForm, ActorGroupCond
 
 
-def getAllActorGroups(session: Session) -> ScalarResult[ActorGroupModel]:
+def getAllActorGroups(session: Session) -> list[ActorGroupModel]:
     stmt = select(ActorGroupModel).order_by(ActorGroupModel.group_priority)
-    return session.scalars(stmt)
+    return list(session.scalars(stmt))
 
 
 def getActorGroup(session: Session, group_id: int) -> ActorGroupModel:
@@ -38,21 +38,21 @@ def updateActorGroup(session: Session, group_id: int, form: ActorGroupForm):
     return real_group
 
 
-def deleteActorGroup(session: Session, group_id: int) -> bool:
+def deleteActorGroup(session: Session, group_id: int) -> ErrorCode:
     # check if there are actors in the group
     exists_query = select(exists().where(
         ActorModel.actor_group_id == group_id
     ))
     actor_exists = session.scalar(exists_query)
     if actor_exists:
-        return False
+        return ErrorCode.GroupHasActors
 
     # delete the group
     session.execute(
         delete(ActorGroupModel).where(ActorGroupModel.group_id == group_id)
     )
 
-    return True
+    return ErrorCode.Success
 
 
 def setGroupCondition(session: Session, group_id: int, cond_list: list[ActorGroupCond]):
@@ -73,30 +73,22 @@ def getGroupConditions(session: Session, group_id: int):
     stmt = select(ActorGroupCondModel).where(ActorGroupCondModel.group_id == group_id)
     return session.scalars(stmt)
 
-def checkGroupCondition(session: Session, actor: ActorModel, group_id: int) -> tuple[bool, str]:
+def checkGroupCondition(session: Session, actor: ActorModel, group_id: int) -> int:
     main_actor = actor.main_actor
     cond_list = getGroupConditions(session, group_id)
     for cond in cond_list:
         if cond.cond_type == GroupCondType.MinScore:
             if main_actor.score < cond.cond_param:
-                return False, f"actor {actor.actor_name} score < {cond.cond_param / 2}"
+                return cond.cond_id
         elif cond.cond_type == GroupCondType.MaxScore:
             if main_actor.score > cond.cond_param:
-                return False, f"actor {actor.actor_name} score > {cond.cond_param / 2}"
+                return cond.cond_id
         elif cond.cond_type == GroupCondType.HasAnyTag:
             tag_count = len(main_actor.rel_tags)
             if (cond.cond_param == 0) != (tag_count == 0):
-                if tag_count == 0:
-                    err_msg = f"actor {actor.actor_name} has no tag"
-                else:
-                    err_msg = f"actor {actor.actor_name} has {tag_count} tags"
-                return False, err_msg
+                return cond.cond_id
         elif cond.cond_type == GroupCondType.Linked:
-            if (actor.isLinked()) != (cond.cond_param == 1):
-                if actor.isLinked():
-                    err_msg = f"actor {actor.actor_name} is linked"
-                else:
-                    err_msg = f"actor {actor.actor_name} is not linked"
-                return False, err_msg
+            if (actor.is_linked) != (cond.cond_param == 1):
+                return cond.cond_id
 
-    return True, ""
+    return 0

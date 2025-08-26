@@ -1,7 +1,8 @@
 from sqlalchemy import Select
 
 from Consts import ResType, PostFilter
-from routers.web_data import DownloadLimitForm, DownloadProgress
+from routers.web_data import DownloadLimitForm
+from routers.schemas_others import DownloadLimitResponse, DownloadProgress
 
 
 class DownloadLimit(object):
@@ -52,8 +53,5 @@ class DownloadLimit(object):
         self.progress.total_file_size += file_size
         self.progress.file_count += 1
 
-    def toJson(self):
-        return {
-            "limit": self.limit.toJson(),
-            "progress": self.progress.toJson()
-        }
+    def toResponse(self) -> DownloadLimitResponse:
+        return DownloadLimitResponse(limit=self.limit, progress=self.progress)

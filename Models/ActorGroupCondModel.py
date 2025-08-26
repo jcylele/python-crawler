@@ -15,15 +15,9 @@ class ActorGroupCondModel(BaseModel):
     cond_param: Mapped[int] = mapped_column(default=0)
 
     group: Mapped["ActorGroupModel"] = relationship(
-        back_populates="cond_list",
+        back_populates="group_cond_list",
         cascade="all",
         passive_deletes=True
     )
 
-    def toJson(self):
-        json_data = {
-            'cond_type': self.cond_type,
-            'cond_param': self.cond_param
-        }
 
-        return json_data

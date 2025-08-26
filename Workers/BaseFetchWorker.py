@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 import Configs
 from Consts import WorkerType
-from Ctrls import DbCtrl, ActorCtrl
+from Ctrls import DbCtrl, ActorCtrl, PathCtrl
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from Download import WebPool
@@ -51,7 +51,7 @@ class BaseFetchWorker(BaseWorker):
         fetch actor icon if not exists, screenshot icon for temporary use if not exists
         """
         # real icon
-        if os.path.exists(actor_info.icon_file_path()):
+        if os.path.exists(PathCtrl.icon_file_path(actor_info)):
             return
 
         # fetch real icon
@@ -59,13 +59,13 @@ class BaseFetchWorker(BaseWorker):
             self.QueueMgr().enqueueActorIcon(actor_info, driver.current_url)
 
         # screenshot icon
-        icon_ss_file_path = actor_info.icon_ss_file_path()
-        if os.path.exists(icon_ss_file_path):
+        ss_file_path = PathCtrl.icon_ss_file_path(actor_info)
+        if os.path.exists(ss_file_path):
             return
         # take screenshot
         try:
             WebDriverWait(driver, 15).until(ImageCompleteWait(selector))
-            driver.find_element(By.CSS_SELECTOR, selector).screenshot(icon_ss_file_path)
+            driver.find_element(By.CSS_SELECTOR, selector).screenshot(ss_file_path)
         except:
             LogUtil.info(f"head icon of {actor_info.actor_name} not loaded")
 

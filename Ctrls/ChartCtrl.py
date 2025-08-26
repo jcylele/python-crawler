@@ -1,3 +1,4 @@
+from routers.schemas_others import TagCount
 from sqlalchemy import BigInteger, func, select
 from sqlalchemy.orm import Session, aliased
 
@@ -11,7 +12,7 @@ from Models.ResModel import ResModel
 from Utils import LogUtil
 
 
-def getTagRelative(session: Session, tag_id: int, limit: int):
+def getTagRelative(session: Session, tag_id: int, limit: int) -> list[TagCount]:
     # 正确创建别名
     TagRel2 = aliased(ActorTagRelationship)
 
@@ -29,7 +30,7 @@ def getTagRelative(session: Session, tag_id: int, limit: int):
             .limit(limit + 1))
 
     ret = session.execute(stmt).all()
-    return [{'tag_id': tag_id, 'count': count} for tag_id, count in ret]
+    return [TagCount(tag_id=tag_id, count=count) for tag_id, count in ret]
 
 
 def getScoresByTag(session: Session, tag_id: int) -> list[int]:
@@ -50,7 +51,7 @@ def getScoresByTag(session: Session, tag_id: int) -> list[int]:
     return scores
 
 
-def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit: int):
+def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit: int) -> list[TagCount]:
     """
     get tag counts used by actors who score between min_score and max_score
     """
@@ -64,7 +65,7 @@ def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit:
               .order_by(func.count(ActorTagRelationship.main_actor_id).desc())
               .limit(limit))
     ret = session.execute(_query).fetchall()
-    return [{'tag_id': tag_id, 'count': count} for tag_id, count in ret]
+    return [TagCount(tag_id=tag_id, count=count) for tag_id, count in ret]
 
 
 def getResSizeStats(session: Session) -> dict[int, int]:

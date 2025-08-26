@@ -5,7 +5,7 @@ from Consts import ActorLogType
 from Models.ActorLogModel import ActorLogModel
 
 
-def getActorLogs(session: Session, actor_id: int):
+def getActorLogs(session: Session, actor_id: int) -> list[ActorLogModel]:
     stmt = (select(ActorLogModel)
             .where(ActorLogModel.actor_id == actor_id)
             .order_by(ActorLogModel.log_id))

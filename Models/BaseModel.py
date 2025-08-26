@@ -31,23 +31,6 @@ class IntEnum(sa.types.TypeDecorator):
         return self._enumtype(value)
 
 
-class BaseModelEncoder(json.JSONEncoder):
-    """
-    json encoder for BaseModel
-    """
-
-    def default(self, obj):
-        # custom toJson
-        method = getattr(obj, 'toJson', None)
-        if callable(method):
-            return method()
-        # enum value
-        if isinstance(obj, Enum):
-            return obj.value
-        # Let the base class default method raise the TypeError
-        return json.JSONEncoder.default(self, obj)
-
-
 class BaseModel(DeclarativeBase):
     def toJson(self):
         json_data = {}

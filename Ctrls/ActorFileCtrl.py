@@ -1,7 +1,7 @@
 import os
 import shutil
 import threading
-from typing import Union
+from collections.abc import Iterable
 from sqlalchemy import Select, delete, exists, select, func, case, event
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 import Configs
 from Models.ActorInfo import ActorInfo
 from Models.ActorModel import ActorModel
-from routers.web_data import ActorFileDetail, ActorVideoInfo
+from Utils.PyUtil import time_cost
+from routers.schemas_others import ActorVideoInfo, ActorFileDetail
+
 from Ctrls import ActorLogCtrl, DbCtrl, PostCtrl, ResCtrl, ResFileCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.PostModel import PostModel
@@ -126,6 +128,8 @@ def _build_single_stmt(actor_id: int) -> Select:
         PostModel.actor_id == actor_id
     ).group_by(
         ResModel.res_state
+    ).order_by(
+        ResModel.res_state
     )
 
 
@@ -141,6 +145,9 @@ def __build_batch_stmt(actor_ids: list[int]) -> Select:
     return __build_basic_stmt().where(
         PostModel.actor_id.in_(actor_ids)
     ).group_by(
+        PostModel.actor_id,
+        ResModel.res_state
+    ).order_by(
         PostModel.actor_id,
         ResModel.res_state
     )
@@ -196,7 +203,7 @@ def deleteActorFileInfo(actor_id: int):
         _schedule_cleanup()
 
 
-def deleteActorFileInfos(actor_ids: list[int]):
+def deleteActorFileInfos(actor_ids: Iterable[int]):
     with _dirty_lock:
         __dirty_actor_ids.update(actor_ids)
         _schedule_cleanup()
@@ -288,14 +295,100 @@ def validate(session: Session, actor_id: int) -> bool:
 # resources and files
 
 
-def validate_all_file_info(session: Session) -> int:
-    actor_ids = []
+@time_cost
+def validate_all_file_info_new(session: Session) -> int:
+    __process_dirty(session)
+
+    # 获取所有 actor_id
     stmt = select(ActorFileInfoModel.actor_id.distinct())
-    for actor_id in session.scalars(stmt):
-        if not validate(session, actor_id):
-            actor_ids.append(actor_id)
-    deleteActorFileInfos(actor_ids)
-    return len(actor_ids)
+    all_actor_ids = list(session.scalars(stmt))
+    if len(all_actor_ids) == 0:
+        return 0
+    
+    BATCH_SIZE = 500  # 定义每个批次处理的 actor 数量
+    all_unmatched_ids = set()
+    # 分批处理所有 actor_id
+    for i in range(0, len(all_actor_ids), BATCH_SIZE):
+        batch_ids = all_actor_ids[i:i + BATCH_SIZE]
+        # 为当前批次构建子查询 (与之前逻辑相同，但数据范围小得多)
+        live_stats_sq = __build_batch_stmt(batch_ids).subquery('live_stats')
+
+        # 对当前批次的数据进行 JOIN 和比较
+        mismatched_ids_stmt = select(ActorFileInfoModel.actor_id.distinct()).where(
+            ActorFileInfoModel.actor_id.in_(batch_ids) # 只关注当前批次的缓存
+        ).outerjoin(
+            live_stats_sq,
+            (ActorFileInfoModel.actor_id == live_stats_sq.c.actor_id) &
+            (ActorFileInfoModel.res_state == live_stats_sq.c.res_state)
+        ).where(
+            # WHERE 条件筛选出所有不一致的数据
+            # 使用 COALESCE 处理 live_stats 中可能因 JOIN 失败而产生的 NULL 值
+            (ActorFileInfoModel.img_size != func.coalesce(live_stats_sq.c.img_size, 0)) |
+            (ActorFileInfoModel.video_size != func.coalesce(live_stats_sq.c.video_size, 0)) |
+            (ActorFileInfoModel.img_count != func.coalesce(live_stats_sq.c.img_count, 0)) |
+            (ActorFileInfoModel.video_count != func.coalesce(live_stats_sq.c.video_count, 0)) |
+            # 这种情况检查缓存中有，但实时统计中已经不存在的条目
+            (live_stats_sq.c.actor_id == None)
+        )
+
+        unmatched_actor_ids = session.scalars(mismatched_ids_stmt).all()
+        all_unmatched_ids.update(unmatched_actor_ids)
+
+    # 对所有不匹配的ID进行处理
+    if all_unmatched_ids:
+        deleteActorFileInfos(all_unmatched_ids)
+            
+    return len(all_unmatched_ids)
+
+@time_cost
+def validate_all_file_info(session: Session) -> int:
+    __process_dirty(session)
+
+    stmt = select(ActorFileInfoModel.actor_id.distinct())
+    actor_ids = list(session.scalars(stmt))
+    new_stmt = __build_batch_stmt(actor_ids)
+    # right data, no function, just rows
+    new_list = list(session.execute(new_stmt))
+
+    old_stmt = select(ActorFileInfoModel).order_by(
+        ActorFileInfoModel.actor_id, ActorFileInfoModel.res_state)
+    # cached data, model with functions
+    old_list: list[ActorFileInfoModel] = list(session.scalars(old_stmt))
+
+    # compare 2 sorted list
+    unmatch_actor_ids = set()
+    new_i = 0
+    old_j = 0
+    while new_i < len(new_list) and old_j < len(old_list):
+        new_info, old_info = new_list[new_i], old_list[old_j]
+        if new_info.actor_id == old_info.actor_id:
+            if new_info.res_state == old_info.res_state:
+                if not old_info.equal(new_info):
+                    unmatch_actor_ids.add(new_info.actor_id)
+                new_i += 1
+                old_j += 1
+            elif new_info.res_state < old_info.res_state:
+                unmatch_actor_ids.add(new_info.actor_id)
+                new_i += 1
+            else:
+                unmatch_actor_ids.add(old_info.actor_id)
+                old_j += 1
+        elif new_info.actor_id < old_info.actor_id:
+            unmatch_actor_ids.add(new_info.actor_id)
+            new_i += 1
+        else:
+            unmatch_actor_ids.add(old_info.actor_id)
+            old_j += 1
+    while new_i < len(new_list):
+        unmatch_actor_ids.add(new_info.actor_id)
+        new_i += 1
+    while old_j < len(old_list):
+        unmatch_actor_ids.add(old_info.actor_id)
+        old_j += 1
+
+    # just put to waiting list
+    deleteActorFileInfos(unmatch_actor_ids)
+    return len(unmatch_actor_ids)
 
 
 def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
@@ -311,13 +404,13 @@ def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
                 is_completed = False
                 break
 
-    return {
-        'res_info': res_info,
-        'total_post_count': actor.total_post_count,
-        'unfinished_post_count': actor.current_post_count - actor.completed_post_count,
-        'finished_post_count': actor.completed_post_count,
-        'is_completed': is_completed
-    }
+    return ActorFileDetail(
+        res_info=res_info,
+        total_post_count=actor.total_post_count,
+        unfinished_post_count=actor.current_post_count - actor.completed_post_count,
+        finished_post_count=actor.completed_post_count,
+        is_completed=is_completed
+    )
 
 
 def __removeDeletedFile(session: Session, file_path: str, post_id: int, res_index: int):
@@ -356,8 +449,8 @@ def clearActorFolder(session: Session, actor: ActorModel):
 
 
 def getActorVideoStats(session: Session, actor_id: int) -> list[ActorVideoInfo]:
-    landscape_info = ActorVideoInfo(True)
-    portrait_info = ActorVideoInfo(False)
+    landscape_info = ActorVideoInfo(is_landscape=True)
+    portrait_info = ActorVideoInfo(is_landscape=False)
     stmt = select(
         ResModel
     ).join(
@@ -377,7 +470,7 @@ def getActorVideoStats(session: Session, actor_id: int) -> list[ActorVideoInfo]:
     return [landscape_info, portrait_info]
 
 
-def createActorFolder(actor: Union[ActorInfo, ActorModel]):
+def createActorFolder(actor: ActorInfo | ActorModel):
     os.makedirs(Configs.formatActorFolderPath(
         actor.actor_id, actor.actor_name), exist_ok=True)
 

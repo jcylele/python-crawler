@@ -1,5 +1,5 @@
 import re
-from typing import Iterable
+from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

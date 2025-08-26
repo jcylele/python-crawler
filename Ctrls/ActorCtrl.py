@@ -1,10 +1,10 @@
 # ActorModel related operations
-from typing import Union
+from collections.abc import Iterable
 
 from sqlalchemy import delete, exists, select, event, inspect
 from sqlalchemy.orm import Session
 
-from Consts import NoticeType, ActorLogType, ResState
+from Consts import ErrorCode, NoticeType, ActorLogType, ResState
 from Ctrls import DbCtrl, PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl, ResFileCtrl
 from Models.ActorInfo import ActorInfo
 from Models.ActorMainModel import ActorMainModel
@@ -89,7 +89,7 @@ def addActor(session: Session, actor_info: ActorInfo, group_id: int) -> ActorMod
 # region update actor / main_actor
 
 
-def _innerSetActorTags(session: Session, main_actor_id: int, tag_list: Union[list[int], set[int]]):
+def _innerSetActorTags(session: Session, main_actor_id: int, tag_list: Iterable[int]):
     # delete all old tags
     _query = delete(ActorTagRelationship) \
         .where(ActorTagRelationship.main_actor_id == main_actor_id)
@@ -189,16 +189,16 @@ def resetActorPosts(session: Session, actor_id: int):
     ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetPost)
 
 
-def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> tuple[bool, ActorModel, str]:
+def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> tuple[ErrorCode, ActorModel]:
     actor = getActor(session, actor_id)
     # no change
     if actor.actor_group_id == new_group_id:
-        return False, actor, f"actor {actor.actor_name} already in group {actor.actor_group.group_name}"
+        return ErrorCode.GroupAlreadyIn, actor
     # check group condition
-    ok, err_msg = ActorGroupCtrl.checkGroupCondition(
+    cond_id = ActorGroupCtrl.checkGroupCondition(
         session, actor, new_group_id)
-    if not ok:
-        return False, actor, err_msg
+    if cond_id != 0:
+        return ErrorCode.GroupCondFailed, actor
 
     oldHas = actor.actor_group.has_folder
     new_group = ActorGroupCtrl.getActorGroup(session, new_group_id)
@@ -218,7 +218,7 @@ def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> tupl
     ActorLogCtrl.addActorLog(
         session, actor_id, ActorLogType.Group, new_group_id)
 
-    return True, actor, f"actor {actor.actor_name} join group {new_group.group_name}"
+    return ErrorCode.Success, actor
 
 
 # endregion
@@ -255,7 +255,8 @@ def refreshActorPostCount(session: Session, actor_id: int):
 
 
 def fixPostBelong(session: Session, post: PostModel, old_owner: ActorModel, new_owner: ActorModel):
-    LogUtil.info(f"fix post {post.post_id} belong changed from {old_owner.actor_name} to {new_owner.actor_name}")
+    LogUtil.info(
+        f"fix post {post.post_id} belong changed from {old_owner.actor_name} to {new_owner.actor_name}")
     post.actor_id = new_owner.actor_id
     # update post counts
     old_owner.current_post_count -= 1

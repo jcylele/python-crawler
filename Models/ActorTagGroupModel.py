@@ -28,12 +28,3 @@ class ActorTagGroupModel(BaseModel):
     def validate_group_desc(self, key, value):
         return self.truncate(key, value, DB_STR_LEN_LONG)
     
-    def toJson(self):
-        json_data = {
-            'group_id': self.group_id,
-            'group_name': self.group_name,
-            'group_desc': self.group_desc or "",
-            'group_priority': self.group_priority,
-            'tags': [tag.toJson() for tag in self.tags]
-        }
-        return json_data

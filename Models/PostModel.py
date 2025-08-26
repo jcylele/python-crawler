@@ -46,12 +46,6 @@ class PostModel(BaseModel):
     def validate_comment(self, key, value):
         return self.truncate(key, value, DB_STR_LEN_LONG)
 
-    def toJson(self):
-        return {
-            # large number may be corrupted in js, so use string instead
-            'post_id': str(self.post_id),
-            'comment': self.comment or ""
-        }
 
     def __repr__(self) -> str:
         return f"Post(post_id={self.post_id!r}, actor_name={self.actor.actor_name})"

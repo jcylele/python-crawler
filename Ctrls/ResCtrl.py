@@ -1,6 +1,5 @@
 # Resource related operations
 import re
-from typing import List, Tuple
 from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
@@ -9,10 +8,10 @@ from Consts import ResState, ResType
 from Models.PostModel import PostModel
 from Models.ResDomainModel import ResDomainModel
 from Models.ResModel import ResModel
-from Models.ResSizeCount import ResSizeCount
 from Models.ResUrlModel import ResUrlModel
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Utils import LogUtil, PyUtil
+from routers.schemas_others import ResSizeCount
 
 
 def getRes(session: Session, res_id: int) -> ResModel:
@@ -74,7 +73,7 @@ def addResUrl(session: Session, url: str) -> int:
     return res_url.url_id
 
 
-def addAllRes(session: Session, post_id: int, url_list: List[Tuple[ResType, str]]):
+def addAllRes(session: Session, post_id: int, url_list: list[tuple[ResType, str]]):
     for i in range(len(url_list)):
         res = ResModel()
         res.post_id = post_id
@@ -130,10 +129,9 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
         state_map = {}
 
     # print(state_arr)
-    rsc_list: List[ResSizeCount] = []
+    rsc_list: list[ResSizeCount] = []
     for i, state_map in enumerate(state_arr):
-        item = ResSizeCount()
-        item.setStateMap(state_map)
+        item = ResSizeCount(count_map = state_map)
         if i == 0:
             item.min = 0
             item.max = res_size_list[i]

@@ -34,10 +34,3 @@ class ActorTagModel(BaseModel):
     def validate_tag_name(self, key, value):
         return self.truncate(key, value, DB_STR_LEN_SHORT)
 
-    def toJson(self):
-        return {
-            "tag_id": self.tag_id,
-            "tag_name": self.tag_name,
-            "tag_priority": self.tag_priority,
-            "tag_group_id": self.tag_group_id or 0
-        }

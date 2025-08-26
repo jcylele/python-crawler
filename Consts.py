@@ -1,7 +1,9 @@
 from enum import Enum, auto, IntEnum
 
+
 class CacheKey(Enum):
     CustomPage = 'Custom Page'
+
 
 class GroupCondType(Enum):
     MinScore = 0  # param: score
@@ -17,7 +19,6 @@ class NoticeType(Enum):
     SameActorName = 3  # same name, different platform
     HasLinkedAccount = 4  # actor has linked accounts
     SimilarActorName = 5  # actor name is similar
-
 
 
 class ActorLogType(Enum):
@@ -83,6 +84,7 @@ class PostFilter(IntEnum):
     Current = 2
     Completed = 3
 
+
 class BoolEnum(Enum):
     ALL = auto()
     TRUE = auto()
@@ -100,3 +102,26 @@ class SortType(Enum):
     TotalFileSize = auto()
     LastPostFetchTime = auto()
     LastResDownloadTime = auto()
+
+
+class ErrorCode(IntEnum):
+    Success = 0
+
+    MainActorNotFound = 1
+    ActorNotFound = 2
+    ActorGroupNotFound = 3
+    TagNotFound = 4
+    TagGroupNotFound = 5
+    FolderNotFound = 6
+
+    MultiLinkGroups = 100
+    NotAllLinkedActors = 101
+    UnlinkedActor = 102
+    
+
+    GroupAlreadyIn = 200
+    GroupCondFailed = 201
+    GroupHasActors = 202
+
+    TagInOtherGroup = 300
+    TagNotInGroup = 301

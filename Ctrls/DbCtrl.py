@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.responses import Response
 
 import Configs
-from Models.BaseModel import BaseModel, BaseModelEncoder
+from Models.BaseModel import BaseModel
 
 __Session = None
 
@@ -26,11 +26,21 @@ def init():
     __Session = sessionmaker(engine)
 
 
+def get_db_session():
+    """FastAPI Dependency to get a DB session."""
+    session = getSession()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
 def getSession() -> Session:
-    """
-    new a reusable session
-    :return:
-    """
+    """new a reusable session, caller manage the session"""
     return __Session()
 
 
@@ -39,8 +49,5 @@ def newSession(connection) -> Session:
 
 
 def CustomJsonResponse(json_data) -> Response:
-    str_data = json.dumps(json_data, cls=BaseModelEncoder)
+    str_data = json.dumps(json_data)
     return Response(content=str_data, media_type="application/text")
-
-
-

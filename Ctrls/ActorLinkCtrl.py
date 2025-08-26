@@ -1,7 +1,7 @@
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import Session
 
-from Consts import ActorLogType, NoticeType
+from Consts import ActorLogType, ErrorCode, NoticeType
 from Ctrls import ActorCtrl, ActorLogCtrl, NoticeCtrl
 from Models.ActorInfo import ActorInfo
 from Models.ActorMainModel import ActorMainModel
@@ -13,31 +13,31 @@ from routers.web_data import LinkActorForm
 def _distinct(id_list: list[int]) -> list[int]:
     return list(set(id_list))
 
-def unlinkActors(session: Session, actor_ids: list[int]) -> tuple[bool, str]:
+def unlinkActors(session: Session, actor_ids: list[int]) -> ErrorCode:
     actor_ids = _distinct(actor_ids)
     # check all actors belong to the same group, and all actors in the group are selected
     actor_list = [ActorCtrl.getActor(session, actor_id)
                   for actor_id in actor_ids]
     main_actor_id = 0
     for actor in actor_list:
-        if not actor.isLinked():  # not linked
-            return False
+        if not actor.is_linked():  # not linked
+            return ErrorCode.UnlinkedActor
         if main_actor_id == 0:
             main_actor_id = actor.main_actor_id
         elif main_actor_id != actor.main_actor_id:  # not in same link
-            return False, f"actors are in different links"
+            return ErrorCode.MultiLinkGroups
 
     # check if all actors included
     stmt = select(func.count(ActorModel.actor_id)).where(
         ActorModel.main_actor_id == main_actor_id)
     linked_actor_count = session.scalar(stmt)
     if linked_actor_count > len(actor_ids):
-        return False, f"not all actors in the link are selected"
+        return ErrorCode.NotAllLinkedActors
 
     main_actor = ActorCtrl.getMainActor(session, main_actor_id)
     if main_actor is None:
         LogUtil.error(f"main actor {main_actor_id} not found")
-        return False, f"main actor {main_actor_id} not found"
+        return ErrorCode.MainActorNotFound
 
     for actor in actor_list:
         # copy main_actor
@@ -68,10 +68,10 @@ def unlinkActors(session: Session, actor_ids: list[int]) -> tuple[bool, str]:
     session.delete(main_actor)
 
     session.flush()
-    return True, f"actors unlinked"
+    return ErrorCode.Success
 
 
-def linkActors(session: Session, form: LinkActorForm) -> tuple[bool, str]:
+def linkActors(session: Session, form: LinkActorForm) -> ErrorCode:
     actor_ids = _distinct(form.actor_ids)
     # check all actors belong to the same link group or no group
     actor_list = [ActorCtrl.getActor(session, actor_id)
@@ -82,12 +82,12 @@ def linkActors(session: Session, form: LinkActorForm) -> tuple[bool, str]:
     linked_actor_count = 0
     for actor in actor_list:
         old_main_actor_ids.add(actor.main_actor_id)
-        if actor.isLinked():
+        if actor.is_linked:
             linked_actor_count += 1
             if old_main_actor_id == 0:
                 old_main_actor_id = actor.main_actor_id
             elif old_main_actor_id != actor.main_actor_id:  # not in same link
-                return False, f"actors are in different links"
+                return ErrorCode.MultiLinkGroups
 
     # check all linked actors are included
     if old_main_actor_id != 0:
@@ -95,7 +95,7 @@ def linkActors(session: Session, form: LinkActorForm) -> tuple[bool, str]:
             ActorModel.main_actor_id == old_main_actor_id)
         total_linked_actor_count = session.scalar(stmt)
         if total_linked_actor_count > linked_actor_count:
-            return False, f"not all actors in the link are selected"
+            return ErrorCode.NotAllLinkedActors
 
     # choose a new main_actor_id from actor_ids, exclude old_main_actor_id
     for actor_id in actor_ids:
@@ -145,12 +145,12 @@ def linkActors(session: Session, form: LinkActorForm) -> tuple[bool, str]:
         if main_actor:
             session.delete(main_actor)
 
-    return True, f"actors linked: {', '.join(actor_names)}"
+    return ErrorCode.Success
 
 
 def getGroupsOfLinkedActors(session: Session, actor_id: int) -> list[int]:
     actor = ActorCtrl.getActor(session, actor_id)
-    if not actor.isLinked():
+    if not actor.is_linked:
         return [actor.actor_group_id]
 
     stmt = (

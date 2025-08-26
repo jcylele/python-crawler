@@ -24,13 +24,10 @@ def getAllTagsUsedInfo(session: Session) -> dict[int, TagUsedInfo]:
         .group_by(ActorTagRelationship.tag_id)
     )
     result = session.execute(_query).fetchall()
-    count_map = {}
+    count_map: dict[int, TagUsedInfo] = {}
     for data in result:
-        count_map[data[0]] = {
-            'used_count': data[1],
-            'avg_score': float(data[2])
-        }
-    return count_map
+        count_map[data[0]] = TagUsedInfo(used_count=data[1], avg_score=float(data[2]))
+    return count_map  # type: ignore
 
 
 def getTagUsedInfo(session: Session, tag_id: int) -> TagUsedInfo:
@@ -48,10 +45,7 @@ def getTagUsedInfo(session: Session, tag_id: int) -> TagUsedInfo:
     )
     # 执行查询并获取单一值结果
     result = session.execute(stmt).fetchone()
-    return {
-        'used_count': result[0],
-        'avg_score': float(result[1])
-    }
+    return TagUsedInfo(used_count=result[0], avg_score=float(result[1]))
 
 
 def getActorTag(session: Session, tag_id: int) -> ActorTagModel:

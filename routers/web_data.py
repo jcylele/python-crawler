@@ -1,13 +1,11 @@
 
-from typing import TypedDict
 
 from pydantic import BaseModel
 
 from Consts import BoolEnum, ResType, SortType
-from Models.ActorFileInfoModel import ActorFileInfoModel
 
 
-class TagUsedInfo(TypedDict):
+class TagUsedInfo(BaseModel):
     used_count: int
     avg_score: float
 
@@ -47,87 +45,6 @@ class PostFilterForm(BaseModel):
     comment: str
 
 
-class ServerData(object):
-    def toJson(self):
-        return self.__dict__
-
-class ResFileInfo(ServerData):
-    file_path: str
-    file_size: int
-    res_size: int
-
-    def __init__(self, file_path: str, file_size: int, res_size: int):
-        self.file_path = file_path
-        self.file_size = file_size
-        self.res_size = res_size
-
-class ActorVideoInfo(ServerData):
-    is_landscape: bool
-    duration: int
-    file_count: int
-    file_size: int
-
-    def __init__(self, is_landscape: bool):
-        self.is_landscape = is_landscape
-        self.duration = 0
-        self.file_count = 0
-        self.file_size = 0
-
-    def add_info(self, duration: float, file_size: int):
-        self.duration += duration
-        self.file_count += 1
-        self.file_size += file_size
-
-class DownloadingVideoStats(ServerData):
-    actor_id: int
-    actor_name: str
-    file_count: int
-    file_size: int
-    res_size: int
-
-    def __init__(self, actor_id: int, actor_name: str):
-        self.actor_id = actor_id
-        self.actor_name = actor_name
-        self.file_count = 0
-        self.file_size = 0
-        self.res_size = 0
-
-    def add_info(self, file_size: int, res_size: int):
-        self.file_count += 1
-        self.file_size += file_size
-        self.res_size += res_size
-
-class ActorPostInfo(ServerData):
-    actor_id: int
-    actor_name: str
-    post_count: int
-
-
-class BaseResult(ServerData):
-    succeed: bool
-    msg: str
-
-    def __init__(self, succeed: bool, msg: str):
-        self.succeed = succeed
-        self.msg = msg
-
-
-class ActorResult(BaseResult):
-    actor: "ActorModel"
-
-    def __init__(self, succeed: bool, msg: str, actor: "ActorModel" = None):
-        super().__init__(succeed, msg)
-        self.actor = actor
-
-
-class ActorListResult(BaseResult):
-    actor_list: list["ActorModel"]
-
-    def __init__(self, succeed: bool, msg: str, actor_list: list["ActorModel"] = []):
-        super().__init__(succeed, msg)
-        self.actor_list = actor_list
-
-
 class ActorTagForm(BaseModel):
     tag_name: str
     tag_priority: int
@@ -150,18 +67,6 @@ class CommonPriority(BaseModel):
     priority: int
 
 
-class DownloadProgress(ServerData):
-    actor_count = 0
-    file_count = 0
-    total_file_size = 0
-
-    def __init__(self):
-        super().__init__()
-        self.actor_count = 0
-        self.file_count = 0
-        self.total_file_size = 0
-
-
 class DownloadLimitForm(BaseModel):
     actor_count: int
     # post count of each actor
@@ -180,9 +85,6 @@ class DownloadLimitForm(BaseModel):
     @staticmethod
     def fixPostsLimit():
         return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=1)
-
-    def toJson(self):
-        return self.__dict__
 
 
 class ActorGroupCond(BaseModel):
@@ -214,19 +116,13 @@ class ActorUrl(BaseModel):
 class UrlDownloadForm(GroupDownloadForm):
     urls: list[ActorUrl]
 
+
 class CommonGroupForm(BaseModel):
     name: str
     desc: str
     priority: int
 
+
 class ActorGroupForm(CommonGroupForm):
     group_color: str
     has_folder: bool
-
-
-class ActorFileDetail(TypedDict):
-    res_info: list[ActorFileInfoModel]
-    total_post_count: int
-    unfinished_post_count: int
-    finished_post_count: int
-    is_completed: bool

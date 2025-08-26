@@ -1,3 +1,4 @@
+from Models.ActorGroupCondModel import ActorGroupCondModel
 from sqlalchemy import String
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
@@ -15,7 +16,7 @@ class ActorGroupModel(BaseModel):
     has_folder: Mapped[bool] = mapped_column(default=False)
     group_priority: Mapped[int] = mapped_column(default=0)
 
-    cond_list: Mapped[list["ActorGroupCondModel"]] = relationship(
+    group_cond_list: Mapped[list[ActorGroupCondModel]] = relationship(
         back_populates="group",
         cascade="all, delete-orphan",
         passive_deletes=True
@@ -29,19 +30,8 @@ class ActorGroupModel(BaseModel):
     def validate_group_desc(self, key, value):
         return self.truncate(key, value, DB_STR_LEN_LONG)
 
-    def toJson(self):
-        json_data = {
-            'group_id': self.group_id,
-            'group_name': self.group_name,
-            'group_desc': self.group_desc,
-            'group_color': self.group_color,
-            'has_folder': self.has_folder,
-            'group_priority': self.group_priority
-        }
+    @property
+    def cond_list(self) -> list[ActorGroupCondModel]:
+        return [cond for cond in self.group_cond_list]
 
-        cond_list = []
-        for cond in self.cond_list:
-            cond_list.append(cond.toJson())
-        json_data['cond_list'] = cond_list
 
-        return json_data

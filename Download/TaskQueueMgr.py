@@ -2,7 +2,7 @@
 import os
 
 from Consts import QueueType
-from Ctrls import RequestCtrl
+from Ctrls import PathCtrl, RequestCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.QueueMgr import QueueMgr
 from Models.ActorInfo import ActorInfo
@@ -76,7 +76,7 @@ class TaskQueueMgr(QueueMgr):
 
     def enqueueActorIcon(self, actor_info: ActorInfo, from_url: str):
         # same actor_name on different platform, so use {actor_name}_{platform}.png
-        file_path = actor_info.icon_file_path()
+        file_path = PathCtrl.icon_file_path(actor_info)
         # skip is exist
         if os.path.exists(file_path):
             return

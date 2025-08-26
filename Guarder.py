@@ -1,7 +1,6 @@
 import threading
 import time
 from time import sleep
-from typing import List
 
 from Utils import LogUtil
 from Download import WorkerMgr
@@ -15,7 +14,7 @@ class Guarder(threading.Thread):
 
     def __init__(self, task: 'DownloadTask'):
         super().__init__()
-        self.workers: List[BaseWorker] = []
+        self.workers: list[BaseWorker] = []
         self.task = task
         self.done = False
 

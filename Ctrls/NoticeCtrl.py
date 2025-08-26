@@ -1,4 +1,5 @@
-from typing import Iterable
+from collections.abc import Iterable
+from routers.schemas_others import NoticeCount
 from sqlalchemy.orm import Session
 from sqlalchemy import update, func, select, or_
 from Consts import NoticeType
@@ -6,12 +7,12 @@ from Models.NoticeModel import NoticeModel
 from Utils import LogUtil
 
 
-def getNoticeCountMap(session: Session):
+def getNoticeCountMap(session: Session) -> list[NoticeCount]:
     _query = select(NoticeModel.notice_type, func.count(NoticeModel.notice_id)) \
         .where(NoticeModel.deleted == False) \
         .group_by(NoticeModel.notice_type)
     ret = session.execute(_query).fetchall()
-    return [{'notice_type': notice_type, 'count': count} for notice_type, count in ret]
+    return [NoticeCount(notice_type=notice_type, count=count) for notice_type, count in ret]
 
 
 def getNoticesOfType(session: Session, notice_type: NoticeType, limit: int = 0, offset: int = 0) -> list[NoticeModel]:
@@ -26,8 +27,7 @@ def getNoticesOfType(session: Session, notice_type: NoticeType, limit: int = 0, 
         stmt = stmt.limit(limit)
     if offset != 0:
         stmt = stmt.offset(offset)
-    notices = session.scalars(stmt)
-    return [notice for notice in notices]
+    return list(session.scalars(stmt))
 
 
 def deleteNoticesOfType(session: Session, notice_type: NoticeType):
@@ -95,7 +95,7 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
     session.flush()
 
 
-def searchNotice(session: Session, actor_name: str):
+def searchNotice(session: Session, actor_name: str) -> list[NoticeModel]:
     """
     search a notice
     """
@@ -107,8 +107,7 @@ def searchNotice(session: Session, actor_name: str):
                 NoticeModel.notice_param3 == actor_name
             ))
             .order_by(NoticeModel.notice_id))
-    notices = session.scalars(stmt)
-    return [notice for notice in notices]
+    return list(session.scalars(stmt))
 
 
 def sortedDistinctNames(names: Iterable[str]):

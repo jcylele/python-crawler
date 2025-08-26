@@ -28,13 +28,9 @@ class ActorMainModel(BaseModel):
         passive_deletes=True
     )
 
-    def toJson(self):
-        json_data = {
-            'score': self.score,
-            'tag_ids': [tag.tag_id for tag in self.rel_tags],
-            'remark': self.remark or ""
-        }
-        return json_data
+    @property
+    def tag_ids(self) -> list[int]:
+        return [tag.tag_id for tag in self.rel_tags]
 
 
 @event.listens_for(ActorMainModel, 'before_insert')

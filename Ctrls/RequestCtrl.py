@@ -1,4 +1,3 @@
-import os.path
 import random
 import requests
 from requests import Session
@@ -52,19 +51,6 @@ def createRequestSession() -> Session:
 
 def formatActorsUrl(start_index: int) -> str:
     return f"{Configs.RootUrl}/artists?o={start_index}"
-
-
-def smartActorIconSrc(actor_info: ActorInfo) -> str:
-    # real icon
-    file_path = actor_info.icon_file_path()
-    if os.path.exists(file_path):
-        return f"{Configs.FileWebPath}/{Configs.IconFolder}/{actor_info.icon_file_name()}"
-    # screenshot icon
-    ss_file_path = actor_info.icon_ss_file_path()
-    if os.path.exists(ss_file_path):
-        return f"{Configs.FileWebPath}/{Configs.IconFolder}/{actor_info.icon_ss_file_name()}"
-    # remote url
-    return formatActorIconUrl(actor_info)
 
 
 def formatActorIconUrl(actor_info: ActorInfo) -> str:

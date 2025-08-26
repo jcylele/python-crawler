@@ -20,11 +20,4 @@ class ActorLogModel(BaseModel):
     log_time: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), default=func.now())
 
-    def toJson(self):
-        json_data = {
-            'log_type': self.log_type,
-            'log_param': self.log_param,
-            'log_time': self.log_time.isoformat(sep=' '),
-        }
 
-        return json_data

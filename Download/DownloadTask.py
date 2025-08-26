@@ -1,5 +1,6 @@
 import os
 
+
 from sqlalchemy.orm import Session
 
 import Configs
@@ -12,7 +13,7 @@ from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from routers.web_data import ActorUrl
-
+from routers.schemas_others import DownloadTaskResponse
 
 class DownloadTask(object):
     def __init__(self, task_uid):
@@ -222,12 +223,11 @@ class DownloadTask(object):
     def __repr__(self):
         return self.desc
 
-    def toJson(self):
-        worker_count_map = self.guarder.getWorkerCountMap()
-        queue_count_map = self.queueMgr.getQueueCountMap()
-        return {'uid': self.uid,
-                'desc': self.desc,
-                'download_limit': self.download_limit.toJson(),
-                'worker_count': worker_count_map,
-                'queue_count': queue_count_map,
-                }
+    def toResponse(self) -> DownloadTaskResponse:
+        return DownloadTaskResponse(
+            uid=self.uid,
+            desc=self.desc,
+            download_limit=self.download_limit.toResponse(),
+            worker_count=self.guarder.getWorkerCountMap(),
+            queue_count=self.queueMgr.getQueueCountMap()
+        )

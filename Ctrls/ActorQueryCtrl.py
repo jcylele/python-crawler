@@ -156,11 +156,14 @@ def getAllActorCount(session: Session) -> int:
     return session.scalar(stmt)
 
 
-def getActorCountOfGroups(session: Session) -> list[tuple[int, int]]:
+def getActorCountInGroups(session: Session) -> dict[int, int]:
     # 直接用select()和func.count()计数，最简洁高效
     stmt = select(ActorModel.actor_group_id, func.count(
         ActorModel.actor_id)).group_by(ActorModel.actor_group_id)
-    return [(row[0], row[1]) for row in session.execute(stmt)]
+    count_map: dict[int, int] = {}
+    for row in session.execute(stmt):
+        count_map[row[0]] = row[1]
+    return count_map
 
 
 def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:

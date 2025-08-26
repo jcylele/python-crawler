@@ -1,8 +1,12 @@
-from fastapi import APIRouter
+from typing import TypeAlias
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
+from Consts import ErrorCode
 from Ctrls import FavoriteFolderCtrl, DbCtrl
 from routers.web_data import CommonGroupForm, CommonPriority
-
+from routers.schemas_others import CommonResponse, UnifiedListResponse, UnifiedResponse
+from routers.schemas import FavoriteFolderResponse
 
 router = APIRouter(
     prefix="/api/favorite_folder",
@@ -11,73 +15,69 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-
-@router.get("/list")
-def get_folder_list():
-    with DbCtrl.getSession() as session, session.begin():
-        ff_list = FavoriteFolderCtrl.getFolders(session)
-        return DbCtrl.CustomJsonResponse(ff_list)
+FavoriteFolderResult: TypeAlias = UnifiedResponse[FavoriteFolderResponse]
 
 
-@router.post("/add")
-def add_folder(form: CommonGroupForm):
-    with DbCtrl.getSession() as session, session.begin():
-        ff = FavoriteFolderCtrl.createFolder(session, form)
-        return DbCtrl.CustomJsonResponse(ff)
-
-@router.post("/priority")
-def update_priorities(priority_list: list[CommonPriority]):
-    with DbCtrl.getSession() as session, session.begin():
-        for p in priority_list:
-            ff = FavoriteFolderCtrl.getFolder(session, p.id)
-            ff.folder_priority = p.priority
-        return DbCtrl.CustomJsonResponse({'value': True})
-
-@router.post("/{folder_id}/update")
-def update_folder(folder_id: int, form: CommonGroupForm):
-    with DbCtrl.getSession() as session, session.begin():
-        ff = FavoriteFolderCtrl.updateFolder(session, folder_id, form)
-        return DbCtrl.CustomJsonResponse(ff)
+@router.get("/list", response_model=UnifiedListResponse[FavoriteFolderResponse])
+def get_folder_list(session: Session = Depends(DbCtrl.get_db_session)):
+    folders = FavoriteFolderCtrl.getFolders(session)
+    return UnifiedListResponse[FavoriteFolderResponse](data=folders)
 
 
-@router.delete("/{folder_id}")
-def delete_folder(folder_id: int):
-    with DbCtrl.getSession() as session, session.begin():
-        FavoriteFolderCtrl.deleteFolder(session, folder_id)
-        return DbCtrl.CustomJsonResponse(True)
+@router.post("/add", response_model=FavoriteFolderResult)
+def add_folder(form: CommonGroupForm, session: Session = Depends(DbCtrl.get_db_session)):
+    folder = FavoriteFolderCtrl.createFolder(session, form)
+    return FavoriteFolderResult(data=folder)
 
 
-@router.get("/{folder_id}")
-def get_folder_detail(folder_id: int):
-    with DbCtrl.getSession() as session, session.begin():
-        ff = FavoriteFolderCtrl.getFolder(session, folder_id)
-        return DbCtrl.CustomJsonResponse(ff)
+@router.post("/priority", response_model=CommonResponse)
+def update_priorities(priority_list: list[CommonPriority], session: Session = Depends(DbCtrl.get_db_session)):
+    for p in priority_list:
+        ff = FavoriteFolderCtrl.getFolder(session, p.id)
+        ff.folder_priority = p.priority
+    return CommonResponse()
 
 
-@router.post("/{folder_id}/add_actor/{actor_id}")
-def add_actor_to_folder(folder_id: int, actor_id: int):
-    with DbCtrl.getSession() as session, session.begin():
-        FavoriteFolderCtrl.addActorToFolder(session, folder_id, actor_id)
-        return DbCtrl.CustomJsonResponse(True)
+@router.post("/{folder_id}/update", response_model=FavoriteFolderResult)
+def update_folder(folder_id: int, form: CommonGroupForm, session: Session = Depends(DbCtrl.get_db_session)):
+    folder = FavoriteFolderCtrl.updateFolder(session, folder_id, form)
+    return FavoriteFolderResult(data=folder)
 
 
-@router.post("/{folder_id}/remove_actor/{actor_id}")
-def remove_actor_from_folder(folder_id: int, actor_id: int):
-    with DbCtrl.getSession() as session, session.begin():
-        FavoriteFolderCtrl.removeActorFromFolder(session, folder_id, actor_id)
-        return DbCtrl.CustomJsonResponse(True)
+@router.delete("/{folder_id}", response_model=CommonResponse)
+def delete_folder(folder_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    FavoriteFolderCtrl.deleteFolder(session, folder_id)
+    return CommonResponse()
 
 
-@router.post("/{folder_id}/batch_add_actor")
-def batch_add_actor_to_folder(folder_id: int, actor_ids: list[int]):
-    with DbCtrl.getSession() as session, session.begin():
-        FavoriteFolderCtrl.batchAddActorToFolder(session, folder_id, actor_ids)
-        return DbCtrl.CustomJsonResponse(True)
+@router.get("/{folder_id}", response_model=FavoriteFolderResult)
+def get_folder_detail(folder_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    folder = FavoriteFolderCtrl.getFolder(session, folder_id)
+    if folder is None:
+        return FavoriteFolderResult(error=ErrorCode.FolderNotFound)
+    return FavoriteFolderResult(data=folder)
 
 
-@router.post("/{folder_id}/batch_remove_actor")
-def batch_remove_actor_from_folder(folder_id: int, actor_ids: list[int]):
-    with DbCtrl.getSession() as session, session.begin():
-        FavoriteFolderCtrl.batchRemoveActorFromFolder(
-            session, folder_id, actor_ids)
-        return DbCtrl.CustomJsonResponse(True)
+@router.post("/{folder_id}/add_actor/{actor_id}", response_model=CommonResponse)
+def add_actor_to_folder(folder_id: int, actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    FavoriteFolderCtrl.addActorToFolder(session, folder_id, actor_id)
+    return CommonResponse()
+
+
+@router.post("/{folder_id}/remove_actor/{actor_id}", response_model=CommonResponse)
+def remove_actor_from_folder(folder_id: int, actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    FavoriteFolderCtrl.removeActorFromFolder(session, folder_id, actor_id)
+    return CommonResponse()
+
+
+@router.post("/{folder_id}/batch_add_actor", response_model=CommonResponse)
+def batch_add_actor_to_folder(folder_id: int, actor_ids: list[int], session: Session = Depends(DbCtrl.get_db_session)):
+    FavoriteFolderCtrl.batchAddActorToFolder(session, folder_id, actor_ids)
+    return CommonResponse()
+
+
+@router.post("/{folder_id}/batch_remove_actor", response_model=CommonResponse)
+def batch_remove_actor_from_folder(folder_id: int, actor_ids: list[int], session: Session = Depends(DbCtrl.get_db_session)):
+    FavoriteFolderCtrl.batchRemoveActorFromFolder(
+        session, folder_id, actor_ids)
+    return CommonResponse()

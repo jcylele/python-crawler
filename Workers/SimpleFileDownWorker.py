@@ -1,6 +1,7 @@
 import os
 
 from Consts import WorkerType, QueueType
+from Ctrls import PathCtrl
 from Utils import LogUtil
 from WorkQueue.ExtraInfo import ActorIconExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
@@ -21,7 +22,7 @@ class SimpleFileDownWorker(BaseRequestWorker):
     def _process(self, item: UrlQueueItem) -> bool:
         extra_info: ActorIconExtraInfo = item.extra_info
         actor_info = extra_info.actor_info
-        file_path = actor_info.icon_file_path()
+        file_path = PathCtrl.icon_file_path(actor_info)
         # double check file exists
         if os.path.exists(file_path):
             return True
@@ -34,7 +35,8 @@ class SimpleFileDownWorker(BaseRequestWorker):
         real_size = os.path.getsize(file_path)
         if real_size != size:
             # delete invalid file
-            LogUtil.warn(f"{file_path} incorrect size, expect {size:,d} get {real_size:,d}")
+            LogUtil.warn(
+                f"{file_path} incorrect size, expect {size:,d} get {real_size:,d}")
             os.remove(file_path)
             return False
 
@@ -42,7 +44,7 @@ class SimpleFileDownWorker(BaseRequestWorker):
 
         # remove screenshot file
         try:
-            os.remove(actor_info.icon_ss_file_path())
+            os.remove(PathCtrl.icon_ss_file_path(actor_info))
         except:
             pass
 

@@ -1,5 +1,7 @@
+import asyncio
 import os
 import re
+from typing import Any, Coroutine
 import ffmpeg
 from math import floor
 from collections.abc import Callable
@@ -18,37 +20,42 @@ from routers.schemas_others import ResFileInfo, DownloadingVideoStats
 def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int], None]):
     actor_folder = Configs.formatActorFolderPath(
         actor.actor_id, actor.actor_name)
-    for root, _, files in os.walk(actor_folder):
-        for file in files:
-            match_obj = re.match(r'^(\d+)_(\d+)\.\w+$', file)
+
+    with os.scandir(actor_folder) as it:
+        for entry in it:
+            if entry.is_dir():
+                continue
+            match_obj = re.match(r'^(\d+)_(\d+)\.\w+$', entry.name)
             if match_obj is None:
                 continue
             post_id = int(match_obj.group(1))
             res_index = int(match_obj.group(2))
-            callback(session, os.path.join(root, file), post_id, res_index)
+            callback(session, entry.path, post_id, res_index)
 
 
 def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str, int, int], None]):
     download_folder = Configs.formatTmpFolderPath()
     try:
-        for root, _, files in os.walk(download_folder):
-            for file in files:
-                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
+        with os.scandir(download_folder) as it:
+            for entry in it:
+                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', entry.name)
                 if match_obj is None:
                     continue
                 post_id = int(match_obj.group(2))
                 res_index = int(match_obj.group(3))
-                callback(session, os.path.join(root, file), post_id, res_index)
+                callback(session, entry.path, post_id, res_index)
     except Exception as e:
+        LogUtil.error(f"traverseDownloadingFiles failed, get Error")
+        LogUtil.exception(e)
         pass
 
 
 def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int], None]):
     download_folder = Configs.formatTmpFolderPath()
     try:
-        for root, _, files in os.walk(download_folder):
-            for file in files:
-                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file)
+        with os.scandir(download_folder) as it:
+            for entry in it:
+                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', entry.name)
                 if match_obj is None:
                     continue
                 actor_name = match_obj.group(1)
@@ -61,10 +68,74 @@ def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callbac
                     continue
                 if post.actor_id != actor.actor_id:
                     continue
-                callback(session, os.path.join(root, file), post_id, res_index)
+                callback(session, entry.path, post_id, res_index)
     except Exception as e:
         LogUtil.error(
-            f"traverseDownloadingFilesOfActor {actor.actor_name} failed, get {type(e)} {e.args}")
+            f"traverseDownloadingFilesOfActor {actor.actor_name} failed, get error")
+        LogUtil.exception(e)
+
+
+async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorModel,
+                                                callback: Callable[[Session, str, int, int], Coroutine[Any, Any, None]]):
+    """
+    traverseDownloadingFilesOfActor 的异步版本。
+    它使用线程池执行器来运行以避免阻塞事件循环。
+    """
+
+    def _walk_and_get_files(folder_path: str):
+        # 这个函数在一个单独的线程中运行。
+        try:
+            file_names = []
+            with os.scandir(folder_path) as it:
+                for entry in it:
+                    if entry.is_file():
+                        file_names.append(entry.name)
+            return file_names
+        except Exception as e:
+            LogUtil.error(f"Error in traverseDownloadingFilesOfActor:")
+            LogUtil.exception(e)
+            return []
+
+    download_folder = Configs.formatTmpFolderPath()
+    loop = asyncio.get_running_loop()
+
+    try:
+        # 在默认的线程池执行器中运行阻塞的逻辑
+        all_file_names = await loop.run_in_executor(None, _walk_and_get_files, download_folder)
+
+        callback_tasks = []
+        for file_name in all_file_names:
+            match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file_name)
+            if not match_obj:
+                continue
+
+            actor_name = match_obj.group(1)
+            if actor_name != actor.actor_name:
+                continue
+
+            post_id = int(match_obj.group(2))
+            res_index = int(match_obj.group(3))
+
+            # 注意: session.get() 是一个同步的数据库调用。
+            # 如果这里成为性能瓶颈，可以考虑使用异步数据库驱动和异步 session。
+            post = session.get(PostModel, post_id)
+            if post is None or post.actor_id != actor.actor_id:
+                continue
+
+            # 创建一个异步回调任务
+            callback_tasks.append(
+                callback(session, os.path.join(
+                    download_folder, file_name), post_id, res_index)
+            )
+
+        # 并发执行所有回调任务
+        if callback_tasks:
+            await asyncio.gather(*callback_tasks)
+
+    except Exception as e:
+        LogUtil.error(
+            f"traverseDownloadingFilesOfActor_async for {actor.actor_name} failed:")
+        LogUtil.exception(e)
 
 
 def removeDownloadingFiles(session: Session, actor: ActorModel):
@@ -152,7 +223,8 @@ def get_media_info(file_path) -> tuple[int, int, int]:
 
         return width, height, duration
     except Exception as e:
-        LogUtil.error(f"get media info failed, get {type(e)} {e.args}")
+        LogUtil.error(f"get media info failed")
+        LogUtil.exception(e)
         return 0, 0, 0
 
 

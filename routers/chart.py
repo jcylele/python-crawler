@@ -34,6 +34,7 @@ def tags_of_score(min_score: int = Query(alias='min'), max_score: int = Query(al
 @router.get("/down_size_of_groups", response_model=UnifiedResponse[dict[int, int]])
 def down_size_of_groups(session: Session = Depends(DbCtrl.get_db_session)):
     down_size_of_groups = ChartCtrl.getResSizeStats(session)
+    down_size_of_groups[0] = ChartCtrl.getTotalDownloadingSize(session)
     return UnifiedResponse[dict[int, int]](data=down_size_of_groups)  # type: ignore
 
 

@@ -1,5 +1,5 @@
 
-from sqlalchemy import String, ForeignKey, DateTime, func, BigInteger
+from sqlalchemy import String, ForeignKey, DateTime, func, BigInteger, event
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
 from Configs import DB_STR_LEN_REMARK, DB_STR_LEN_SHORT
@@ -35,6 +35,8 @@ class ActorModel(BaseModel):
     link_checked: Mapped[bool] = mapped_column(default=False)
     manual_done: Mapped[bool] = mapped_column(default=False)
     # info for this actor (not shared), just to record trivial things
+    has_comment: Mapped[bool] = mapped_column(
+        default=False, nullable=False, index=True)
     comment: Mapped[str] = mapped_column(
         String(DB_STR_LEN_REMARK), nullable=True, default=None)
 
@@ -86,3 +88,9 @@ class ActorModel(BaseModel):
     @property
     def tag_ids(self) -> list[int]:
         return self.main_actor.tag_ids
+
+
+@event.listens_for(ActorModel, 'before_insert')
+@event.listens_for(ActorModel, 'before_update')
+def update_has_comment(mapper, connection, target):
+    target.has_comment = target.comment is not None

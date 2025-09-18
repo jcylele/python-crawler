@@ -1,3 +1,5 @@
+import os
+from Ctrls import ResFileCtrl
 from routers.schemas_others import TagCount
 from sqlalchemy import BigInteger, func, select
 from sqlalchemy.orm import Session, aliased
@@ -20,14 +22,14 @@ def getTagRelative(session: Session, tag_id: int, limit: int) -> list[TagCount]:
         ActorTagRelationship.tag_id,
         func.count(ActorTagRelationship.main_actor_id)
     )
-            .join(
+        .join(
         TagRel2,
         ActorTagRelationship.main_actor_id == TagRel2.main_actor_id
     )
-            .where(TagRel2.tag_id == tag_id)
-            .group_by(ActorTagRelationship.tag_id)
-            .order_by(func.count(ActorTagRelationship.main_actor_id).desc())
-            .limit(limit + 1))
+        .where(TagRel2.tag_id == tag_id)
+        .group_by(ActorTagRelationship.tag_id)
+        .order_by(func.count(ActorTagRelationship.main_actor_id).desc())
+        .limit(limit + 1))
 
     ret = session.execute(stmt).all()
     return [TagCount(tag_id=tag_id, count=count) for tag_id, count in ret]
@@ -66,6 +68,22 @@ def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit:
               .limit(limit))
     ret = session.execute(_query).fetchall()
     return [TagCount(tag_id=tag_id, count=count) for tag_id, count in ret]
+
+
+def _addSize(total_size: int, file_path: str) -> int:
+    return total_size + os.path.getsize(file_path)
+
+
+def getTotalDownloadingSize(session: Session) -> int:
+    total_size = 0
+
+    def add_size(_1, file, _2, _3):
+        nonlocal total_size
+        if os.path.exists(file):
+            total_size += os.path.getsize(file)
+
+    ResFileCtrl.traverseDownloadingFiles(session, add_size)
+    return total_size
 
 
 def getResSizeStats(session: Session) -> dict[int, int]:

@@ -177,7 +177,6 @@ def __has_actor_file_info(session: Session, actor_id: int):
 
 
 def __deleteActorFileInfos(session: Session, actor_ids: set[int] | list[int]):
-    LogUtil.info(f"delete dirty actors: {actor_ids}")
     stmt = delete(ActorFileInfoModel).where(
         ActorFileInfoModel.actor_id.in_(actor_ids))
     session.execute(stmt)
@@ -253,7 +252,8 @@ def __process_dirty(session: Session):
             stop_cleanup_task()
 
     if len(remove_actor_ids) > 0:
-        __deleteActorFileInfos(session, list(remove_actor_ids))
+        LogUtil.info(f"delete dirty actors: {remove_actor_ids}")
+        __deleteActorFileInfos(session, remove_actor_ids)
 
 
 @event.listens_for(Session, 'after_flush')
@@ -276,20 +276,6 @@ def __collect_dirty_posts(session, context):
         if post_added:
             _schedule_cleanup()
 
-
-def validate(session: Session, actor_id: int) -> bool:
-    select_stmt = _build_single_stmt(actor_id)
-    list1 = list(session.execute(select_stmt))
-    list2 = _get_actor_file_info(session, actor_id)
-    if len(list1) != len(list2):
-        return False
-    list1.sort(key=lambda x: x.res_state.value)
-    list2.sort(key=lambda x: x.res_state.value)
-    for i in range(len(list1)):
-        if not list2[i].equal(list1[i]):
-            return False
-    return True
-
 # endregion
 
 # resources and files
@@ -304,7 +290,7 @@ def validate_all_file_info_new(session: Session) -> int:
     all_actor_ids = list(session.scalars(stmt))
     if len(all_actor_ids) == 0:
         return 0
-    
+
     BATCH_SIZE = 500  # 定义每个批次处理的 actor 数量
     all_unmatched_ids = set()
     # 分批处理所有 actor_id
@@ -315,7 +301,7 @@ def validate_all_file_info_new(session: Session) -> int:
 
         # 对当前批次的数据进行 JOIN 和比较
         mismatched_ids_stmt = select(ActorFileInfoModel.actor_id.distinct()).where(
-            ActorFileInfoModel.actor_id.in_(batch_ids) # 只关注当前批次的缓存
+            ActorFileInfoModel.actor_id.in_(batch_ids)  # 只关注当前批次的缓存
         ).outerjoin(
             live_stats_sq,
             (ActorFileInfoModel.actor_id == live_stats_sq.c.actor_id) &
@@ -337,11 +323,8 @@ def validate_all_file_info_new(session: Session) -> int:
     # 对所有不匹配的ID进行处理
     if all_unmatched_ids:
         deleteActorFileInfos(all_unmatched_ids)
-            
-    return len(all_unmatched_ids)
 
-@time_cost
-def validate_all_file_info(session: Session) -> int:
+    return len(all_unmatched_ids)
     __process_dirty(session)
 
     stmt = select(ActorFileInfoModel.actor_id.distinct())
@@ -389,6 +372,18 @@ def validate_all_file_info(session: Session) -> int:
     # just put to waiting list
     deleteActorFileInfos(unmatch_actor_ids)
     return len(unmatch_actor_ids)
+
+
+def validateActorFileInfo(session: Session, actor_id: int) -> list[ActorFileInfoModel]:
+    # delete
+    with _dirty_lock:
+        __dirty_actor_ids.add(actor_id)
+    __process_dirty(session)
+    # insert
+    __insert_actor_file_info(session, actor_id)
+    session.flush()
+    # get
+    return _get_actor_file_info(session, actor_id)
 
 
 def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
@@ -471,7 +466,11 @@ def getActorVideoStats(session: Session, actor_id: int) -> list[ActorVideoInfo]:
 
 
 def createActorFolder(actor: ActorInfo | ActorModel):
-    os.makedirs(Configs.formatActorFolderPath(
-        actor.actor_id, actor.actor_name), exist_ok=True)
+    actor_folder_path = Configs.formatActorFolderPath(
+        actor.actor_id, actor.actor_name)
+    os.makedirs(actor_folder_path, exist_ok=True)
+    thumbnail_folder_path = Configs.formatActorThumbnailFolderPath(
+        actor.actor_id, actor.actor_name)
+    os.makedirs(thumbnail_folder_path, exist_ok=True)
 
 # endregion

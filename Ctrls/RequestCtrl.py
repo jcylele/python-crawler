@@ -48,6 +48,11 @@ def createRequestSession() -> Session:
 
     return session
 
+def createRequestHeaders() -> dict:
+    header = __headers.copy()
+    user_agent = random.choice(__user_agents)  # 随机获取一个浏览器用户信息
+    header['user-agent'] = user_agent
+    return header
 
 def formatActorsUrl(start_index: int) -> str:
     return f"{Configs.RootUrl}/artists?o={start_index}"

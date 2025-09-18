@@ -96,7 +96,7 @@ class ResModel(BaseModel):
         actor_name = self.actor().actor_name
         if self.res_size > 0:
             if self.res_size == size:
-                LogUtil.warn(
+                LogUtil.warning(
                     f"({self.res_id} of {self.post_id} of {actor_name}) size already set: {self.res_size}")
             else:
                 LogUtil.error(

@@ -1,4 +1,4 @@
-import asyncio
+
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -6,19 +6,31 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
 import Configs
-from Download import TaskManager
-from Ctrls import ActorFileCtrl
+# init browser env
+Configs.initPlaywright()
+
 from Download.DownloadTask import DownloadTask
+from Download import TaskManager, WebPool
+from Utils import LogUtil
 from routers import actor, actor_tag, download, vue, actor_group, chart, post, notice, favorite_folder, actor_tag_group
+
+
 
 DownloadTask.initEnv()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # --- 应用启动时 ---
+    LogUtil.info("Application startup...")
+    await WebPool.init_pool()
+
     yield
+
+    LogUtil.info("Application shutdown...")
+    # --- 应用关闭时 ---
     # await asyncio.to_thread(ActorFileCtrl.process_dirty_on_shutdown)
-    await asyncio.to_thread(TaskManager.StopAllTasks)
+    await TaskManager.StopAllTasks()
+    await WebPool.clear_pool()
 
 app = FastAPI(lifespan=lifespan)
 

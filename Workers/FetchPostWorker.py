@@ -1,13 +1,16 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
+import os
+import re
+from playwright.async_api import Page, Locator, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from Consts import WorkerType, QueueType, ResType
+import Configs
+from Consts import WorkerType, ResType
 from Ctrls import DbCtrl, RequestCtrl, PostCtrl, ResCtrl
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchPostQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
+from Workers.ImageWait.PostThumbnailWait import PostThumbnailWait
 
 
 class FetchPostWorker(BaseFetchWorker):
@@ -15,17 +18,17 @@ class FetchPostWorker(BaseFetchWorker):
     worker to analyse the actor list page
     """
 
-    def __init__(self, task: 'DownloadTask'):
+    def __init__(self, task):
         super().__init__(worker_type=WorkerType.FetchPost, task=task)
+        self.thumbnail_wait = PostThumbnailWait()
+        self.thumbnail_wait.set_wait(task.download_limit.allowResDownload(
+            ResType.Image))
 
-    def _queueType(self) -> QueueType:
-        return QueueType.FetchPost
-
-    def _getResUrl(self, res_node):
-        a_node = res_node.find_element(By.CSS_SELECTOR, "a")
-        if a_node is None:
+    async def _getResUrl(self, res_node: Locator):
+        a_node = res_node.locator("a")
+        if (await a_node.count()) == 0:
             return None
-        href = a_node.get_attribute("href")
+        href = await a_node.get_attribute("href")
         # error defence
         if href.endswith("f=undefined"):
             # LogUtil.warn(f"{item} undefined res")
@@ -60,23 +63,30 @@ class FetchPostWorker(BaseFetchWorker):
 
         return True
 
-    def _onFetched(self, item: FetchPostQueueItem, driver: webdriver.Chrome) -> bool:
-        # actor icon
-        self._saveActorIcon(
-            item.actor_info, ".post__user-profile img", driver, False)
+    def _beforeFetch(self, session: Session, item: FetchPostQueueItem):
+        if self.thumbnail_wait.get_wait():
+            self.thumbnail_wait.set_folder_path(
+                Configs.formatActorThumbnailFolderPath(
+                    item.actor_info.actor_id, item.actor_info.actor_name
+                ))
+
+    async def on_response(self, response: Response):
+        await self.thumbnail_wait.on_response(response)
+
+    async def _onFetched(self, item: FetchPostQueueItem, page: Page) -> bool:
 
         # analyze res
         url_list = []
 
-        image_list = driver.find_elements(By.CSS_SELECTOR, '.post__thumbnail')
+        image_list = await page.locator('.post__thumbnail').all()
         for image_node in image_list:
-            url = self._getResUrl(image_node)
+            url = await self._getResUrl(image_node)
             if url is not None:
                 url_list.append((ResType.Image, url))
 
-        video_list = driver.find_elements(By.CSS_SELECTOR, '.post__attachment')
+        video_list = await page.locator('.post__attachment').all()
         for video_node in video_list:
-            url = self._getResUrl(video_node)
+            url = await self._getResUrl(video_node)
             if url is not None:
                 url_list.append((ResType.Video, url))
 
@@ -88,10 +98,11 @@ class FetchPostWorker(BaseFetchWorker):
                 # add records for the resources
                 ResCtrl.addAllRes(session, item.post_id, url_list)
                 # enqueue all resources of the post
-                self.QueueMgr().enqueueAllRes(item.actor_info, post, self.DownloadLimit())
+                await self.queue_mgr().enqueueAllRes(item.actor_info, post, self.DownloadLimit())
 
             # mark the post as analysed
             post.completed = True
-            post.actor.last_post_fetch_time = func.now()
+
+        await self.thumbnail_wait.wait(page)
 
         return True

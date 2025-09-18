@@ -1,12 +1,7 @@
+import asyncio
 import os
-import time
-
 from sqlalchemy.orm import Session
-from selenium import webdriver
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from playwright.async_api import Page, Locator, Response, TimeoutError as PlaywrightTimeoutError
 
 import Configs
 from Consts import WorkerType
@@ -16,7 +11,6 @@ from Utils import LogUtil
 from Download import WebPool
 from WorkQueue.BaseQueueItem import BaseQueueItem
 from Workers.BaseWorker import BaseWorker
-from Workers.ImageCompleteWait import ImageCompleteWait
 
 
 class BaseFetchWorker(BaseWorker):
@@ -24,90 +18,133 @@ class BaseFetchWorker(BaseWorker):
     base class for workers working through webdriver
     """
 
-    def __init__(self, worker_type: WorkerType, task: 'DownloadTask'):
+    def __init__(self, worker_type: WorkerType, task):
         super().__init__(worker_type, task)
 
     def getActorInfo(self, actor_id: int) -> ActorInfo:
         with DbCtrl.getSession() as session, session.begin():
             return ActorCtrl.getActorInfo(session, actor_id)
 
-    def calcActorInfo(self, actor_node: WebElement) -> ActorInfo:
-        href_list = actor_node.get_attribute("href").split("/")
+    async def calcActorInfo(self, actor_locator: Locator) -> ActorInfo:
+        href = await actor_locator.get_attribute("href")
+        if not href:
+            raise SystemError("actor href attribute not found")
+        href_list = href.split("/")
 
         actor_info = ActorInfo()
         actor_info.actor_platform = href_list[-3]
         actor_info.actor_link = href_list[-1]
 
-        actor_name_node = actor_node.find_element(By.CLASS_NAME, "user-card__name")
-        if actor_name_node is None:
-            raise Exception(f"actor name element not found")
-        actor_name = actor_name_node.text
-        actor_info.actor_name = actor_name
+        actor_name_locator = actor_locator.locator(".user-card__name")
+        actor_name = await actor_name_locator.text_content()
+        if not actor_name:
+            if (await actor_name_locator.count()) == 0:
+                raise SystemError("actor name element not found")
+            raise SystemError("actor name is empty")
 
+        actor_info.actor_name = actor_name.strip()
         return actor_info
 
-    def _saveActorIcon(self, actor_info: ActorInfo, selector: str, driver: webdriver.Chrome, enqueue: bool):
-        """
-        fetch actor icon if not exists, screenshot icon for temporary use if not exists
-        """
-        # real icon
-        if os.path.exists(PathCtrl.icon_file_path(actor_info)):
-            return
-
-        # fetch real icon
-        if enqueue:
-            self.QueueMgr().enqueueActorIcon(actor_info, driver.current_url)
-
-        # screenshot icon
-        ss_file_path = PathCtrl.icon_ss_file_path(actor_info)
-        if os.path.exists(ss_file_path):
-            return
-        # take screenshot
-        try:
-            WebDriverWait(driver, 15).until(ImageCompleteWait(selector))
-            driver.find_element(By.CSS_SELECTOR, selector).screenshot(ss_file_path)
-        except:
-            LogUtil.info(f"head icon of {actor_info.actor_name} not loaded")
-
-    def _onFetched(self, item: BaseQueueItem, driver: webdriver.Chrome) -> bool:
-        raise NotImplementedError("subclasses of BaseFetchWorker must implement method _onFetched")
+    async def _onFetched(self, item: BaseQueueItem, page: Page) -> bool:
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _onFetched")
 
     def _loadSelector(self) -> str:
-        raise NotImplementedError("subclasses of BaseFetchWorker must implement method _loadSelector")
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _loadSelector")
 
     def _url(self, item: BaseQueueItem) -> str:
-        raise NotImplementedError("subclasses of BaseFetchWorker must implement method _url")
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _url")
 
     def _checkFetch(self, session: Session, item: BaseQueueItem):
-        raise NotImplementedError("subclasses of BaseFetchWorker must implement method _checkFetch")
+        """check if the item should be fetched"""
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _checkFetch")
 
-    def _process(self, item: BaseQueueItem) -> bool:
+    def _beforeFetch(self, session: Session, item: BaseQueueItem):
+        """do some extra work before fetching"""
+        pass
+
+    async def scrollToBottom(self, page: Page):
+        await page.wait_for_timeout(1000)
+
+        while True:
+            last_height = await page.evaluate("document.body.scrollHeight")
+
+            # 内部循环，每次滚动一个窗口的高度，直到滚动到页面底部
+            while True:
+                await page.evaluate("window.scrollBy(0, window.innerHeight)")
+                # 等待滚动动画和懒加载内容
+                await page.wait_for_timeout(200)
+
+                # 检查是否已到达页面底部
+                is_at_bottom = await page.evaluate(
+                    "window.scrollY + window.innerHeight >= document.body.scrollHeight"
+                )
+                if is_at_bottom:
+                    break
+
+            # 滚动到底部后，等待一段时间让新内容加载
+            await page.wait_for_timeout(1000)
+
+            new_height = await page.evaluate("document.body.scrollHeight")
+            if new_height == last_height:
+                break
+
+    async def on_response(response: Response):
+        pass
+
+    async def _process(self, item: BaseQueueItem) -> bool:
         with DbCtrl.getSession() as session, session.begin():
             if not self._checkFetch(session, item):
                 return True
-        driver = WebPool.getDriver(self.workerType())
-        driver.get(self._url(item))
-        for i in range(30):
-            try:
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, self._loadSelector()))
-                )
-            except:
-                title = driver.title
-                LogUtil.info(f"failed to load {item}, get {title} instead")
-                # just release the driver
-                if not Configs.SHOW_BROWSER:
-                    WebPool.releaseDriver(driver, self.workerType())
-                    return False
-                if "DDoS-Guard" in title:
-                    # wait for human
-                    time.sleep(10)
-                elif "Error" in title:
-                    # refresh page
-                    time.sleep(10)
-                    driver.refresh()
+            self._beforeFetch(session, item)
 
-        # LogUtil.info(f"on fetch {item}")
-        processed = self._onFetched(item, driver)
-        WebPool.releaseDriver(driver, self.workerType())
-        return processed
+        page = None
+        try:
+            page = await WebPool.acquire_page(self.workerType())
+            page.on("response", self.on_response)
+            await page.goto(self._url(item), timeout=60000)
+            fetch_succeed = False
+            for i in range(30):
+                try:
+                    # Wait for the main content selector to ensure the page is loaded
+                    await page.wait_for_selector(self._loadSelector(), timeout=10000)
+                    # If selector is found, break the loop and proceed
+                    fetch_succeed = True
+                    break
+                except PlaywrightTimeoutError:
+                    title = await page.title()
+                    LogUtil.info(
+                        f"failed to load {item}, get {title} instead (attempt {i+1}/30)")
+
+                    if not Configs.SHOW_BROWSER:
+                        LogUtil.warning(
+                            f"Failed to load page in headless mode for {item}. Giving up.")
+                        return False
+
+                    if "DDoS-Guard" in title:
+                        LogUtil.info(
+                            "DDoS-Guard detected, waiting for human intervention...")
+                        await asyncio.sleep(10)
+                        await page.reload()
+                    elif "Error" in title:
+                        LogUtil.info("Error page detected, refreshing...")
+                        await asyncio.sleep(10)
+                        await page.reload()
+                    else:
+                        LogUtil.warning(
+                            f"Unknown page state with title '{title}', retrying...")
+                        await asyncio.sleep(10)
+                        await page.reload()
+
+            if fetch_succeed:
+                processed = await self._onFetched(item, page)
+                return processed
+            else:
+                LogUtil.error(f"Failed to load page for {item}, Giving up.")
+                return False
+        finally:
+            if page:
+                await WebPool.release_page(page, self.workerType())

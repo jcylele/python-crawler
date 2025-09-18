@@ -10,6 +10,7 @@ from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
+from routers.schemas_others import CommentCount
 from routers.web_data import ActorConditionForm, TagFilter
 
 _sort_file_size_map: dict[SortType, list[ResState]] = {
@@ -17,6 +18,7 @@ _sort_file_size_map: dict[SortType, list[ResState]] = {
     SortType.DownFileSize: [ResState.Down],
     SortType.TotalFileSize: [ResState.Init, ResState.Down],
 }
+
 
 def _initQuery(is_count: bool = False) -> Select:
     if is_count:
@@ -77,9 +79,9 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
     if form.name:
         name_list = [name for name in form.name.split("||")]
         real_name_list = [name.strip() for name in name_list if name.strip()]
-        if len(name_list) > 1: # || found, need to be accurate
+        if len(name_list) > 1:  # || found, need to be accurate
             query = query.where(ActorModel.actor_name.in_(real_name_list))
-        elif real_name_list: # no || found, need to be fuzzy, skip empty name
+        elif real_name_list:  # no || found, need to be fuzzy, skip empty name
             query = query.where(
                 ActorModel.actor_name.like(f"%{real_name_list[0]}%"))
 
@@ -184,7 +186,7 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
             )
         elif sort_item.sort_type == SortType.LastResDownloadTime:
             _query = _query.order_by(
-                order_func(ActorModel.last_res_download_time.is_(None)),
+                order_func(ActorModel.last_res_download_time.is_not(None)),
                 order_func(ActorModel.last_res_download_time)
             )
         elif sort_item.sort_type in _sort_file_size_map:
@@ -216,6 +218,7 @@ def _unsortedActorList(session: Session, form: ActorConditionForm) -> list[int]:
     _query = _filterQuery(_initQuery(False), form)
     return list(session.scalars(_query))
 
+
 def _needFileInfo(form: ActorConditionForm) -> bool:
     if form.post_completed and form.res_completed:
         return True
@@ -225,6 +228,7 @@ def _needFileInfo(form: ActorConditionForm) -> bool:
     ):
         return True
     return False
+
 
 def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, start: int = 0) -> list[int]:
     if _needFileInfo(form):
@@ -246,3 +250,11 @@ def getActorsByGroup(session: Session, group_id: int) -> list[ActorModel]:
     _query = (select(ActorModel)
               .where(ActorModel.actor_group_id == group_id))
     return session.scalars(_query)
+
+
+def getComments(session: Session) -> list[CommentCount]:
+    _query = (select(ActorModel.comment, func.count(ActorModel.actor_id))
+              .where(ActorModel.has_comment == True)
+              .group_by(ActorModel.comment)
+              .order_by(func.count(ActorModel.actor_id).desc(), ActorModel.comment))
+    return [CommentCount(comment=row[0], count=row[1]) for row in session.execute(_query)]

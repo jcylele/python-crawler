@@ -44,7 +44,7 @@ def getSession() -> Session:
     return __Session()
 
 
-def newSession(connection) -> Session:
+def innerSession(connection) -> Session:
     return sessionmaker(bind=connection)()
 
 

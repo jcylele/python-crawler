@@ -1,5 +1,5 @@
+import asyncio
 import os
-
 
 from sqlalchemy.orm import Session
 
@@ -9,43 +9,89 @@ from Ctrls import ActorQueryCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, R
 from Download import WorkerMgr
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskQueueMgr import TaskQueueMgr
-from Guarder import Guarder
 from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from routers.web_data import ActorUrl
 from routers.schemas_others import DownloadTaskResponse
 
-class DownloadTask(object):
+
+class DownloadTask:
     def __init__(self, task_uid):
         self.uid = task_uid
-        self.guarder = Guarder(self)
-        self.queueMgr = TaskQueueMgr()
-        self.download_limit: DownloadLimit = None
+        self.running = False
+        self.worker_tasks = []
+        self.watcher_task: asyncio.Task | None = None
+        self.queue_mgr = TaskQueueMgr()
+        self.download_limit: DownloadLimit | None = None
         self.init_group_id = 0
         self.desc = ""
         self.actor_ids = []
         self.is_fix_posts = False
 
-    def is_all_posts(self):
-        return self.download_limit.getPostFilter() == PostFilter.All
-
-    def startDownload(self):
+    async def start(self):
         """
         new all threads and start running
         """
+        if self.running:
+            LogUtil.warning("Task is already running.")
+            return
+        self.running = True
+
         for worker_type in WorkerType:
             count = WorkerMgr.getWorkerCount(worker_type)
             for i in range(count):
                 worker = WorkerMgr.createWorker(worker_type, self)
-                self.guarder.addWorker(worker)
-        self.guarder.start()
+                # print(f"create worker {worker_type}")
+                task = asyncio.create_task(worker.run())
+                self.worker_tasks.append(task)
 
-    def Stop(self):
-        self.guarder.Stop()
-        self.queueMgr.clear()
+        self.watcher_task = asyncio.create_task(self._watch_completion())
+
+    async def _watch_completion(self):
+        """
+        私有协程：在后台运行，等待所有队列完成工作。
+        """
+        try:
+            # wait for all queues to finish
+            await self.queue_mgr.wait_for_finish()
+            LogUtil.info(f"Task {self.desc} queues finished.")
+            # stop all workers by sending sentinel
+            await self._notify_workers_to_stop()
+            await asyncio.gather(*self.worker_tasks, return_exceptions=True)
+            LogUtil.info(f"Task {self.desc} workers stopped.")
+            self.running = False
+            LogUtil.info(f"Task {self.desc} finished.")
+
+        except asyncio.CancelledError:
+            LogUtil.info(f"Task {self.desc} was cancelled.")
+        except Exception as e:
+            LogUtil.error(f"Task {self.desc} crashed")
+            LogUtil.exception(e)
+        finally:
+            self.watcher_task = None
+
+    async def _notify_workers_to_stop(self):
+        for worker_type in WorkerType:
+            count = WorkerMgr.getWorkerCount(worker_type)
+            queue_type = Configs.getQueueTypeByWorkerType(worker_type)
+            for i in range(count):
+                await self.queue_mgr.enqueueSentinel(queue_type)
+
+    async def Stop(self):
+        if not self.running:
+            return
+        self.running = False
+        tasks_to_wait = list(self.worker_tasks)
+        for task in self.worker_tasks:
+            task.cancel()
+        if self.watcher_task:
+            self.watcher_task.cancel()
+            tasks_to_wait.append(self.watcher_task)
+        await asyncio.gather(*tasks_to_wait, return_exceptions=True)
+        LogUtil.info(f"Task {self.desc} stopped successfully.")
 
     def isDone(self) -> bool:
-        return self.guarder.done
+        return not self.running
 
     def setLimit(self, limit: DownloadLimit):
         """
@@ -60,12 +106,15 @@ class DownloadTask(object):
         """
         self.init_group_id = group_id
 
-    def normalPosts(self, actor_ids: list[int]):
-        for actor_id in actor_ids:
-            self.queueMgr.enqueueFetchActor(actor_id)
-            self.queueMgr.enqueueFetchActorLink(actor_id)
+    def is_all_posts(self) -> bool:
+        return self.download_limit.getPostFilter() == PostFilter.All
 
-    def completedPosts(self, actor_ids: list[int]):
+    async def normalPosts(self, actor_ids: list[int]):
+        for actor_id in actor_ids:
+            await self.queue_mgr.enqueueFetchActor(actor_id)
+            await self.queue_mgr.enqueueFetchActorLink(actor_id)
+
+    async def completedPosts(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
@@ -73,10 +122,10 @@ class DownloadTask(object):
                 posts = PostCtrl.getCompletedPosts(
                     session, actor_id, actor.last_post_id)
                 for post in posts:
-                    self.queueMgr.enqueueAllRes(
+                    await self.queue_mgr.enqueueAllRes(
                         actor_info, post, self.download_limit)
 
-    def currentPosts(self, actor_ids: list[int]):
+    async def currentPosts(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
@@ -85,27 +134,27 @@ class DownloadTask(object):
                     session, actor_id, actor.last_post_id)
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
-                        self.queueMgr.enqueueFetchPost(
+                        await self.queue_mgr.enqueueFetchPost(
                             actor_info, post.post_id, post.is_dm)
                     else:  # all resources of the post are already added
-                        self.queueMgr.enqueueAllRes(
+                        await self.queue_mgr.enqueueAllRes(
                             actor_info, post, self.download_limit)
 
-    def downloadActors(self, actor_ids: list[int]):
+    async def downloadActors(self, actor_ids: list[int]):
         self.actor_ids = actor_ids
         post_filter = self.download_limit.getPostFilter()
         if post_filter == PostFilter.Normal or post_filter == PostFilter.All:
-            self.normalPosts(actor_ids)
+            await self.normalPosts(actor_ids)
         elif post_filter == PostFilter.Current:
-            self.currentPosts(actor_ids)
+            await self.currentPosts(actor_ids)
         elif post_filter == PostFilter.Completed:
-            self.completedPosts(actor_ids)
+            await self.completedPosts(actor_ids)
         else:
             raise Exception(f"Unknown post filter {post_filter}")
 
-        self.startDownload()
+        await self.start()
 
-    def downloadByUrls(self, actor_urls: list[ActorUrl]):
+    async def downloadByUrls(self, actor_urls: list[ActorUrl]):
         self.desc = "Specific Urls"
         actor_ids: list[int] = []
         with DbCtrl.getSession() as session, session.begin():
@@ -127,9 +176,9 @@ class DownloadTask(object):
                     LogUtil.info(
                         f"actor {actor_info.actor_name} already exists")
         # print(actor_ids)
-        self.downloadActors(actor_ids)
+        await self.downloadActors(actor_ids)
 
-    def downloadSpecificActor(self, actor_id: int):
+    async def downloadSpecificActor(self, actor_id: int):
         """
         download specific actors
         """
@@ -138,17 +187,17 @@ class DownloadTask(object):
             # in case linked actors found, set the group id to the actor's group id
             self.setInitGroup(actor.actor_group_id)
             self.desc = f"Specific Actor {actor.actor_name}"
-        self.downloadActors([actor_id])
+        await self.downloadActors([actor_id])
 
-    def downloadNewActors(self, start_page: int):
+    async def downloadNewActors(self, start_page: int):
         """
         download new actors
         """
         self.desc = "New Actors."
-        self.queueMgr.enqueueFetchActors(start_page)
-        self.startDownload()
+        await self.queue_mgr.enqueueFetchActors(start_page)
+        await self.start()
 
-    def downloadByActorGroup(self, group_id: int):
+    async def downloadByActorGroup(self, group_id: int):
         """
         download actors in corresponding category
         """
@@ -160,14 +209,14 @@ class DownloadTask(object):
             actors = ActorQueryCtrl.getActorsByGroup(session, group_id)
             for actor in actors:
                 actor_ids.append(actor.actor_id)
-        self.downloadActors(actor_ids)
+        await self.downloadActors(actor_ids)
 
-    def __resumeActor_Process(self, session: Session, file: str, post_id: int, res_index: int):
+    async def __resumeActor_Process(self, session: Session, file: str, post_id: int, res_index: int):
         res = ResCtrl.getResByIndex(session, post_id, res_index)
         if res.shouldDownload(self.download_limit):
-            self.queueMgr.enqueueResFile(res)
+            await self.queue_mgr.enqueueResFile(res)
 
-    def resumeActor(self, actor_id: int):
+    async def resumeActor(self, actor_id: int):
         with DbCtrl.getSession() as session, session.begin():
             actor = ActorCtrl.getActor(session, actor_id)
             if actor is None or not actor.actor_group.has_folder:
@@ -175,18 +224,18 @@ class DownloadTask(object):
             self.desc = f"resume actor {actor.actor_name}"
             self.actor_ids = [actor_id]
 
-            ResFileCtrl.traverseDownloadingFilesOfActor(
+            await ResFileCtrl.traverseDownloadingFilesOfActor_async(
                 session, actor, self.__resumeActor_Process)
 
-        self.startDownload()
+        await self.start()
 
-    def fix_more_posts(self, actor_id: int):
+    async def fix_more_posts(self, actor_id: int):
         if actor_id not in self.actor_ids:
             LogUtil.info(f"fix more actor {actor_id}")
             self.actor_ids.append(actor_id)
-            self.normalPosts([actor_id])
+            await self.normalPosts([actor_id])
 
-    def fix_posts_of_actor(self, actor_id: int):
+    async def fix_posts_of_actor(self, actor_id: int):
         with DbCtrl.getSession() as session, session.begin():
             actor = ActorCtrl.getActor(session, actor_id)
             if actor is None:
@@ -196,10 +245,10 @@ class DownloadTask(object):
             self.is_fix_posts = True
             self.desc = f"fix posts of actor {actor.actor_name}"
             self.actor_ids = [actor_id]
-            self.normalPosts(self.actor_ids)
-            self.startDownload()
+            await self.normalPosts(self.actor_ids)
+            await self.start()
 
-    def manual(self):
+    async def manual(self):
         """
         custom logic to fix bugs etc
         """
@@ -228,6 +277,6 @@ class DownloadTask(object):
             uid=self.uid,
             desc=self.desc,
             download_limit=self.download_limit.toResponse(),
-            worker_count=self.guarder.getWorkerCountMap(),
-            queue_count=self.queueMgr.getQueueCountMap()
+            worker_count=self.queue_mgr.get_worker_count_map(),
+            queue_count=self.queue_mgr.get_queue_count_map()
         )

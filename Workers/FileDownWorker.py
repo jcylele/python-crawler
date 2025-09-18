@@ -1,8 +1,8 @@
-import os.path
+import asyncio
+import aiofiles.os  # 1. 导入 aiofiles.os
 
-import Configs
 from Consts import WorkerType, QueueType
-from Ctrls import DbCtrl
+from Ctrls import DbCtrl, RequestCtrl
 from Download import FileManager
 from Utils import LogUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
@@ -19,60 +19,57 @@ class FileDownWorker(BaseRequestWorker):
     worker to download resource by url and save it to file
     """
 
-    def __init__(self, task: 'DownloadTask'):
+    def __init__(self, task):
         super().__init__(worker_type=WorkerType.FileDown, task=task)
 
-    def _queueType(self) -> QueueType:
-        return QueueType.FileDownload
-
-    def _process(self, item: UrlQueueItem) -> bool:
-        extra_info: ResFileExtraInfo = item.extra_info
-
-        # skip if no folder
+    def check_has_folder(self, extra_info: ResFileExtraInfo):
         with DbCtrl.getSession() as session, session.begin():
-            if not self.hasActorFolder(session, extra_info.actor_info.actor_id):
-                return True
+            return self.hasActorFolder(session, extra_info.actor_info.actor_id)
 
-        self.requestSession.headers["referer"] = item.from_url
-
-        # protection, skip if other thread is downloading
-        while not FileManager.useFile(extra_info.file_path, self.native_id):
-            return True
-
-        # check for total file size, skip if not enough
-        if not self.DownloadLimit().canDownload(extra_info.file_size):
-            FileManager.releaseFile(extra_info.file_path, self.native_id)
-            return True
-
-        file_mode = "wb"
+    async def _process(self, item: UrlQueueItem) -> bool:
+        extra_info: ResFileExtraInfo = item.extra_info
         file_path = extra_info.file_path
-        if os.path.exists(file_path):
-            file_size = os.path.getsize(file_path)
-            # rarely, but possible
-            if file_size == extra_info.file_size:
-                FileManager.releaseFile(file_path, self.native_id)
-                self.QueueMgr().enqueueResValid(item)
+        
+        if not self.check_has_folder(extra_info):
+            return True
+
+        request_headers = RequestCtrl.createRequestHeaders()
+        request_headers["referer"] = item.from_url
+        # 3. 文件锁需要用 asyncio.Lock 实现，而不是依赖线程 ID
+        async with FileManager.get_lock(file_path):
+            # 4. 检查文件大小等操作全部替换为异步版本
+            file_mode = "wb"
+
+            if await aiofiles.os.path.exists(file_path):
+                file_size = (await aiofiles.os.stat(file_path)).st_size
+                if file_size == extra_info.file_size:
+                    await self.queue_mgr().enqueueResValid(item)
+                    return True
+
+                if file_size >= MinResumeSize:
+                    file_mode = "ab"
+                    # 5. 关键修改：将 Range 头放入本次请求专用的 headers 字典
+                    request_headers["Range"] = f"bytes={file_size}-"
+                    LogUtil.warning(f"Resuming {file_path} from {file_size:,d}")
+
+            # 6. 下载限流检查 (假设 DownloadLimit 已被改造或为非阻塞)
+            if not self.DownloadLimit().canDownload(extra_info.file_size):
                 return True
-            # if there is an uncompleted file and its size is large enough
-            # resume the download instead of starting from the beginning
-            if file_size >= MinResumeSize:
-                file_mode = "ab"
-                self.requestSession.headers["Range"] = f"bytes={file_size}-"
-                # for test, change to debug after that
-                LogUtil.warn(f"resume {file_path} from {file_size:,d}")
 
-        # if timeout, start a new thread to download other files
-        self.setTimeout(Configs.BASE_TIME_OUT +
-                        extra_info.file_size / Configs.MIN_DOWN_SPEED)
+            try:
+                # 7. 将专用的 headers 字典传递给下载方法
+                await self._downloadStream(item.url, file_path, file_mode, headers=request_headers)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                LogUtil.exception(e)
+                # 下载失败时，不继续执行后续逻辑
+                return False
+            finally:
+                # 8. 无需清理 session headers，因为我们没有修改它
+                pass
 
-        self._downloadStream(item.url, file_path, file_mode)
-
-        # remove the range attribute in header
-        if "Range" in self.requestSession.headers:
-            self.requestSession.headers.pop("Range")
-
-        FileManager.releaseFile(file_path, self.native_id)
-        # enqueue for validation
-        self.QueueMgr().enqueueResValid(item)
+        # 9. 移出 lock 范围后再入队
+        await self.queue_mgr().enqueueResValid(item)
 
         return True

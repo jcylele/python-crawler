@@ -12,7 +12,7 @@ class Guarder(threading.Thread):
     monitor and report running status of all workers and queues
     """
 
-    def __init__(self, task: 'DownloadTask'):
+    def __init__(self, task):
         super().__init__()
         self.workers: list[BaseWorker] = []
         self.task = task
@@ -42,7 +42,7 @@ class Guarder(threading.Thread):
         check if all tasks are down
         :return:
         """
-        if not self.task.queueMgr.empty():  # all queues are empty
+        if not self.task.queue_mgr.empty():  # all queues are empty
             # print("queue not empty")
             return False
         for worker in self.workers:

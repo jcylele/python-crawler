@@ -1,5 +1,5 @@
+import asyncio
 import os
-import threading
 import subprocess
 
 from fastapi import APIRouter, Depends
@@ -29,76 +29,75 @@ def get_custom_page():
 
 
 @router.post("/new", response_model=CommonResponse)
-def download_new_actors(form: NewDownloadForm):
+async def download_new_actors(form: NewDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
-    task.downloadNewActors(form.start_page)
+    await task.downloadNewActors(form.start_page)
     return CommonResponse()
 
 
 @router.post("/group", response_model=CommonResponse)
-def download_by_group(form: GroupDownloadForm):
+async def download_by_group(form: GroupDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
-    task.downloadByActorGroup(form.actor_group_id)
+    await task.downloadByActorGroup(form.actor_group_id)
     return CommonResponse()
 
 
 @router.patch("/resume/{actor_id}", response_model=CommonResponse)
-def resume_actor(actor_id: int):
+async def resume_actor(actor_id: int):
     limit = DownloadLimit(DownloadLimitForm.resumeVideoLimit())
     task = NewTask()
     task.setLimit(limit)
-    task.resumeActor(actor_id)
+    await task.resumeActor(actor_id)
     return CommonResponse()
 
 
 @router.patch("/fix_posts/{actor_id}", response_model=CommonResponse)
-def fix_posts(actor_id: int):
+async def fix_posts(actor_id: int):
     limit = DownloadLimit(DownloadLimitForm.fixPostsLimit())
     task = NewTask()
     task.setLimit(limit)
-    task.fix_posts_of_actor(actor_id)
+    await task.fix_posts_of_actor(actor_id)
     return CommonResponse()
 
 
 @router.post("/manual", response_model=CommonResponse)
-def manual(form: GroupDownloadForm):
+async def manual(form: GroupDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
-    task.manual()
+    await task.manual()
     return CommonResponse()
 
 
-def _add_task(actor_id: int, download_limit: DownloadLimitForm):
+async def _start_actor_download_task(actor_id: int, download_limit: DownloadLimitForm):
     limit = DownloadLimit(download_limit)
     task = NewTask()
     task.setLimit(limit)
-    task.downloadSpecificActor(actor_id)
+    await task.downloadSpecificActor(actor_id)
 
 
 @router.post("/specific", response_model=CommonResponse)
-def download_specific(form: ActorIdDownloadForm):
+async def download_specific(form: ActorIdDownloadForm):
     for actor_id in form.actor_ids:
-        x = threading.Thread(target=_add_task, args=(
-            actor_id, form.download_limit,))
-        x.start()
+        asyncio.create_task(_start_actor_download_task(
+            actor_id, form.download_limit))
     return CommonResponse()
 
 
 @router.post("/urls", response_model=CommonResponse)
-def download_by_urls(form: UrlDownloadForm):
+async def download_by_urls(form: UrlDownloadForm):
     limit = DownloadLimit(form.download_limit)
     task = NewTask()
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
-    task.downloadByUrls(form.urls)
+    await task.downloadByUrls(form.urls)
     return CommonResponse()
 
 
@@ -120,14 +119,14 @@ def get_task_actor_ids():
 
 # must before @router.delete("/{task_uid}")
 @router.delete("/all", response_model=CommonResponse)
-def stop_all_task():
-    StopAllTasks()
+async def stop_all_task():
+    await StopAllTasks()
     return CommonResponse()
 
 
 @router.delete("/{task_uid}", response_model=CommonResponse)
-def stop_task(task_uid: int):
-    StopTask(task_uid)
+async def stop_task(task_uid: int):
+    await StopTask(task_uid)
     return CommonResponse()
 
 

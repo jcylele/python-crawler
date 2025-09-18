@@ -1,6 +1,8 @@
 #! fix/update bugs/problems in database, mainly caused by existing actors skipping new features
 import os
 import re
+import shutil
+import aiofiles
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
@@ -14,57 +16,9 @@ from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagModel import ActorTagModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from Models.ResModel import ResModel
 from Utils import LogUtil
 
-
-def removeActorFolders(session: Session):
-    for root, folders, files in os.walk(Configs.RootFolder):
-        for folder in folders:
-            match_obj = re.match(r'^(\S+)_(\d+)$', folder)
-            if match_obj is None:
-                LogUtil.info(f"unknown folder {folder}")
-                continue
-            actor_id = int(match_obj.group(2))
-            actor = ActorCtrl.getActor(session, actor_id)
-            if actor is None:
-                LogUtil.error(f"actor {actor_id} not found")
-            elif not actor.actor_group.has_folder:
-                LogUtil.info(f"remove folder {folder}")
-                os.rmdir(os.path.join(root, folder))
-
-def refreshResInfo(session: Session):
-    for root1, folders, _ in os.walk(Configs.RootFolder):
-        for folder in folders:
-            match_obj1 = re.match(r'^(\S+)_(\d+)$', folder)
-            if match_obj1 is None:
-                LogUtil.info(f"unknown folder {folder}")
-                continue
-            actor_name = match_obj1.group(1)
-            for root2, _, files in os.walk(os.path.join(root1, folder)):
-                for file in files:
-                    match_obj2 = re.match(r'^(\d+)_(\d+)\.(\S+)$', file)
-                    if match_obj2 is None:
-                        LogUtil.error(f"unknown file {file}")
-                        continue
-                    post_id = int(match_obj2.group(1))
-                    res_index = int(match_obj2.group(2))
-                    extension = match_obj2.group(3)
-                    # skip image files
-                    if extension == 'jpg' or extension == 'jpeg':
-                        continue
-                    res = ResCtrl.getResByIndex(session, post_id, res_index)
-                    if res is None:
-                        LogUtil.error(f"res {post_id}_{res_index} not found")
-                        continue
-                    file_path = os.path.join(root2, file)
-                    width, height, duration = ResFileCtrl.get_media_info(file_path)
-                    if width > 0 and height > 0:
-                        res.res_width = width
-                        res.res_height = height
-                        if duration > 0:
-                            res.res_duration = duration
-            print(actor_name)
-            session.flush()
 
 def resetManual(session: Session):
     stmt = (
@@ -138,12 +92,26 @@ def get_tag_combinations_with_empty(session: Session) -> list[dict]:
     return results
 
 
-def validateActor(session: Session, actor_id: int):
-    actor = ActorCtrl.getActor(session, actor_id)
-    # set res state to downed if downloaded files exist
-    ResFileCtrl.traverseDownloadedFilesOfActor(session, actor, ActorCtrl._setResStateToDowned)
+async def check_size(session: Session, file_path: str, res_id: int):
+    res = session.get(ResModel, res_id)
+    if await aiofiles.os.path.exists(file_path):
+        file_size = (await aiofiles.os.stat(file_path)).st_size
+        print(file_size == res.res_size, file_size)
 
 
-def new_check_similar(session: Session):
-    ActorSimilarCtrl.check_similar_names(session)
-    # ActorSimilarCtrl.findAllSimilarActors(session)
+def renameThumbnailFolder(session: Session):
+    with os.scandir(Configs.RootFolder) as it1:
+        for entry1 in it1:
+            if entry1.is_file():
+                continue
+            match_obj = re.match(r'^(\S+)_(\d+)$', entry1.name)
+            if match_obj is None:
+                continue
+            actor_name = match_obj.group(1)
+            with os.scandir(entry1.path) as it2:
+                for entry2 in it2:
+                    if entry2.is_file():
+                        continue
+                    if entry2.name == Configs.ThumbnailFolder:
+                        os.rename(entry2.path, os.path.join(
+                            entry1.path, f"_{actor_name}"))

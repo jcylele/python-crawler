@@ -1,9 +1,9 @@
 # manager for queues
 
-import queue
+import asyncio
 
 from Consts import QueueType
-from WorkQueue.BaseQueueItem import BaseQueueItem
+from WorkQueue.BaseQueueItem import BaseQueueItem, SentinelQueueItem
 
 
 class QueueMgr(object):
@@ -12,52 +12,74 @@ class QueueMgr(object):
     """
 
     def __init__(self):
-        self._cleared = False
-        self.__all_queues: dict[QueueType, queue.Queue] = {}
+        self.__all_queues: dict[QueueType, asyncio.Queue] = {}
+        self.__worker_count_map: dict[QueueType, int] = {}
+        self.__lock = asyncio.Lock()
         for queue_type in QueueType:
+            self.__worker_count_map[queue_type] = 0
             if queue_type > QueueType.MinPriorityQueue:
-                self.__all_queues[queue_type] = queue.PriorityQueue()
+                self.__all_queues[queue_type] = asyncio.PriorityQueue()
             else:
-                self.__all_queues[queue_type] = queue.Queue()
+                self.__all_queues[queue_type] = asyncio.Queue()
 
-    def clear(self):
-        """
-        clear all queues
-        """
-        for queue_type, q in self.__all_queues.items():
-            q.queue.clear()
-        self._cleared = True
+    async def wait_for_finish(self):
+        while True:
+            await asyncio.gather(*[q.join() for q in self.__all_queues.values()])
+            async with self.__lock:
+                if all(count == 0 for count in self.__worker_count_map.values()):
+                    break
+            await asyncio.sleep(1)
 
     def empty(self) -> bool:
         """
         is all queues empty
         :return:
         """
-        for queue_type, q in self.__all_queues.items():
-            if q.qsize() > 0:
+        for q in self.__all_queues.values():
+            if not q.empty():
                 return False
         return True
 
-    def getQueueCountMap(self) -> dict[str, int]:
+    def get_queue_count_map(self) -> dict[str, int]:
         size_map = {}
-        for queue_type, q in self.__all_queues.items():
-            if q.qsize() > 0:
-                size_map[queue_type.name] = q.qsize()
+        for q_type, q in self.__all_queues.items():
+            if not q.empty():
+                size_map[q_type.name] = q.qsize()
         return size_map
 
-    def put(self, queue_type: QueueType, item: BaseQueueItem):
+    def get_worker_count_map(self) -> dict[str, int]:
+        size_map = {}
+        for q_type, count in self.__worker_count_map.items():
+            if count > 0:
+                size_map[q_type.name] = count
+        return size_map
+
+    async def put(self, queue_type: QueueType, item: BaseQueueItem):
         """
         put queue item into the queue.
         """
-        # thread will wait if the queue is full
-        # but waiting for put inside a session causes db conflicts
-        # so all queues are infinite in size
-        if self._cleared:
-            return
-        self.__all_queues[queue_type].put(item)
+        await self.__all_queues[queue_type].put(item)
+        # LogUtil.info(f"put item {item} into queue {queue_type.name}")
 
-    def get(self, queue_type: QueueType) -> BaseQueueItem:
+    async def get(self, queue_type: QueueType) -> BaseQueueItem:
         """
         get an item from the queue, wait if the queue is empty
         """
-        return self.__all_queues[queue_type].get()
+
+        item = await self.__all_queues[queue_type].get()
+        # LogUtil.info(f"get item {item} from queue {queue_type.name}")
+        return item
+
+    def item_done(self, queue_type: QueueType):
+        self.__all_queues[queue_type].task_done()
+
+    async def add_worker(self, queue_type: QueueType):
+        async with self.__lock:
+            self.__worker_count_map[queue_type] += 1
+
+    async def remove_worker(self, queue_type: QueueType):
+        async with self.__lock:
+            self.__worker_count_map[queue_type] -= 1
+
+    async def enqueueSentinel(self, queue_type: QueueType):
+        await self.put(queue_type, SentinelQueueItem())

@@ -1,5 +1,5 @@
+import asyncio
 from Download.DownloadTask import DownloadTask
-from Download import WebPool
 
 next_task_id = 0
 task_dict: dict[int, DownloadTask] = {}
@@ -37,18 +37,22 @@ def GetAllTask() -> list[DownloadTask]:
     return list(task_dict.values())
 
 
-def StopTask(task_uid: int):
+async def StopTask(task_uid: int):
     task = task_dict.get(task_uid)
     if task:
-        task.Stop()
+        await task.Stop()
         del task_dict[task_uid]
 
 
-def StopAllTasks():
-    for task in task_dict.values():
-        task.Stop()
+async def StopAllTasks():
+    # 1. 收集所有需要执行的 Stop 协程到一个列表中
+    #    注意：这里只是创建了协程对象，还没有执行它们
+    stop_coroutines = [task.Stop() for task in task_dict.values()]
+
+    # 2. 使用 asyncio.gather 并发运行所有 Stop 协程，并等待它们全部完成
+    #    这就是您说的“统一等”
+    await asyncio.gather(*stop_coroutines, return_exceptions=True)
     task_dict.clear()
-    WebPool.clearPool()
 
 
 def GetActorIds() -> list[int]:

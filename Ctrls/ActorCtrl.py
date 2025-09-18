@@ -1,7 +1,7 @@
 # ActorModel related operations
 from collections.abc import Iterable
 
-from sqlalchemy import delete, exists, select, event, inspect
+from sqlalchemy import delete, exists, func, select, event, inspect
 from sqlalchemy.orm import Session
 
 from Consts import ErrorCode, NoticeType, ActorLogType, ResState
@@ -285,19 +285,21 @@ def _updateActorPostCount(session: Session, actor_id: int, post_completed: bool,
 
 @event.listens_for(PostModel, 'after_insert')
 def after_post_insert(mapper, connection, target: PostModel):
-    with DbCtrl.newSession(connection) as session, session.begin():
+    with DbCtrl.innerSession(connection) as session, session.begin():
         _updateActorPostCount(session, target.actor_id, target.completed, 1)
 
 
 @event.listens_for(PostModel, 'after_delete')
 def after_post_delete(mapper, connection, target: PostModel):
-    with DbCtrl.newSession(connection) as session, session.begin():
+    with DbCtrl.innerSession(connection) as session, session.begin():
         _updateActorPostCount(session, target.actor_id, target.completed, -1)
 
 
 def _updateCompletedPostCount(session: Session, actor_id: int, delta: int):
     actor = getActor(session, actor_id)
     actor.completed_post_count += delta
+    if delta > 0:
+        actor.last_post_fetch_time = func.now()
 
 
 @event.listens_for(PostModel, 'after_update')
@@ -315,7 +317,7 @@ def after_post_update(mapper, connection, target: PostModel):
     else:
         return
 
-    with DbCtrl.newSession(connection) as session, session.begin():
+    with DbCtrl.innerSession(connection) as session, session.begin():
         _updateCompletedPostCount(session, target.actor_id, delta)
 
 # endregion

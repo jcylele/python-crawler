@@ -77,7 +77,6 @@ class ActorFileDetail(BaseModel):
     finished_post_count: int
     is_completed: bool
 
-
 class NoticeCount(BaseModel):
     notice_type: int
     count: int
@@ -87,6 +86,9 @@ class TagCount(BaseModel):
     tag_id: int
     count: int
 
+class CommentCount(BaseModel):
+    comment: str
+    count: int
 
 class DownloadTaskResponse(BaseModel):
     uid: int

@@ -2,7 +2,7 @@
 DefaultRetryTimes = 5
 
 
-class BaseQueueItem(object):
+class BaseQueueItem:
     """
     base class for all queue items(tasks)
     """
@@ -31,3 +31,15 @@ class BaseQueueItem(object):
         if self.left_retry_times != other.left_retry_times:
             return self.left_retry_times < other.left_retry_times
         return self.priority() < other.priority()
+
+
+class SentinelQueueItem(BaseQueueItem):
+    __uuid = 0
+
+    def __init__(self):
+        super().__init__()
+        self.uuid = SentinelQueueItem.__uuid
+        SentinelQueueItem.__uuid += 1
+
+    def priority(self):
+        return self.uuid

@@ -68,7 +68,7 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
 
     # length of params should <= 4, otherwise truncate it
     if len(params) > 4:
-        LogUtil.warn(f"too many params {params} for notice type {notice_type}")
+        LogUtil.warning(f"too many params {params} for notice type {notice_type}")
         params = params[:4]
 
     notice = NoticeModel(
@@ -82,7 +82,7 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
     notices = session.scalars(stmt)
     for n in notices:
         if not n.isSameParams(notice):
-            LogUtil.warn(f"same checksum but different notice params, {notice.notice_checksum}")
+            LogUtil.warning(f"same checksum but different notice params, {notice.notice_checksum}")
             continue
         # identical notice
         if n.notice_type == notice_type:

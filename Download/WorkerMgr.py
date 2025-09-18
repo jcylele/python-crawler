@@ -7,14 +7,12 @@ from Workers.FetchPostWorker import FetchPostWorker
 from Workers.FileDownWorker import FileDownWorker
 from Workers.ResInfoWorker import ResInfoWorker
 from Workers.ResValidWorker import ResValidWorker
-from Workers.SimpleFileDownWorker import SimpleFileDownWorker
 
 # specify the corresponding class for each worker type
 WorkerClasses = {
     WorkerType.FileDown: FileDownWorker,
     WorkerType.ResInfo: ResInfoWorker,
     WorkerType.ResValid: ResValidWorker,
-    WorkerType.SimpleFile: SimpleFileDownWorker,
 
     WorkerType.FetchActors: FetchActorsWorker,
     WorkerType.FetchActor: FetchActorWorker,
@@ -24,12 +22,12 @@ WorkerClasses = {
 
 # specify worker count for types, count is 1 if not specified
 WorkerCount = {
-    WorkerType.FileDown: 7,
+    WorkerType.FileDown: 5,
     WorkerType.ResInfo: 5,
 }
 
 
-def createWorker(work_type: WorkerType, task: 'DownloadTask') -> BaseWorker:
+def createWorker(work_type: WorkerType, task) -> BaseWorker:
     """
     create a worker by type
     """

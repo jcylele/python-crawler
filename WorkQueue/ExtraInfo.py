@@ -23,18 +23,6 @@ class BaseExtraInfo(object):
         raise NotImplementedError("subclasses of BaseExtraInfo must implement method priority")
 
 
-class ActorIconExtraInfo(BaseExtraInfo):
-    def __init__(self, actor_info: ActorInfo):
-        super().__init__()
-        self.actor_info = actor_info
-
-    def __repr__(self) -> str:
-        return f"(icon of {self.actor_info})"
-
-    def priority(self) -> int:
-        return 0
-
-
 class ResInfoExtraInfo(BaseExtraInfo):
     """
     attached to UrlQueueItem, indicate that it's fetching the size of a resource

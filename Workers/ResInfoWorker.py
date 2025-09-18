@@ -11,22 +11,20 @@ class ResInfoWorker(BaseRequestWorker):
     worker to get the size of a resource from the header
     """
 
-    def __init__(self, task: 'DownloadTask'):
+    def __init__(self, task):
         super().__init__(worker_type=WorkerType.ResInfo, task=task)
 
-    def _queueType(self) -> QueueType:
-        return QueueType.ResInfo
 
-    def _process(self, item: UrlQueueItem) -> bool:
+    async def _process(self, item: UrlQueueItem) -> bool:
         extra_info: ResInfoExtraInfo = item.extra_info
         download_limit = self.DownloadLimit()
         # skip (avoid DDOS protection)
         if not download_limit.canResInfo(extra_info.res_type):
             return True
 
-        succeed, size = self._head(item)
+        succeed, size = await self._head(item)
         if not succeed:
-            LogUtil.warn(f"head failed: {item.url}")
+            LogUtil.warning(f"head failed: {item.url}")
             return False
 
         # keep session life short, no time-consuming things allowed
@@ -34,7 +32,7 @@ class ResInfoWorker(BaseRequestWorker):
         with DbCtrl.getSession() as session, session.begin():
             res1 = ResCtrl.getRes(session, extra_info.res_id)
             if res1 is None:
-                LogUtil.warn(f"res not found {extra_info}")
+                LogUtil.warning(f"res not found {extra_info}")
                 return False
 
             # update size
@@ -47,6 +45,6 @@ class ResInfoWorker(BaseRequestWorker):
 
             # enqueue for downloading
             if res1.shouldDownload(download_limit):
-                self.QueueMgr().downloadResFile(item, res1.tmpFilePath(), size)
+                await self.queue_mgr().downloadResFile(item, res1.tmpFilePath(), size)
 
             return True

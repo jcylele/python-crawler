@@ -3,6 +3,8 @@ import os
 import sys
 from os import path
 
+from Consts import QueueType, WorkerType
+
 # connection string
 DbConnectString = ""
 # root url from where to download
@@ -17,6 +19,8 @@ TmpFolder = "_downloading"
 IconFolder = "_icon"
 # web path for files, app mount prefix
 FileWebPath = "files"
+# thumbnail image folder in actor folder
+ThumbnailFolder = "_thumbnail"
 
 # minimum download speed
 MIN_DOWN_SPEED = 0
@@ -24,6 +28,10 @@ MIN_DOWN_SPEED = 0
 BASE_TIME_OUT = 0
 # if show Chrome browser
 SHOW_BROWSER = False
+
+# wait for images js
+WAIT_ALL_IMAGES_JS: str | None = None
+WAIT_SINGLE_IMAGE_JS: str | None = None
 
 ### above variables are in configs/settings.json, below are constants ###
 
@@ -63,6 +71,22 @@ def init():
         SHOW_BROWSER = setting_json['SHOW_BROWSER']
 
 
+def getWaitAllImagesJs(selector: str) -> str:
+    global WAIT_ALL_IMAGES_JS
+    if WAIT_ALL_IMAGES_JS is None:
+        with open(formatStaticFile('configs/wait_all_images.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
+            WAIT_ALL_IMAGES_JS = wait_for_images_js_file.read()
+    return f"({WAIT_ALL_IMAGES_JS})('{selector}')"
+
+
+def getWaitSingleImageJs(selector: str) -> str:
+    global WAIT_SINGLE_IMAGE_JS
+    if WAIT_SINGLE_IMAGE_JS is None:
+        with open(formatStaticFile('configs/wait_single_image.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
+            WAIT_SINGLE_IMAGE_JS = wait_for_images_js_file.read()
+    return f"({WAIT_SINGLE_IMAGE_JS})('{selector}')"
+
+
 def __generateResSizeList() -> list[int]:
     ret = [0]
     res_size = MIN_RES_SIZE
@@ -77,6 +101,25 @@ def getResSizeList() -> list[int]:
     if len(RES_SIZE_LIST) == 0:
         RES_SIZE_LIST = __generateResSizeList()
     return RES_SIZE_LIST
+
+
+def initPlaywright():
+    # Check if the application is running as a frozen executable (packaged by PyInstaller)
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # The '0' value seems unreliable in some bundled environments.
+        # Instead, we construct the full, absolute path to the system-wide
+        # Playwright browser installation directory and set that.
+
+        local_app_data = os.getenv('LOCALAPPDATA')
+        if local_app_data:
+            browsers_path = os.path.join(local_app_data, 'ms-playwright')
+            print(
+                f"PyInstaller mode detected. Setting Playwright browsers path to: {browsers_path}")
+            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = browsers_path
+        else:
+            # Fallback or error if LOCALAPPDATA is not set
+            print(
+                "Warning: LOCALAPPDATA environment variable not found. Playwright might fail.")
 
 
 def formatStaticFile(relative_path: str) -> str:
@@ -98,6 +141,7 @@ def formatTmpFolderPath() -> str:
     """
     return f"{RootFolder}\\{TmpFolder}"
 
+
 def formatIconFolderPath() -> str:
     """
     folder for downloading icons of actors
@@ -108,3 +152,27 @@ def formatIconFolderPath() -> str:
 
 def formatActorFolderPath(actor_id: int, actor_name: str) -> str:
     return f"{RootFolder}\\{actor_name}_{actor_id}"
+
+
+def formatActorThumbnailFolderPath(actor_id: int, actor_name: str) -> str:
+    return f"{formatActorFolderPath(actor_id, actor_name)}\\_{actor_name}"
+
+
+def getQueueTypeByWorkerType(worker_type: WorkerType) -> QueueType:
+    match worker_type:
+        case WorkerType.FileDown:
+            return QueueType.FileDownload
+        case WorkerType.ResInfo:
+            return QueueType.ResInfo
+        case WorkerType.ResValid:
+            return QueueType.ResValid
+        case WorkerType.FetchActors:
+            return QueueType.FetchActors
+        case WorkerType.FetchActor:
+            return QueueType.FetchActor
+        case WorkerType.FetchActorLink:
+            return QueueType.FetchActorLink
+        case WorkerType.FetchPost:
+            return QueueType.FetchPost
+        case _:
+            raise ValueError(f"Invalid worker type: {worker_type}")

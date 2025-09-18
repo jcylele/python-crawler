@@ -8,8 +8,8 @@ from fastapi.params import Query, Body
 import Configs
 from Consts import ErrorCode
 from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, ActorSimilarCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl, ResFileCtrl
-from routers.schemas import ActorLogResponse, ActorResponse
-from routers.schemas_others import ActorVideoInfo, CommonResponse, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
+from routers.schemas import ActorFileInfoResponse, ActorLogResponse, ActorResponse
+from routers.schemas_others import ActorVideoInfo, CommentCount, CommonResponse, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
 from routers.web_data import ActorConditionForm, BatchActorGroup, LinkActorForm
 
 router = APIRouter(
@@ -98,8 +98,13 @@ def clear_folder_by_group(group_id: int, session: Session = Depends(DbCtrl.get_d
 
 @router.get("/validate_all_file_info", response_model=UnifiedResponse[int])
 def validate_all_file_info(session: Session = Depends(DbCtrl.get_db_session)):
-    invalid_count = ActorFileCtrl.validate_all_file_info_new(session)
-    return UnifiedResponse[int](data=invalid_count)
+    return CommonResponse(error_code=ErrorCode.Unavailable)
+
+
+@router.get("/comments", response_model=UnifiedListResponse[CommentCount])
+def get_comments(session: Session = Depends(DbCtrl.get_db_session)):
+    comments = ActorQueryCtrl.getComments(session)
+    return UnifiedListResponse[CommentCount](data=comments)
 
 # 同方法(get)按顺序匹配, 固定前缀在前，{actor_id}在后, 以下皆为单个匹配
 
@@ -174,6 +179,13 @@ def get_actor_file_info(actor_id: int, session: Session = Depends(DbCtrl.get_db_
     return UnifiedResponse[ActorFileDetail](data=actor_file_detail)
 
 
+@router.patch("/{actor_id}/validate_file_info", response_model=UnifiedListResponse[ActorFileInfoResponse])
+def validate_actor_file_info(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    actor_file_info_list = ActorFileCtrl.validateActorFileInfo(
+        session, actor_id)
+    return UnifiedListResponse[ActorFileInfoResponse](data=actor_file_info_list)
+
+
 @router.get("/{actor_id}/video_stats", response_model=UnifiedListResponse[ActorVideoInfo])
 def get_actor_video_stats(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actor_video_stats = ActorFileCtrl.getActorVideoStats(session, actor_id)
@@ -206,7 +218,8 @@ def get_linked_actors(actor_id: int, session: Session = Depends(DbCtrl.get_db_se
     actor = ActorCtrl.getActor(session, actor_id)
     if not actor.is_linked:
         return UnifiedResponse[list[int]](data=[actor_id])
-    linked_actor_ids = ActorCtrl.getLinkedActorIds(session, actor.main_actor_id)
+    linked_actor_ids = ActorCtrl.getLinkedActorIds(
+        session, actor.main_actor_id)
     return UnifiedResponse[list[int]](data=linked_actor_ids)
 
 

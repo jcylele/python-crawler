@@ -54,7 +54,6 @@ class WorkerType(Enum):
     FileDown = auto()
     ResInfo = auto()
     ResValid = auto()
-    SimpleFile = auto()
 
     FetchActors = auto()
     FetchActor = auto()
@@ -75,7 +74,6 @@ class QueueType(IntEnum):
 
     FileDownload = auto()
     ResInfo = auto()
-    SimpleFile = auto()
 
 
 class PostFilter(IntEnum):
@@ -107,21 +105,22 @@ class SortType(Enum):
 class ErrorCode(IntEnum):
     Success = 0
 
-    MainActorNotFound = 1
-    ActorNotFound = 2
-    ActorGroupNotFound = 3
-    TagNotFound = 4
-    TagGroupNotFound = 5
-    FolderNotFound = 6
+    Unavailable = 1
 
-    MultiLinkGroups = 100
-    NotAllLinkedActors = 101
-    UnlinkedActor = 102
-    
+    MainActorNotFound = 101
+    ActorNotFound = 102
+    ActorGroupNotFound = 103
+    TagNotFound = 104
+    TagGroupNotFound = 105
+    FolderNotFound = 106
 
-    GroupAlreadyIn = 200
-    GroupCondFailed = 201
-    GroupHasActors = 202
+    MultiLinkGroups = 201
+    NotAllLinkedActors = 202
+    UnlinkedActor = 203
 
-    TagInOtherGroup = 300
-    TagNotInGroup = 301
+    GroupAlreadyIn = 301
+    GroupCondFailed = 302
+    GroupHasActors = 303
+
+    TagInOtherGroup = 401
+    TagNotInGroup = 402

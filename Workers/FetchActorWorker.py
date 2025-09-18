@@ -1,17 +1,15 @@
+import asyncio
 import re
-import time
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from Consts import WorkerType, QueueType, NoticeType, ActorLogType
-from Ctrls import ActorCtrl, ActorFileCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
+from playwright.async_api import Page, Response, expect, TimeoutError as PlaywrightTimeoutError
+
+from Consts import WorkerType, NoticeType, ActorLogType
+from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
+from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
+from Workers.ImageWait.ActorIconWait import ActorIconWait
 from Workers.BaseFetchWorker import BaseFetchWorker
 
 # max number of post id
@@ -23,15 +21,14 @@ class FetchActorWorker(BaseFetchWorker):
     worker to analyse the actor list page
     """
 
-    def __init__(self, task: 'DownloadTask'):
+    def __init__(self, task):
         super().__init__(worker_type=WorkerType.FetchActor, task=task)
+        self.actor_info: ActorInfo | None = None
+        self.actor_icon_wait = ActorIconWait()
 
-    def _queueType(self) -> QueueType:
-        return QueueType.FetchActor
-
-    def processPosts(self, post_list: list[(int, bool)], from_url: str) -> bool:
+    async def processPosts(self, post_list: list[(int, bool)], from_url: str) -> bool:
         reach_last = False
-        posts_to_enqueue = []
+        posts_to_enqueue: list[(int, bool)] = []
         with DbCtrl.getSession() as session, session.begin():
             actor_id = self.actor_info.actor_id
             actor = ActorCtrl.getActor(session, actor_id)
@@ -44,8 +41,7 @@ class FetchActorWorker(BaseFetchWorker):
                 post = PostCtrl.getPost(session, post_id)
                 if post is None:
                     PostCtrl.addPost(session, actor_id, post_id, is_dm)
-                    posts_to_enqueue.append(
-                        {'post_id': post_id, 'is_dm': is_dm})
+                    posts_to_enqueue.append(tup_post)
                 else:
                     if post.actor_id != actor_id:
                         owner_actor = ActorCtrl.getActor(
@@ -53,19 +49,18 @@ class FetchActorWorker(BaseFetchWorker):
                         ActorCtrl.fixPostBelong(
                             session, post, owner_actor, actor)
                         if self.task.is_fix_posts:
-                            self.task.fix_more_posts(owner_actor.actor_id)
+                            await self.task.fix_more_posts(owner_actor.actor_id)
 
                     elif not post.completed:  # the post is not analysed yet
-                        self.QueueMgr().enqueueFetchPost(
+                        await self.queue_mgr().enqueueFetchPost(
                             self.actor_info, post_id, is_dm)
                     else:  # all resources of the post are already added
-                        self.QueueMgr().enqueueAllRes(
+                        await self.queue_mgr().enqueueAllRes(
                             self.actor_info, post, self.DownloadLimit())
 
         # 在事务提交后，再将所有任务推入队列
         for item in posts_to_enqueue:
-            self.QueueMgr().enqueueFetchPost(
-                self.actor_info, item['post_id'], item['is_dm'])
+            await self.queue_mgr().enqueueFetchPost(self.actor_info, item[0], item[1])
 
         return reach_last
 
@@ -85,126 +80,126 @@ class FetchActorWorker(BaseFetchWorker):
             NoticeCtrl.addNotice(
                 session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
 
-    @staticmethod
-    def elementInClass(element: WebElement, class_name: str):
-        return element.get_attribute("class").find(class_name) != -1
-
     def _loadSelector(self) -> str:
         return ".user-header"
 
     def _url(self, item: FetchActorQueueItem) -> str:
-        actor_info = self.getActorInfo(item.actor_id)
-        return RequestCtrl.formatActorUrl(actor_info)
+        return RequestCtrl.formatActorUrl(self.actor_info)
 
     def _checkFetch(self, session: Session, item: FetchActorQueueItem):
         # return self.hasActorFolder(session, item.actor_id)
         return True
 
-    def _onFetched(self, item: FetchActorQueueItem, driver: webdriver.Chrome) -> bool:
+    def _beforeFetch(self, session: Session, item: FetchActorQueueItem):
         self.actor_info = self.getActorInfo(item.actor_id)
+        self.actor_icon_wait.set_actor_info(self.actor_info)
+
+    async def on_response(self, response: Response):
+        await self.actor_icon_wait.on_response(response)
+
+    async def _onFetched(self, item: FetchActorQueueItem, page: Page) -> bool:
         actor_name = self.actor_info.actor_name
 
-        # create folder
-        ActorFileCtrl.createActorFolder(self.actor_info)
-
         # actor icon
-        self._saveActorIcon(
-            self.actor_info, ".user-header__avatar img", driver, True)
+        await self.actor_icon_wait.wait(page)
 
         # update post count
         post_count = 0
         post_count_updated = False
 
-        # webpage is new in every iteration, so keep elements inside the loop
+        # Loop through pages, using i as the expected page number
         for i in range(1, 1000000):
-            try:
-                paginator_top = driver.find_element(
-                    By.CSS_SELECTOR, "#paginator-top")
-            except:
-                paginator_top = None
-
-            if paginator_top is not None and not post_count_updated:
-                try:
-                    ele_count = paginator_top.find_element(
-                        By.CSS_SELECTOR, 'small')
-                    nums = re.findall(r"\d+", ele_count.text)
-                    FetchActorWorker.updateActorPostCount(
-                        item.actor_id, int(nums[-1]))
-                    post_count_updated = True
-                except:
-                    pass
-
-            try:
-                page_menu = paginator_top.find_element(By.CSS_SELECTOR, 'menu')
-            except:
-                page_menu = None
-
             LogUtil.info(f"actor {actor_name} page {i}")
-            # wait for page load
-            if page_menu is not None:
+
+            top_paginator = page.locator("#paginator-top")
+
+            # Try to update total post count from paginator if it exists and hasn't been updated yet
+            if (await top_paginator.count()) > 0 and not post_count_updated:
                 try:
-                    WebDriverWait(driver, 10).until(
-                        EC.text_to_be_present_in_element(
-                            (By.CSS_SELECTOR, ".pagination-button-current b"), f"{i}")
-                    )
-                except:
-                    LogUtil.error(f"actor {actor_name} page {i} not found")
+                    ele_count_text = await top_paginator.locator('small').text_content(timeout=5000)
+                    if ele_count_text:
+                        nums = re.findall(r"\d+", ele_count_text)
+                        if nums:
+                            FetchActorWorker.updateActorPostCount(
+                                item.actor_id, int(nums[-1]))
+                            post_count_updated = True
+                except PlaywrightTimeoutError:
+                    LogUtil.info(
+                        f"actor {actor_name} post count not found, assuming a single page.")
+
+            top_menu = top_paginator.locator('menu')
+
+            # If a page menu exists, wait for the current page number to be correct
+            if (await top_menu.count()) > 0:
+                try:
+                    await expect(top_menu.locator(".pagination-button-current b")).to_have_text(f"{i}", timeout=10000)
+                except PlaywrightTimeoutError:
+                    LogUtil.error(
+                        f"actor {actor_name} page {i} not found or timed out")
                     break
             else:
-                LogUtil.info(f"actor {actor_name} page {i} no page menu")
+                if i > 1:
+                    # If we are past the first page and the menu disappears, we are done.
+                    LogUtil.info(
+                        f"Paginator not found on page {i} for actor {actor_name}, ending.")
+                    break
+                LogUtil.info(
+                    f"actor {actor_name} has no page menu, assuming a single page.")
 
-            # analyze content
-            article_list = driver.find_elements(
-                By.CSS_SELECTOR, 'article.post-card')
+            # Analyze content
+            article_locators = await page.locator('article.post-card').all()
             post_list = []
-            for article in article_list:
-                post_id_str = article.get_attribute("data-id")
+            for article_locator in article_locators:
+                post_id_str = await article_locator.get_attribute("data-id")
                 if post_id_str is None:
                     continue
                 is_dm = post_id_str.startswith('DM')
                 try:
-                    if is_dm:
-                        post_id = int(post_id_str[2:])
-                    else:
-                        post_id = int(post_id_str)
+                    post_id = int(post_id_str[2:]) if is_dm else int(
+                        post_id_str)
                     if post_id > MAX_POST_ID:
                         raise ValueError
-                except:
+                except (ValueError, TypeError):
                     FetchActorWorker.addInvalidPostNotice(
                         actor_name, i, post_id_str)
                     LogUtil.error(
                         f"actor {actor_name} page {i} post {post_id_str} invalid")
                     continue
                 post_list.append((post_id, is_dm))
-            reach_last_post = self.processPosts(post_list, driver.current_url)
+
+            reach_last_post = await self.processPosts(post_list, page.url)
             post_count += len(post_list)
 
-            # only one page
+            # If post count was never updated from a paginator, it's a single page.
+            # Update the count with the number of posts found on this page.
             if not post_count_updated:
                 FetchActorWorker.updateActorPostCount(
                     item.actor_id, len(post_list))
                 post_count_updated = True
 
-            # download no more
+            # Check break conditions
             if reach_last_post or (not self.DownloadLimit().morePost(post_count)):
                 break
 
-            # next page
-            next_btn = None
-            if page_menu is not None:
-                try:
-                    next_btn = page_menu.find_element(
-                        By.CSS_SELECTOR, '.pagination-button-after-current')
-
-                except:
-                    pass
-
-            if next_btn is None or FetchActorWorker.elementInClass(next_btn, "pagination-button-disabled"):
+            # Next page logic
+            # If there's no page menu, it's the last page.
+            if (await top_menu.count()) == 0:
                 break
 
-            # click
-            next_btn.click()
-            # wait
-            time.sleep(3)
+            next_btn_locator = top_menu.locator(
+                '.pagination-button-after-current')
+            # If there's no 'next' button, it's the last page.
+            if (await next_btn_locator.count()) == 0:
+                break
+
+            # If the 'next' button is disabled, it's the last page.
+            next_btn_classes = await next_btn_locator.get_attribute("class")
+            if next_btn_classes and "pagination-button-disabled" in next_btn_classes:
+                break
+
+            # slow down to avoid being blocked
+            await asyncio.sleep(2)
+            # Click to go to the next page
+            await next_btn_locator.click()
 
         return True

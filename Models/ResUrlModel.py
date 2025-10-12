@@ -10,8 +10,10 @@ class ResUrlModel(BaseModel):
     __tablename__ = "tab_res_url"
 
     url_id: Mapped[int] = mapped_column(primary_key=True)
-    domain_id: Mapped[int] = mapped_column(ForeignKey("tab_res_domains.domain_id"))
-    hash_binary: Mapped[bytes] = mapped_column(VARBINARY(DB_BYTES_LEN_SHA256))  # 二进制存储哈希
+    domain_id: Mapped[int] = mapped_column(
+        ForeignKey("tab_res_domains.domain_id"))
+    hash_binary: Mapped[bytes] = mapped_column(
+        VARBINARY(DB_BYTES_LEN_SHA256))  # 二进制存储哈希
     extension: Mapped[str] = mapped_column(String(DB_STR_LEN_EXTENSION))
 
     domain: Mapped["ResDomainModel"] = relationship()
@@ -27,3 +29,8 @@ class ResUrlModel(BaseModel):
         hex_sha256 = PyUtil.bytes2hex(self.hash_binary)
         hash_part = f"{hex_sha256[:2]}/{hex_sha256[2:4]}/{hex_sha256}"
         return f"https://{self.domain.domain_name}/data/{hash_part}.{self.extension}"
+
+    @property
+    def file_name(self) -> str:
+        hex_sha256 = PyUtil.bytes2hex(self.hash_binary)
+        return f"{hex_sha256}.{self.extension}"

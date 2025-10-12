@@ -17,20 +17,20 @@ class ActorModel(BaseModel):
         ForeignKey("tab_actor_group.group_id"))
     actor_platform: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
     actor_link: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
-    total_post_count: Mapped[int] = mapped_column(default=0)
+    total_post_count: Mapped[int] = mapped_column(default=0, index=True)
     current_post_count: Mapped[int] = mapped_column(default=0)
-    completed_post_count: Mapped[int] = mapped_column(default=0)
+    completed_post_count: Mapped[int] = mapped_column(default=0, index=True)
     last_post_fetch_time: Mapped[DateTime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True)
+        DateTime(timezone=True), nullable=True, index=True)
     last_res_download_time: Mapped[DateTime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True)
+        DateTime(timezone=True), nullable=True, index=True)
 
     main_actor_id: Mapped[int | None] = mapped_column(
         ForeignKey("tab_actor_main.main_actor_id"),
         nullable=True
     )
     group_time: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True), default=func.now())
+        DateTime(timezone=True), default=func.now(), index=True)
     last_post_id: Mapped[int] = mapped_column(BigInteger, default=0)
     link_checked: Mapped[bool] = mapped_column(default=False)
     manual_done: Mapped[bool] = mapped_column(default=False)

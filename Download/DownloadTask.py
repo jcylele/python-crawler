@@ -4,7 +4,7 @@ import os
 from sqlalchemy.orm import Session
 
 import Configs
-from Consts import PostFilter, WorkerType
+from Consts import PostFilter, TaskType, WorkerType
 from Ctrls import ActorQueryCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ResFileCtrl
 from Download import WorkerMgr
 from Download.DownloadLimit import DownloadLimit
@@ -24,7 +24,9 @@ class DownloadTask:
         self.queue_mgr = TaskQueueMgr()
         self.download_limit: DownloadLimit | None = None
         self.init_group_id = 0
-        self.desc = ""
+        self.task_type = TaskType.Default
+        self.task_desc = ""
+        self.task_arg = 0
         self.actor_ids = []
         self.is_fix_posts = False
 
@@ -54,18 +56,18 @@ class DownloadTask:
         try:
             # wait for all queues to finish
             await self.queue_mgr.wait_for_finish()
-            LogUtil.info(f"Task {self.desc} queues finished.")
+            LogUtil.info(f"Task {self.task_desc} queues finished.")
             # stop all workers by sending sentinel
             await self._notify_workers_to_stop()
             await asyncio.gather(*self.worker_tasks, return_exceptions=True)
-            LogUtil.info(f"Task {self.desc} workers stopped.")
+            LogUtil.info(f"Task {self.task_desc} workers stopped.")
             self.running = False
-            LogUtil.info(f"Task {self.desc} finished.")
+            LogUtil.info(f"Task {self.task_desc} finished.")
 
         except asyncio.CancelledError:
-            LogUtil.info(f"Task {self.desc} was cancelled.")
+            LogUtil.info(f"Task {self.task_desc} was cancelled.")
         except Exception as e:
-            LogUtil.error(f"Task {self.desc} crashed")
+            LogUtil.error(f"Task {self.task_desc} crashed")
             LogUtil.exception(e)
         finally:
             self.watcher_task = None
@@ -88,7 +90,7 @@ class DownloadTask:
             self.watcher_task.cancel()
             tasks_to_wait.append(self.watcher_task)
         await asyncio.gather(*tasks_to_wait, return_exceptions=True)
-        LogUtil.info(f"Task {self.desc} stopped successfully.")
+        LogUtil.info(f"Task {self.task_desc} stopped successfully.")
 
     def isDone(self) -> bool:
         return not self.running
@@ -135,7 +137,7 @@ class DownloadTask:
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
                         await self.queue_mgr.enqueueFetchPost(
-                            actor_info, post.post_id, post.is_dm)
+                            actor_info, post)
                     else:  # all resources of the post are already added
                         await self.queue_mgr.enqueueAllRes(
                             actor_info, post, self.download_limit)
@@ -155,7 +157,8 @@ class DownloadTask:
         await self.start()
 
     async def downloadByUrls(self, actor_urls: list[ActorUrl]):
-        self.desc = "Specific Urls"
+        self.task_type = TaskType.Url
+        self.task_desc = "Specific Urls"
         actor_ids: list[int] = []
         with DbCtrl.getSession() as session, session.begin():
             for actor_url in actor_urls:
@@ -186,14 +189,17 @@ class DownloadTask:
             actor = ActorCtrl.getActor(session, actor_id)
             # in case linked actors found, set the group id to the actor's group id
             self.setInitGroup(actor.actor_group_id)
-            self.desc = f"Specific Actor {actor.actor_name}"
+            self.task_type = TaskType.Specific
+            self.task_desc = f"Specific Actor {actor.actor_name}"
+            self.task_arg = actor_id
         await self.downloadActors([actor_id])
 
     async def downloadNewActors(self, start_page: int):
         """
         download new actors
         """
-        self.desc = "New Actors."
+        self.task_type = TaskType.New
+        self.task_desc = "New Actors"
         await self.queue_mgr.enqueueFetchActors(start_page)
         await self.start()
 
@@ -204,14 +210,15 @@ class DownloadTask:
         actor_ids = []
         with DbCtrl.getSession() as session, session.begin():
             group = ActorGroupCtrl.getActorGroup(session, group_id)
-            self.desc = f"Actors in group {group.group_name}."
-
+            self.task_type = TaskType.Group
+            self.task_desc = f"Actors in group {group.group_name}"
+            self.task_arg = group_id
             actors = ActorQueryCtrl.getActorsByGroup(session, group_id)
             for actor in actors:
                 actor_ids.append(actor.actor_id)
         await self.downloadActors(actor_ids)
 
-    async def __resumeActor_Process(self, session: Session, file: str, post_id: int, res_index: int):
+    async def __resumeActor_Process(self, session: Session, file: str, post_id: int, res_index: int, extra_data: any = None):
         res = ResCtrl.getResByIndex(session, post_id, res_index)
         if res.shouldDownload(self.download_limit):
             await self.queue_mgr.enqueueResFile(res)
@@ -221,9 +228,10 @@ class DownloadTask:
             actor = ActorCtrl.getActor(session, actor_id)
             if actor is None or not actor.actor_group.has_folder:
                 return
-            self.desc = f"resume actor {actor.actor_name}"
             self.actor_ids = [actor_id]
-
+            self.task_type = TaskType.Resume
+            self.task_desc = f"resume actor {actor.actor_name}"
+            self.task_arg = actor_id
             await ResFileCtrl.traverseDownloadingFilesOfActor_async(
                 session, actor, self.__resumeActor_Process)
 
@@ -243,8 +251,10 @@ class DownloadTask:
             ActorCtrl.refreshActorPostCount(session, actor_id)
 
             self.is_fix_posts = True
-            self.desc = f"fix posts of actor {actor.actor_name}"
             self.actor_ids = [actor_id]
+            self.task_type = TaskType.FixPost
+            self.task_desc = f"fix posts of actor {actor.actor_name}"
+            self.task_arg = actor_id
             await self.normalPosts(self.actor_ids)
             await self.start()
 
@@ -252,7 +262,8 @@ class DownloadTask:
         """
         custom logic to fix bugs etc
         """
-        self.desc = f"manual op"
+        self.task_type = TaskType.Manual
+        self.task_desc = f"manual op"
         # TODO: implement manual logic
 
     @staticmethod
@@ -263,20 +274,24 @@ class DownloadTask:
         """
         LogUtil.info("initializing environment...")
         # should be called before any other operations
-        Configs.init()
-        os.makedirs(Configs.RootFolder, exist_ok=True)
+        os.makedirs(Configs.getRootFolder(), exist_ok=True)
         os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
         os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
         DbCtrl.init()
 
     def __repr__(self):
-        return self.desc
+        return self.task_desc
 
-    def toResponse(self) -> DownloadTaskResponse:
-        return DownloadTaskResponse(
+    def toResponse(self, session: Session) -> DownloadTaskResponse:
+        response = DownloadTaskResponse(
             uid=self.uid,
-            desc=self.desc,
+            type=self.task_type,
+            arg=self.task_arg,
             download_limit=self.download_limit.toResponse(),
             worker_count=self.queue_mgr.get_worker_count_map(),
             queue_count=self.queue_mgr.get_queue_count_map()
         )
+        if self.task_type < TaskType.MaxSingleActor:
+            response.actor_abstract = ActorCtrl.getActorAbstract(
+                session, self.task_arg)
+        return response

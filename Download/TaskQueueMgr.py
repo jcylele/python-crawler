@@ -3,6 +3,7 @@ from Ctrls import RequestCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.QueueMgr import QueueMgr
 from Models.ActorInfo import ActorInfo
+from Models.PostInfo import PostInfo
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from WorkQueue.ExtraInfo import ResInfoExtraInfo, ResFileExtraInfo
@@ -26,8 +27,8 @@ class TaskQueueMgr(QueueMgr):
         item = FetchActorQueueItem(actor_id)
         await self.put(QueueType.FetchActorLink, item)
 
-    async def enqueueFetchPost(self, actor_info: ActorInfo, post_id: int, is_dm: bool):
-        item = FetchPostQueueItem(actor_info, post_id, is_dm)
+    async def enqueueFetchPost(self, actor_info: ActorInfo, post_info: PostInfo|PostModel):
+        item = FetchPostQueueItem(actor_info, post_info)
         await self.put(QueueType.FetchPost, item)
 
     async def enqueueAllRes(self, actor_info: ActorInfo, post: PostModel, downloadLimit: DownloadLimit):

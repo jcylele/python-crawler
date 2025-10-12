@@ -1,26 +1,57 @@
 import json
 
-import Configs
-from Consts import CacheKey
+from Consts import CacheFile, CacheKey
+from Utils import PyUtil
 
-_json_data = None
-_file_path = Configs.formatStaticFile('configs/cache.json')
-
-
-def init():
-    global _json_data
-    if _json_data is None:
-        with open(_file_path, 'r') as f:
-            _json_data = json.load(f)
+_json_map: dict[CacheFile, dict[str, any]] = {}
 
 
-def getValue(key: CacheKey):
-    init()
-    return _json_data.get(key.value, None)
+def filePath(cache_file: CacheFile):
+    return PyUtil.formatStaticFile(cache_file.value)
 
 
-def setValue(key: CacheKey, value: any):
-    init()
-    _json_data[key.value] = value
-    with open(_file_path, 'w') as f:
-        json.dump(_json_data, f)
+def init(cache_file: CacheFile):
+    if cache_file in _json_map:
+        return
+    with open(filePath(cache_file), 'r') as f:
+        _json_map[cache_file] = json.load(f)
+
+
+def getValue(cache_file: CacheFile, key: CacheKey):
+    init(cache_file)
+    return _json_map[cache_file].get(key.value, None)
+
+
+def setValue(cache_file: CacheFile, key: CacheKey, value: any, save: bool = True):
+    init(cache_file)
+    _json_map[cache_file][key.value] = value
+    if save:
+        saveFile(cache_file)
+
+
+def saveFile(cache_file: CacheFile):
+    if cache_file not in _json_map:
+        return
+    with open(filePath(cache_file), 'w') as f:
+        json.dump(_json_map[cache_file], f, indent=4, sort_keys=True)
+
+
+def getJson(cache_file: CacheFile) -> dict[str, any]:
+    init(cache_file)
+    return _json_map[cache_file]
+
+
+def setCustomPage(page: int):
+    setValue(CacheFile.CustomPage, CacheKey.CustomPage, page)
+
+
+def getCustomPage() -> int:
+    return getValue(CacheFile.CustomPage, CacheKey.CustomPage)
+
+
+def getSettings() -> dict[str, any]:
+    return getJson(CacheFile.Settings)
+
+
+def changeSetting(setting_name: CacheKey, setting_value: any):
+    setValue(CacheFile.Settings, setting_name, setting_value)

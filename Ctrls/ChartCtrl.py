@@ -70,20 +70,15 @@ def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit:
     return [TagCount(tag_id=tag_id, count=count) for tag_id, count in ret]
 
 
-def _addSize(total_size: int, file_path: str) -> int:
-    return total_size + os.path.getsize(file_path)
+def _add_size_process(_0: Session, file: str, _1: int, _2: int, sum: list[int]):
+    if os.path.exists(file):
+        sum[0] += os.path.getsize(file)
 
 
 def getTotalDownloadingSize(session: Session) -> int:
-    total_size = 0
-
-    def add_size(_1, file, _2, _3):
-        nonlocal total_size
-        if os.path.exists(file):
-            total_size += os.path.getsize(file)
-
-    ResFileCtrl.traverseDownloadingFiles(session, add_size)
-    return total_size
+    sum = [0]
+    ResFileCtrl.traverseDownloadingFiles(session, _add_size_process, sum)
+    return sum[0]
 
 
 def getResSizeStats(session: Session) -> dict[int, int]:

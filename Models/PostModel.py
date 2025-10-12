@@ -23,6 +23,10 @@ class PostModel(BaseModel):
         nullable=False,
         index=True
     )
+    has_thumbnail: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False
+    )
 
     # 在类定义后添加索引定义
     __table_args__ = (
@@ -45,7 +49,6 @@ class PostModel(BaseModel):
     @validates("comment")
     def validate_comment(self, key, value):
         return self.truncate(key, value, DB_STR_LEN_LONG)
-
 
     def __repr__(self) -> str:
         return f"Post(post_id={self.post_id!r}, actor_name={self.actor.actor_name})"

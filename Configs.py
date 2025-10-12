@@ -1,18 +1,9 @@
-import json
 import os
 import sys
-from os import path
 
-from Consts import QueueType, WorkerType
+from Consts import CacheFile, CacheKey, QueueType, WorkerType
+from Utils import CacheUtil, PyUtil
 
-# connection string
-DbConnectString = ""
-# root url from where to download
-RootUrl = ""
-IconUrl = ""
-ServerPort = 7878
-# Root Folder for all downloaded resources(files)
-RootFolder = ""
 # tmp file inside RootFolder for downloading files which will be  moved to other locations when completed
 TmpFolder = "_downloading"
 # folder for downloading icons of actors
@@ -21,13 +12,6 @@ IconFolder = "_icon"
 FileWebPath = "files"
 # thumbnail image folder in actor folder
 ThumbnailFolder = "_thumbnail"
-
-# minimum download speed
-MIN_DOWN_SPEED = 0
-# base time out for downloading files
-BASE_TIME_OUT = 0
-# if show Chrome browser
-SHOW_BROWSER = False
 
 # wait for images js
 WAIT_ALL_IMAGES_JS: str | None = None
@@ -41,12 +25,8 @@ MAX_SCORE = 12
 RES_SIZE_LIST = []
 MIN_RES_SIZE = 4 * 1024 * 1024
 MAX_RES_SIZE = 1024 * 1024 * 1024
-
-# port for file server, only icons now
-FILE_PORT = 1314
-
+# database fields length
 DB_BYTES_LEN_SHA256 = 32
-
 DB_STR_LEN_COLOR = 7
 DB_STR_LEN_EXTENSION = 10
 DB_STR_LEN_BIG_INT = 20
@@ -57,24 +37,22 @@ DB_STR_LEN_LONG = 100
 DB_STR_LEN_REMARK = 200
 
 
-def init():
-    with open(formatStaticFile('configs/settings.json'), 'r') as setting_file:
-        setting_json = json.load(setting_file)
-        global DbConnectString, RootUrl, IconUrl, ServerPort, RootFolder, MIN_DOWN_SPEED, BASE_TIME_OUT, SHOW_BROWSER
-        DbConnectString = setting_json['DbConnectString']
-        RootUrl = setting_json['RootUrl']
-        IconUrl = setting_json['IconUrl']
-        ServerPort = setting_json['ServerPort']
-        RootFolder = setting_json['RootFolder']
-        MIN_DOWN_SPEED = setting_json['MIN_DOWN_SPEED']
-        BASE_TIME_OUT = setting_json['BASE_TIME_OUT']
-        SHOW_BROWSER = setting_json['SHOW_BROWSER']
+def getSetting(cache_key: CacheKey):
+    return CacheUtil.getValue(CacheFile.Settings, cache_key)
+
+
+def setSetting(cache_key: CacheKey, value: any):
+    CacheUtil.setValue(CacheFile.Settings, cache_key, value)
+
+
+def getRootFolder() -> str:
+    return getSetting(CacheKey.RootFolder)
 
 
 def getWaitAllImagesJs(selector: str) -> str:
     global WAIT_ALL_IMAGES_JS
     if WAIT_ALL_IMAGES_JS is None:
-        with open(formatStaticFile('configs/wait_all_images.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
+        with open(PyUtil.formatStaticFile('configs/wait_all_images.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
             WAIT_ALL_IMAGES_JS = wait_for_images_js_file.read()
     return f"({WAIT_ALL_IMAGES_JS})('{selector}')"
 
@@ -82,7 +60,7 @@ def getWaitAllImagesJs(selector: str) -> str:
 def getWaitSingleImageJs(selector: str) -> str:
     global WAIT_SINGLE_IMAGE_JS
     if WAIT_SINGLE_IMAGE_JS is None:
-        with open(formatStaticFile('configs/wait_single_image.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
+        with open(PyUtil.formatStaticFile('configs/wait_single_image.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
             WAIT_SINGLE_IMAGE_JS = wait_for_images_js_file.read()
     return f"({WAIT_SINGLE_IMAGE_JS})('{selector}')"
 
@@ -122,24 +100,12 @@ def initPlaywright():
                 "Warning: LOCALAPPDATA environment variable not found. Playwright might fail.")
 
 
-def formatStaticFile(relative_path: str) -> str:
-    if getattr(sys, 'frozen', False):
-        # we are running in a bundle
-        bundle_dir = sys._MEIPASS
-    else:
-        # we are running in a normal Python environment
-        bundle_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # print(bundle_dir)
-    return path.join(bundle_dir, relative_path)
-
-
 def formatTmpFolderPath() -> str:
     """
     temporary folder for downloading files
     :return:
     """
-    return f"{RootFolder}\\{TmpFolder}"
+    return f"{getRootFolder()}\\{TmpFolder}"
 
 
 def formatIconFolderPath() -> str:
@@ -147,11 +113,11 @@ def formatIconFolderPath() -> str:
     folder for downloading icons of actors
     :return:
     """
-    return f"{RootFolder}\\{IconFolder}"
+    return f"{getRootFolder()}\\{IconFolder}"
 
 
 def formatActorFolderPath(actor_id: int, actor_name: str) -> str:
-    return f"{RootFolder}\\{actor_name}_{actor_id}"
+    return f"{getRootFolder()}\\{actor_name}_{actor_id}"
 
 
 def formatActorThumbnailFolderPath(actor_id: int, actor_name: str) -> str:

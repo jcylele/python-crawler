@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.responses import Response
 
 import Configs
+from Consts import CacheKey
 from Models.BaseModel import BaseModel
 
 __Session = None
@@ -18,7 +19,7 @@ def init():
     """
     init database
     """
-    engine = create_engine(Configs.DbConnectString, echo=False)
+    engine = create_engine(Configs.getSetting(CacheKey.DbConnectString), echo=False)
 
     # create all table if not exist
     BaseModel.metadata.create_all(engine)

@@ -29,7 +29,7 @@ class BaseQueueItem:
 
     def __lt__(self, other):
         if self.left_retry_times != other.left_retry_times:
-            return self.left_retry_times < other.left_retry_times
+            return self.left_retry_times > other.left_retry_times
         return self.priority() < other.priority()
 
 

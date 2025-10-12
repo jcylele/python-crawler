@@ -4,13 +4,16 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from playwright.async_api import Page, Response, expect, TimeoutError as PlaywrightTimeoutError
 
-from Consts import WorkerType, NoticeType, ActorLogType
+import Configs
+from Consts import ResType, WorkerType, NoticeType, ActorLogType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
 from Models.ActorInfo import ActorInfo
+from Models.PostInfo import PostInfo
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.ImageWait.ActorIconWait import ActorIconWait
 from Workers.BaseFetchWorker import BaseFetchWorker
+from Workers.ImageWait.PostThumbnailWait import ActorThumbnailWait
 
 # max number of post id
 MAX_POST_ID = 1 << 64 - 1
@@ -25,23 +28,25 @@ class FetchActorWorker(BaseFetchWorker):
         super().__init__(worker_type=WorkerType.FetchActor, task=task)
         self.actor_info: ActorInfo | None = None
         self.actor_icon_wait = ActorIconWait()
+        self.actor_thumbnail_wait = ActorThumbnailWait()
+        self.actor_thumbnail_wait.set_wait(task.download_limit.allowResDownload(
+            ResType.Image))
 
-    async def processPosts(self, post_list: list[(int, bool)], from_url: str) -> bool:
+    async def processPosts(self, post_list: list[PostInfo], from_url: str) -> bool:
         reach_last = False
-        posts_to_enqueue: list[(int, bool)] = []
+        posts_to_enqueue: list[PostInfo] = []
         with DbCtrl.getSession() as session, session.begin():
             actor_id = self.actor_info.actor_id
             actor = ActorCtrl.getActor(session, actor_id)
             last_post_id = 0 if self.task.is_all_posts() else actor.last_post_id
-            for tup_post in post_list:
-                (post_id, is_dm) = tup_post
-                if post_id <= last_post_id:
+            for post_info in post_list:
+                if post_info.post_id <= last_post_id:
                     reach_last = True
                     continue
-                post = PostCtrl.getPost(session, post_id)
+                post = PostCtrl.getPost(session, post_info.post_id)
                 if post is None:
-                    PostCtrl.addPost(session, actor_id, post_id, is_dm)
-                    posts_to_enqueue.append(tup_post)
+                    PostCtrl.addPost(session, actor_id, post_info)
+                    posts_to_enqueue.append(post_info)
                 else:
                     if post.actor_id != actor_id:
                         owner_actor = ActorCtrl.getActor(
@@ -53,14 +58,14 @@ class FetchActorWorker(BaseFetchWorker):
 
                     elif not post.completed:  # the post is not analysed yet
                         await self.queue_mgr().enqueueFetchPost(
-                            self.actor_info, post_id, is_dm)
+                            self.actor_info, post_info)
                     else:  # all resources of the post are already added
                         await self.queue_mgr().enqueueAllRes(
                             self.actor_info, post, self.DownloadLimit())
 
         # 在事务提交后，再将所有任务推入队列
-        for item in posts_to_enqueue:
-            await self.queue_mgr().enqueueFetchPost(self.actor_info, item[0], item[1])
+        for post_info in posts_to_enqueue:
+            await self.queue_mgr().enqueueFetchPost(self.actor_info, post_info)
 
         return reach_last
 
@@ -93,9 +98,15 @@ class FetchActorWorker(BaseFetchWorker):
     def _beforeFetch(self, session: Session, item: FetchActorQueueItem):
         self.actor_info = self.getActorInfo(item.actor_id)
         self.actor_icon_wait.set_actor_info(self.actor_info)
+        if self.actor_thumbnail_wait.get_wait():
+            self.actor_thumbnail_wait.set_folder_path(
+                Configs.formatActorThumbnailFolderPath(
+                    self.actor_info.actor_id, self.actor_info.actor_name
+                ))
 
     async def on_response(self, response: Response):
         await self.actor_icon_wait.on_response(response)
+        await self.actor_thumbnail_wait.on_response(response)
 
     async def _onFetched(self, item: FetchActorQueueItem, page: Page) -> bool:
         actor_name = self.actor_info.actor_name
@@ -148,7 +159,7 @@ class FetchActorWorker(BaseFetchWorker):
 
             # Analyze content
             article_locators = await page.locator('article.post-card').all()
-            post_list = []
+            post_list: list[PostInfo] = []
             for article_locator in article_locators:
                 post_id_str = await article_locator.get_attribute("data-id")
                 if post_id_str is None:
@@ -165,10 +176,15 @@ class FetchActorWorker(BaseFetchWorker):
                     LogUtil.error(
                         f"actor {actor_name} page {i} post {post_id_str} invalid")
                     continue
-                post_list.append((post_id, is_dm))
+                thumbnail_locator = article_locator.locator(
+                    ".post-card__image-container")
+                has_thumbnail = (await thumbnail_locator.count()) > 0
+                post_list.append(PostInfo(post_id, is_dm, has_thumbnail))
 
             reach_last_post = await self.processPosts(post_list, page.url)
             post_count += len(post_list)
+
+            await self.actor_thumbnail_wait.wait(page)
 
             # If post count was never updated from a paginator, it's a single page.
             # Update the count with the number of posts found on this page.

@@ -21,14 +21,16 @@ class ActorIconWait(BaseWait):
         self.set_wait(not os.path.exists(self.actor_icon_path))
 
     async def _on_response(self, response: Response):
-        match = re.search(r"/icons/(\w+)/(\w+)$", response.url)
+        match = re.search(r"/icons/(\w+)/([\w\-\.]+)$", response.url)
         if not match:
             return
 
+        LogUtil.info(f"actor icon {response.url}")
         platform = match.group(1)
         actor_link = match.group(2)
         if platform != self.actor_info.actor_platform or \
                 actor_link != self.actor_info.actor_link:
+            LogUtil.warning(f"actor icon {response.url} not match {self.actor_info}")
             return
 
         # stop waiting for icon

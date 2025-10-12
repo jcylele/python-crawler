@@ -3,7 +3,7 @@ import asyncio
 from playwright.async_api import async_playwright, Playwright, Browser, Page
 
 import Configs
-from Consts import WorkerType
+from Consts import CacheKey, WorkerType
 
 __semaphores = {
     WorkerType.FetchActors: asyncio.Semaphore(1),
@@ -22,7 +22,7 @@ async def init_pool():
     global __playwright, __browser
     if __browser is None:
         __playwright = await async_playwright().start()
-        __browser = await __playwright.chromium.launch(headless=not Configs.SHOW_BROWSER)
+        __browser = await __playwright.chromium.launch(headless=not Configs.getSetting(CacheKey.ShowBrowser))
 
 
 async def acquire_page(worker_type: WorkerType) -> Page:
@@ -53,5 +53,5 @@ async def clear_pool():
         __browser = None
     if __playwright:
         # playwright.stop() 是同步的，不需要 await
-        __playwright.stop()
+        await __playwright.stop()
         __playwright = None

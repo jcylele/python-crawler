@@ -25,10 +25,9 @@ class FetchActorLinkWorker(BaseFetchWorker):
         with DbCtrl.getSession() as session, session.begin():
             ActorLinkCtrl.setActorLinkChecked(session, actor_id)
 
-    def processLinks(self, actor_infos: list[ActorInfo], cur_url: str):
+    def processLinks(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
-            ActorLinkCtrl.checkActorLink(
-                session, actor_infos, self.init_category())
+            ActorLinkCtrl.checkActorLink(session, actor_ids)
 
     def _loadSelector(self) -> str:
         return ".card-list__items"
@@ -71,6 +70,7 @@ class FetchActorLinkWorker(BaseFetchWorker):
                 f"actor {self.actor_info.actor_name} linked not found")
             return True
 
-        self.processLinks(actor_infos, page.url)
+        all_actor_ids = await self.processActors(actor_infos)
+        self.processLinks(all_actor_ids)
 
         return True

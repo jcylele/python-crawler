@@ -1,15 +1,11 @@
 import asyncio
-import os
-import subprocess
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from Consts import CacheKey
-from Ctrls import ActorFileCtrl, DbCtrl
+from Ctrls import DbCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
-from Utils import CacheUtil
 from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, \
     NewDownloadForm, DownloadLimitForm
 from routers.schemas_others import CommonResponse, DownloadTaskResponse, UnifiedListResponse, UnifiedResponse
@@ -20,12 +16,6 @@ router = APIRouter(
     # dependencies=[Depends(get_token_header)],
     responses={404: {"description": "Not found"}},
 )
-
-
-@router.get("/custom_page", response_model=UnifiedResponse[int])
-def get_custom_page():
-    page: int = CacheUtil.getValue(CacheKey.CustomPage)
-    return UnifiedResponse[int](data=page)
 
 
 @router.post("/new", response_model=CommonResponse)
@@ -107,8 +97,8 @@ def get_task_count():
 
 
 @router.get("/list", response_model=UnifiedListResponse[DownloadTaskResponse])
-def get_tasks():
-    tasks = [task.toResponse() for task in GetAllTask()]
+def get_tasks(session: Session = Depends(DbCtrl.get_db_session)):
+    tasks = [task.toResponse(session) for task in GetAllTask()]
     return UnifiedListResponse[DownloadTaskResponse](data=tasks)
 
 
@@ -130,14 +120,4 @@ async def stop_task(task_uid: int):
     return CommonResponse()
 
 
-@router.get("/clean", response_model=CommonResponse)
-def clean_files(session: Session = Depends(DbCtrl.get_db_session)):
-    ActorFileCtrl.removeOutdatedFiles(session)
-    return CommonResponse()
 
-
-@router.get("/logs", response_model=CommonResponse)
-def open_log_folder():
-    cur_dir = os.getcwd()
-    subprocess.Popen(f'explorer {cur_dir}\\logs')
-    return CommonResponse()

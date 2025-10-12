@@ -1,6 +1,7 @@
 import os
 import shutil
 import threading
+from pathlib import Path
 from collections.abc import Iterable
 from sqlalchemy import Select, delete, exists, select, func, case, event
 from sqlalchemy.dialects.mysql import insert
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 import Configs
 from Models.ActorInfo import ActorInfo
 from Models.ActorModel import ActorModel
+from Utils import PyUtil
 from Utils.PyUtil import time_cost
 from routers.schemas_others import ActorVideoInfo, ActorFileDetail
 
@@ -399,7 +401,12 @@ def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
                 is_completed = False
                 break
 
+    thumbnail_folder = Configs.formatActorThumbnailFolderPath(
+        actor.actor_id, actor.actor_name)
+    thumbnail_count = PyUtil.fileCount(thumbnail_folder)
+
     return ActorFileDetail(
+        thumbnail_count=thumbnail_count,
         res_info=res_info,
         total_post_count=actor.total_post_count,
         unfinished_post_count=actor.current_post_count - actor.completed_post_count,
@@ -408,7 +415,7 @@ def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
     )
 
 
-def __removeDeletedFile(session: Session, file_path: str, post_id: int, res_index: int):
+def __remove_outdated_process(session: Session, file_path: str, post_id: int, res_index: int, extra_data: any = None):
     res = ResCtrl.getResByIndex(session, post_id, res_index)
     if res.res_state == ResState.Del:
         LogUtil.info(f"remove downloading file {file_path}")
@@ -416,7 +423,7 @@ def __removeDeletedFile(session: Session, file_path: str, post_id: int, res_inde
 
 
 def removeOutdatedFiles(session: Session):
-    ResFileCtrl.traverseDownloadingFiles(session, __removeDeletedFile)
+    ResFileCtrl.traverseDownloadingFiles(session, __remove_outdated_process)
 
 
 def deleteAllRes(session: Session, actor: ActorModel):
@@ -424,7 +431,7 @@ def deleteAllRes(session: Session, actor: ActorModel):
         actor.actor_id, actor.actor_name)
     if os.path.exists(actor_folder):
         shutil.rmtree(actor_folder)
-        ResFileCtrl.removeDownloadingFiles(session, actor)
+        ResFileCtrl.removeActorDownloadingFiles(session, actor)
 
     PostCtrl.batchSetResStates(session, actor.actor_id, ResState.Del)
 

@@ -10,6 +10,7 @@ from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
+from Utils import PyUtil
 from routers.schemas_others import CommentCount
 from routers.web_data import ActorConditionForm, TagFilter
 
@@ -109,13 +110,25 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
     if form.max_score < Configs.MAX_SCORE:
         query = query.where(ActorMainModel.score <= form.max_score)
 
+    # remark filter, fuzzy match
     if form.has_remark == BoolEnum.TRUE:
         query = query.where(ActorMainModel.has_remark == True)
-        remark = form.remark_str.strip()
+        remark = PyUtil.stripToNone(form.remark_str)
         if remark:
             query = query.where(ActorMainModel.remark.like(f"%{remark}%"))
     elif form.has_remark == BoolEnum.FALSE:
         query = query.where(ActorMainModel.has_remark == False)
+    else:
+        pass
+    
+    # comment filter, exact match
+    if form.has_comment == BoolEnum.TRUE:
+        query = query.where(ActorModel.has_comment == True)
+        comment = PyUtil.stripToNone(form.comment_str)
+        if comment:
+            query = query.where(ActorModel.comment == comment)
+    elif form.has_comment == BoolEnum.FALSE:
+        query = query.where(ActorModel.has_comment == False)
     else:
         pass
 
@@ -143,6 +156,7 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
         ))
     else:
         pass
+    
     return query
 
 
@@ -175,8 +189,8 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
             _query = _query.order_by(order_func(ActorMainModel.score))
         elif sort_item.sort_type == SortType.TotalPostCount:
             _query = _query.order_by(order_func(ActorModel.total_post_count))
-        elif sort_item.sort_type == SortType.CurPostCount:
-            _query = _query.order_by(order_func(ActorModel.current_post_count))
+        elif sort_item.sort_type == SortType.CompletedPostCount:
+            _query = _query.order_by(order_func(ActorModel.completed_post_count))
         elif sort_item.sort_type == SortType.CategoryTime:
             _query = _query.order_by(order_func(ActorModel.group_time))
         elif sort_item.sort_type == SortType.LastPostFetchTime:

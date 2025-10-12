@@ -4,7 +4,7 @@ from typing_extensions import override
 from playwright.async_api import Response
 
 from Ctrls import PathCtrl
-from Models import ActorInfo
+from Models.ActorInfo import ActorInfo
 from Utils import LogUtil
 from Workers.ImageWait.BaseWait import BaseWait
 

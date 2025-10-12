@@ -5,8 +5,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from Consts import WorkerType, QueueType, ResState
-from Ctrls import ActorCtrl, DbCtrl, ResCtrl, ResFileCtrl
-from Utils import LogUtil
+from Ctrls import ActorCtrl, DbCtrl, ResCtrl
+from Utils import LogUtil, PyUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
 from Workers.BaseWorker import BaseWorker
@@ -59,7 +59,7 @@ class ResValidWorker(BaseWorker):
             return False
 
         # get media info
-        width, height, duration = ResFileCtrl.get_media_info(
+        width, height, duration = PyUtil.get_media_info(
             true_file_path)
 
         # update db

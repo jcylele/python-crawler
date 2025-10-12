@@ -9,7 +9,7 @@ import Configs
 from Consts import ErrorCode
 from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, ActorSimilarCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl, ResFileCtrl
 from routers.schemas import ActorFileInfoResponse, ActorLogResponse, ActorResponse
-from routers.schemas_others import ActorVideoInfo, CommentCount, CommonResponse, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
+from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
 from routers.web_data import ActorConditionForm, BatchActorGroup, LinkActorForm
 
 router = APIRouter(
@@ -76,18 +76,6 @@ def batch_set_group(form: BatchActorGroup, session: Session = Depends(DbCtrl.get
     return UnifiedResponse[list[ActorResult]](data=ar_list)
 
 
-@router.get("/reset_manual", response_model=CommonResponse)
-def reset_manual(session: Session = Depends(DbCtrl.get_db_session)):
-    ManualCtrl.resetManual(session)
-    return CommonResponse()
-
-
-@router.get("/similar_names", response_model=CommonResponse)
-def similar_names(session: Session = Depends(DbCtrl.get_db_session)):
-    ActorSimilarCtrl.check_similar_names(session)
-    return CommonResponse()
-
-
 @router.get("/clear_group_folder/{group_id}", response_model=CommonResponse)
 def clear_folder_by_group(group_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actors = ActorQueryCtrl.getActorsByGroup(session, group_id)
@@ -115,6 +103,14 @@ def get_actor(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     if actor is None:
         return ActorResult(error_code=ErrorCode.ActorNotFound)
     return ActorResult(data=actor)
+
+
+@router.get("/{actor_id}/abstract", response_model=UnifiedResponse[ActorAbstract])
+def get_actor_abstract(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    actor_abstract = ActorCtrl.getActorAbstract(session, actor_id)
+    if actor_abstract is None:
+        return UnifiedResponse[ActorAbstract](error_code=ErrorCode.ActorNotFound)
+    return UnifiedResponse[ActorAbstract](data=actor_abstract)
 
 
 @router.patch("/{actor_id}/group", response_model=ActorResult)
@@ -151,6 +147,7 @@ def change_actor_tag(actor_id: int, tag_list: list[int], session: Session = Depe
 @router.get("/{actor_id}/open", response_model=CommonResponse)
 def open_actor_folder(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actor = ActorCtrl.getActor(session, actor_id)
+    ResFileCtrl.remove_thumbnail_images(session, actor)
     subprocess.Popen(
         f'explorer "{Configs.formatActorFolderPath(actor.actor_id, actor.actor_name)}"')
     return CommonResponse()

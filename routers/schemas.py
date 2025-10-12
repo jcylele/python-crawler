@@ -66,6 +66,7 @@ class ActorGroupResponse(BaseModel):
     group_desc: str
     group_color: str
     has_folder: bool
+    is_initial: bool
     group_priority: int
 
     # properties from ORM
@@ -92,6 +93,12 @@ class ActorTagResponse(BaseModel):
     tag_name: str
     tag_priority: int
     tag_group_id: int
+
+    # use field_validator to handle None value
+    @field_validator('tag_group_id', mode='before')
+    @classmethod
+    def null_to_0(cls, v):
+        return v or 0
 
     class Config:
         from_attributes = True

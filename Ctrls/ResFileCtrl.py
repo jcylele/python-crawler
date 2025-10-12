@@ -2,8 +2,6 @@ import asyncio
 import os
 import re
 from typing import Any, Coroutine
-import ffmpeg
-from math import floor
 from collections.abc import Callable
 from sqlalchemy.orm import Session
 
@@ -14,10 +12,11 @@ from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Utils import LogUtil
 from routers.schemas_others import ResFileInfo, DownloadingVideoStats
-# region downloading files
+
+# region traverse file functions
 
 
-def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int], None]):
+def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int, any], None], extra_data: any = None):
     actor_folder = Configs.formatActorFolderPath(
         actor.actor_id, actor.actor_name)
 
@@ -30,10 +29,10 @@ def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback
                 continue
             post_id = int(match_obj.group(1))
             res_index = int(match_obj.group(2))
-            callback(session, entry.path, post_id, res_index)
+            callback(session, entry.path, post_id, res_index, extra_data)
 
 
-def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str, int, int], None]):
+def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str, int, int, any], None], extra_data: any = None):
     download_folder = Configs.formatTmpFolderPath()
     try:
         with os.scandir(download_folder) as it:
@@ -43,14 +42,14 @@ def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str,
                     continue
                 post_id = int(match_obj.group(2))
                 res_index = int(match_obj.group(3))
-                callback(session, entry.path, post_id, res_index)
+                callback(session, entry.path, post_id, res_index, extra_data)
     except Exception as e:
         LogUtil.error(f"traverseDownloadingFiles failed, get Error")
         LogUtil.exception(e)
         pass
 
 
-def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int], None]):
+def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int, any], None], extra_data: any = None):
     download_folder = Configs.formatTmpFolderPath()
     try:
         with os.scandir(download_folder) as it:
@@ -68,7 +67,7 @@ def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callbac
                     continue
                 if post.actor_id != actor.actor_id:
                     continue
-                callback(session, entry.path, post_id, res_index)
+                callback(session, entry.path, post_id, res_index, extra_data)
     except Exception as e:
         LogUtil.error(
             f"traverseDownloadingFilesOfActor {actor.actor_name} failed, get error")
@@ -76,32 +75,15 @@ def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callbac
 
 
 async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorModel,
-                                                callback: Callable[[Session, str, int, int], Coroutine[Any, Any, None]]):
+                                                callback: Callable[[Session, str, int, int], Coroutine[Any, Any, None]],
+                                                extra_data: any = None):
     """
-    traverseDownloadingFilesOfActor 的异步版本。
-    它使用线程池执行器来运行以避免阻塞事件循环。
+    traverseDownloadingFilesOfActor 的异步版本
     """
-
-    def _walk_and_get_files(folder_path: str):
-        # 这个函数在一个单独的线程中运行。
-        try:
-            file_names = []
-            with os.scandir(folder_path) as it:
-                for entry in it:
-                    if entry.is_file():
-                        file_names.append(entry.name)
-            return file_names
-        except Exception as e:
-            LogUtil.error(f"Error in traverseDownloadingFilesOfActor:")
-            LogUtil.exception(e)
-            return []
-
-    download_folder = Configs.formatTmpFolderPath()
-    loop = asyncio.get_running_loop()
 
     try:
-        # 在默认的线程池执行器中运行阻塞的逻辑
-        all_file_names = await loop.run_in_executor(None, _walk_and_get_files, download_folder)
+        download_folder = Configs.formatTmpFolderPath()
+        all_file_names = os.listdir(download_folder)
 
         callback_tasks = []
         for file_name in all_file_names:
@@ -125,7 +107,7 @@ async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorMo
             # 创建一个异步回调任务
             callback_tasks.append(
                 callback(session, os.path.join(
-                    download_folder, file_name), post_id, res_index)
+                    download_folder, file_name), post_id, res_index, extra_data)
             )
 
         # 并发执行所有回调任务
@@ -137,10 +119,15 @@ async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorMo
             f"traverseDownloadingFilesOfActor_async for {actor.actor_name} failed:")
         LogUtil.exception(e)
 
+# endregion
 
-def removeDownloadingFiles(session: Session, actor: ActorModel):
-    traverseDownloadingFilesOfActor(
-        session, actor, lambda _1, file, _2, _3: os.remove(file))
+
+def remove_file_process(session: Session, path: str, post_id: int, res_index: int, extra_data: any = None):
+    os.remove(path)
+
+
+def removeActorDownloadingFiles(session: Session, actor: ActorModel):
+    traverseDownloadingFilesOfActor(session, actor, remove_file_process)
 
 
 def __getResVideoInfo(session: Session, file_path: str, post_id: int, res_index: int) -> ResFileInfo:
@@ -164,14 +151,13 @@ def __getDownloadingFiles_Process(session: Session, file, post_id, res_index, re
 
 def getDownloadingFilesOfActor(session: Session, actor: ActorModel) -> list[ResFileInfo]:
     ret = []
-    traverseDownloadingFilesOfActor(session, actor, lambda session, file, post_id,
-                                    res_index: __getDownloadingFiles_Process(session, file, post_id, res_index, ret))
+    traverseDownloadingFilesOfActor(
+        session, actor, __getDownloadingFiles_Process, ret)
     return ret
 
 
 def removeDownloadingFilesOfActor(session: Session, actor: ActorModel):
-    traverseDownloadingFilesOfActor(
-        session, actor, lambda _1, file, _2, _3: os.remove(file))
+    traverseDownloadingFilesOfActor(session, actor, remove_file_process)
 
 
 def _get_downloading_video_stats_process(session: Session, file, post_id, res_index, ret: dict[int, DownloadingVideoStats]):
@@ -191,62 +177,42 @@ def _get_downloading_video_stats_process(session: Session, file, post_id, res_in
 
 def get_downloading_video_stats(session: Session) -> list[DownloadingVideoStats]:
     ret_map: dict[int, DownloadingVideoStats] = {}
-    traverseDownloadingFiles(session, lambda _1, file, post_id, res_index: _get_downloading_video_stats_process(
-        session, file, post_id, res_index, ret_map))
+    traverseDownloadingFiles(
+        session, _get_downloading_video_stats_process, ret_map)
     return list(ret_map.values())
 
-# endregion
 
-# region file info fetch / rename
-
-
-def get_media_info(file_path) -> tuple[int, int, int]:
-    """获取视频/图片文件的基本信息"""
-    try:
-        # 获取视频流信息
-        probe = ffmpeg.probe(file_path)
-        streams = probe['streams']
-        video_stream = None
-        # 获取视频流
-        for stream in streams:
-            codec_type = stream.get('codec_type')
-            if codec_type == 'video' or codec_type == 'image':
-                video_stream = stream
-                break
-        # 没有视频流
-        if video_stream is None:
-            return 0, 0, 0
-        # 基本信息
-        width = int(video_stream['width'])  # 宽度
-        height = int(video_stream['height'])  # 高度
-        duration = floor(float(probe['format'].get('duration', 0)))
-
-        return width, height, duration
-    except Exception as e:
-        LogUtil.error(f"get media info failed")
-        LogUtil.exception(e)
-        return 0, 0, 0
+def _rename_actor_file_process(session: Session, path: str, post_id: int, res_index: int, extra_data: any = None):
+    res = ResCtrl.getResByIndex(session, post_id, res_index)
+    if res is None:
+        return
+    if res.res_type == ResType.Image:
+        return
+    if res.res_width == 0 or res.res_height == 0 or res.res_duration == 0:
+        return
+    prefix = res.res_width >= res.res_height and "l" or "p"
+    actor_folder, file_name = os.path.split(path)
+    os.rename(path, os.path.join(actor_folder, f"{prefix}_{file_name}"))
 
 
 def rename_actor_files(session: Session, actor: ActorModel):
-    actor_folder = Configs.formatActorFolderPath(
-        actor.actor_id, actor.actor_name)
-    for file in os.listdir(actor_folder):
-        match_obj = re.match(r'^(\d+)_(\d+)\.\w+$', file)
-        if match_obj is None:
-            continue
-        post_id = int(match_obj.group(1))
-        res_index = int(match_obj.group(2))
-        res = ResCtrl.getResByIndex(session, post_id, res_index)
-        if res is None:
-            continue
-        if res.res_type == ResType.Image:
-            continue
-        if res.res_width == 0 or res.res_height == 0 or res.res_duration == 0:
-            continue
-        prefix = res.res_width >= res.res_height and "l" or "p"
-        new_file_name = f"{prefix}_{match_obj.group(0)}"
-        os.rename(os.path.join(actor_folder, file),
-                  os.path.join(actor_folder, new_file_name))
+    traverseDownloadedFilesOfActor(session, actor, _rename_actor_file_process)
 
-# endregion
+
+def _remove_thumbnail_image_process(session: Session, path: str, post_id: int, res_index: int, thumbnail_folder: str):
+    res = ResCtrl.getResByIndex(session, post_id, res_index)
+    if res is None:
+        return
+    if res.res_type == ResType.Video:
+        return
+    try:
+        os.remove(os.path.join(thumbnail_folder, res.res_url_info.file_name))
+    except FileNotFoundError:
+        pass
+
+
+def remove_thumbnail_images(session: Session, actor: ActorModel):
+    thumbnail_folder = Configs.formatActorThumbnailFolderPath(
+        actor.actor_id, actor.actor_name)
+    traverseDownloadedFilesOfActor(
+        session, actor, _remove_thumbnail_image_process, thumbnail_folder)

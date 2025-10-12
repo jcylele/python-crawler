@@ -17,6 +17,9 @@ class BaseWait:
         else:
             self.js_func = Configs.getWaitAllImagesJs(selector)
 
+    def get_class_name(self):
+        return self.__class__.__name__
+        
     def set_wait(self, is_wait: bool):
         self._wait_img = is_wait
 
@@ -25,13 +28,15 @@ class BaseWait:
 
     async def wait(self, page: Page):
         if not self.get_wait():
+            LogUtil.info(f"wait {self.get_class_name()} is not wait")
             return
         try:
             if self.need_scroll:
                 await self.scroll_to_bottom(page)
             await page.wait_for_function(self.js_func, timeout=self.time_out)
+            LogUtil.info(f"wait {self.get_class_name()} finished")
         except PlaywrightTimeoutError:
-            pass
+            LogUtil.warning(f"wait {self.get_class_name()} timeout")
 
     async def _on_response(self, response: Response):
         raise NotImplementedError(
@@ -60,7 +65,7 @@ class BaseWait:
             while True:
                 await page.evaluate("window.scrollBy(0, window.innerHeight)")
                 # 等待滚动动画和懒加载内容
-                await page.wait_for_timeout(200)
+                await page.wait_for_timeout(250)
 
                 # 检查是否已到达页面底部
                 is_at_bottom = await page.evaluate(
@@ -82,6 +87,8 @@ class BaseWait:
             if not os.path.exists(icon_path):
                 with open(icon_path, "wb") as f:
                     f.write(await response.body())
-                LogUtil.info(f"saved icon {icon_path}")
+                LogUtil.info(f"icon {icon_path} saved")
+            else:
+                LogUtil.info(f"icon {icon_path} already exists")
         except Exception as e:
             LogUtil.exception(e)

@@ -1,8 +1,20 @@
 from enum import Enum, auto, IntEnum
 
 
+class CacheFile(Enum):
+    CustomPage = 'configs/cache.json'
+    Settings = 'configs/settings.json'
+
+
 class CacheKey(Enum):
+    # CustomPage
     CustomPage = 'Custom Page'
+    # Settings
+    DbConnectString = 'DbConnectString'
+    RootUrl = 'RootUrl'
+    ServerPort = 'ServerPort'
+    RootFolder = 'RootFolder'
+    ShowBrowser = 'ShowBrowser'
 
 
 class GroupCondType(Enum):
@@ -67,11 +79,11 @@ class QueueType(IntEnum):
     FetchActors = auto()
     FetchActor = auto()
     FetchActorLink = auto()
-    FetchPost = auto()
-
+    
     # above queues are FIFO queues, below are priority queues
     MinPriorityQueue = 100
 
+    FetchPost = auto()
     FileDownload = auto()
     ResInfo = auto()
 
@@ -81,6 +93,20 @@ class PostFilter(IntEnum):
     Normal = 1
     Current = 2
     Completed = 3
+
+
+class TaskType(IntEnum):
+    Default = 0
+    Specific = 1
+    Resume = 2
+
+    MaxSingleActor = 100  # above are single actor tasks, below are multiple actor tasks
+
+    New = 101
+    Url = 102
+    Group = 103
+    FixPost = 104
+    Manual = 105
 
 
 class BoolEnum(Enum):
@@ -94,7 +120,7 @@ class SortType(Enum):
     Score = auto()
     CategoryTime = auto()
     TotalPostCount = auto()
-    CurPostCount = auto()
+    CompletedPostCount = auto()
     InitFileSize = auto()
     DownFileSize = auto()
     TotalFileSize = auto()

@@ -15,7 +15,7 @@ class ActorMainModel(BaseModel):
         default=False, nullable=False, index=True)
     remark: Mapped[str] = mapped_column(
         String(DB_STR_LEN_REMARK), nullable=True, default=None)
-    score: Mapped[int] = mapped_column(default=0)
+    score: Mapped[int] = mapped_column(default=0, index=True)
 
     @validates("remark")
     def validate_remark(self, key, remark):

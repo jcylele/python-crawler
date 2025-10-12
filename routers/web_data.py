@@ -32,6 +32,8 @@ class ActorConditionForm(BaseModel):
     max_score: int
     has_remark: BoolEnum
     remark_str: str
+    has_comment: BoolEnum
+    comment_str: str
     post_completed: BoolEnum
     res_completed: BoolEnum
 
@@ -126,3 +128,4 @@ class CommonGroupForm(BaseModel):
 class ActorGroupForm(CommonGroupForm):
     group_color: str
     has_folder: bool
+    is_initial: bool

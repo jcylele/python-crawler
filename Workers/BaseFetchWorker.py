@@ -25,6 +25,27 @@ class BaseFetchWorker(BaseWorker):
         with DbCtrl.getSession() as session, session.begin():
             return ActorCtrl.getActorInfo(session, actor_id)
 
+    async def processActors(self, actor_infos: list[ActorInfo]) -> list[int]:
+        all_actor_ids = []
+        new_actor_ids = []
+        with DbCtrl.getSession() as session, session.begin():
+            for actor_info in actor_infos:
+                # enqueue actor if not exists
+                actor = ActorCtrl.getActorByInfo(session, actor_info)
+                if actor is None:
+                    self.DownloadLimit().onActor()
+                    actor = ActorCtrl.addActor(
+                        session, actor_info, self.init_category())
+                    new_actor_ids.append(actor.actor_id)
+                
+                all_actor_ids.append(actor.actor_id)
+
+        for actor_id in new_actor_ids:
+            await self.queue_mgr().enqueueFetchActor(actor_id)
+            await self.queue_mgr().enqueueFetchActorLink(actor_id)
+
+        return all_actor_ids
+
     async def calcActorInfo(self, actor_locator: Locator) -> ActorInfo:
         href = await actor_locator.get_attribute("href")
         if not href:
@@ -119,11 +140,6 @@ class BaseFetchWorker(BaseWorker):
                     LogUtil.info(
                         f"failed to load {item}, get {title} instead (attempt {i+1}/30)")
 
-                    if not Configs.SHOW_BROWSER:
-                        LogUtil.warning(
-                            f"Failed to load page in headless mode for {item}. Giving up.")
-                        return False
-
                     if "DDoS-Guard" in title:
                         LogUtil.info(
                             "DDoS-Guard detected, waiting for human intervention...")
@@ -135,7 +151,7 @@ class BaseFetchWorker(BaseWorker):
                         await page.reload()
                     else:
                         LogUtil.warning(
-                            f"Unknown page state with title '{title}', retrying...")
+                            f"Page load timeout, title '{title}', retrying...")
                         await asyncio.sleep(10)
                         await page.reload()
 

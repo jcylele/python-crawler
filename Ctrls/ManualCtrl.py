@@ -100,7 +100,7 @@ async def check_size(session: Session, file_path: str, res_id: int):
 
 
 def renameThumbnailFolder(session: Session):
-    with os.scandir(Configs.RootFolder) as it1:
+    with os.scandir(Configs.getRootFolder()) as it1:
         for entry1 in it1:
             if entry1.is_file():
                 continue

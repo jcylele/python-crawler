@@ -4,7 +4,7 @@ import math
 from playwright.async_api import Page, Response, expect, TimeoutError as PlaywrightTimeoutError
 from sqlalchemy.orm import Session
 
-from Consts import CacheKey, WorkerType, QueueType
+from Consts import WorkerType
 from Ctrls import ActorCtrl, ActorQueryCtrl, DbCtrl, RequestCtrl
 from Models.ActorInfo import ActorInfo
 from Utils import CacheUtil, LogUtil
@@ -22,22 +22,6 @@ class FetchActorsWorker(BaseFetchWorker):
     def __init__(self, task):
         super().__init__(worker_type=WorkerType.FetchActors, task=task)
         self.actor_icons_wait = ActorIconsWait()
-
-    async def processActors(self, actor_infos: list[ActorInfo], cur_url: str):
-        actor_ids = []
-        with DbCtrl.getSession() as session, session.begin():
-            for actor_info in actor_infos:
-                # enqueue actor if not exists
-                actor = ActorCtrl.getActorByInfo(session, actor_info)
-                if actor is None and self.DownloadLimit().moreActor():
-                    self.DownloadLimit().onActor()
-                    actor = ActorCtrl.addActor(
-                        session, actor_info, self.init_category())
-                    actor_ids.append(actor.actor_id)
-
-        for actor_id in actor_ids:
-            await self.queue_mgr().enqueueFetchActor(actor_id)
-            await self.queue_mgr().enqueueFetchActorLink(actor_id)
 
     def getFinishedPage(self, start_page: int) -> int:
         if start_page > 0:
@@ -92,7 +76,7 @@ class FetchActorsWorker(BaseFetchWorker):
                 except SystemError as e:
                     LogUtil.warning(f"Failed to parse an actor card: {e}")
 
-            await self.processActors(actor_infos, page.url)
+            await self.processActors(actor_infos)
 
             self.actor_icons_wait.set_actor_infos(actor_infos)
             await self.actor_icons_wait.wait(page)
@@ -119,7 +103,7 @@ class FetchActorsWorker(BaseFetchWorker):
             await next_btn_locator.click()
 
         if item.start_page >= 0:
-            CacheUtil.setValue(CacheKey.CustomPage, self.start_page)
+            CacheUtil.setCustomPage(self.start_page)
             LogUtil.info(f"set custom page to {self.start_page}")
 
         return True

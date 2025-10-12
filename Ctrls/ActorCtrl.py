@@ -12,6 +12,7 @@ from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.PostModel import PostModel
 from Utils import LogUtil, PyUtil
+from routers.schemas_others import ActorAbstract
 
 
 # region single actor
@@ -23,6 +24,18 @@ def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
         LogUtil.error(f"get actorInfo failed, actor {actor_id} not exist")
         return None
     return ActorInfo(actor)
+
+
+def getActorAbstract(session: Session, actor_id: int) -> ActorAbstract:
+    actor = getActor(session, actor_id)
+    if actor is None:
+        LogUtil.error(f"get actorAbstract failed, actor {actor_id} not exist")
+        return None
+    return ActorAbstract(
+        actor_id=actor_id,
+        actor_name=actor.actor_name,
+        actor_group_id=actor.actor_group_id
+    )
 
 
 def getActor(session: Session, actor_id: int) -> ActorModel:
@@ -170,7 +183,7 @@ def changeActorRemark(session: Session, actor_id: int, remark: str) -> list[Acto
     return linked_actors
 
 
-def _setResStateToDowned(session: Session, file_path: str, post_id: int, res_index: int):
+def _setResStateToDowned(session: Session, file_path: str, post_id: int, res_index: int, extra_data: any = None):
     res = ResCtrl.getResByIndex(session, post_id, res_index)
     if res is None:
         return

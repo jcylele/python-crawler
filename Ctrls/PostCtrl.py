@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from Consts import ResState
 from Ctrls import ActorFileCtrl
 from Models.ActorModel import ActorModel
+from Models.PostInfo import PostInfo
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from Utils import PyUtil
@@ -27,14 +28,15 @@ def getMaxPostId(session: Session, actor_id: int) -> int:
     return result or 0
 
 
-def addPost(session: Session, actor_id: int, post_id: int, is_dm: bool):
+def addPost(session: Session, actor_id: int, post_info: PostInfo):
     """
     add a post record
     """
     post = PostModel()
-    post.post_id = post_id
+    post.post_id = post_info.post_id
     post.actor_id = actor_id
-    post.is_dm = is_dm
+    post.is_dm = post_info.is_dm
+    post.has_thumbnail = post_info.has_thumbnail
     session.add(post)
     session.flush()
 
@@ -91,7 +93,8 @@ def getPostCountList(session: Session, form: PostFilterForm) -> list[ActorPostIn
     response = []
     for data in result:
         actor = session.get(ActorModel, data[0])
-        info = ActorPostInfo(actor_id=data[0], actor_name=actor.actor_name, post_count=data[1])
+        info = ActorPostInfo(
+            actor_id=data[0], actor_name=actor.actor_name, post_count=data[1])
         response.append(info)
     return response
 

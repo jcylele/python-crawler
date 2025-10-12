@@ -3,6 +3,7 @@ import requests
 from requests import Session
 
 import Configs
+from Consts import CacheKey
 from Models.ActorInfo import ActorInfo
 
 __user_agents = [
@@ -48,22 +49,24 @@ def createRequestSession() -> Session:
 
     return session
 
+
 def createRequestHeaders() -> dict:
     header = __headers.copy()
     user_agent = random.choice(__user_agents)  # 随机获取一个浏览器用户信息
     header['user-agent'] = user_agent
     return header
 
+
+def getRootUrl() -> str:
+    return Configs.getSetting(CacheKey.RootUrl)
+
+
 def formatActorsUrl(start_index: int) -> str:
-    return f"{Configs.RootUrl}/artists?o={start_index}"
-
-
-def formatActorIconUrl(actor_info: ActorInfo) -> str:
-    return f"{Configs.IconUrl}/{actor_info.actor_platform}/{actor_info.actor_link}"
+    return f"{getRootUrl()}/artists?o={start_index}"
 
 
 def formatActorHref(actor_info: ActorInfo) -> str:
-    return f"{Configs.RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}"
+    return f"{getRootUrl()}/{actor_info.actor_platform}/user/{actor_info.actor_link}"
 
 
 def formatActorUrl(actor_info: ActorInfo) -> str:
@@ -76,11 +79,11 @@ def formatActorLinksUrl(actor_info: ActorInfo) -> str:
 
 def formatPostUrl(actor_info: ActorInfo, post_id: int, is_dm: bool) -> str:
     post_prefix = is_dm and "DM" or ""
-    return f"{Configs.RootUrl}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_prefix}{post_id}"
+    return f"{getRootUrl()}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_prefix}{post_id}"
 
 
 def formatFullUrl(relative_url: str) -> str:
     if relative_url.startswith('/'):
-        return Configs.RootUrl + relative_url
+        return getRootUrl() + relative_url
     else:
         return relative_url

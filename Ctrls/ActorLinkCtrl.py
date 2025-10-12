@@ -10,8 +10,10 @@ from Models.ActorTagRelationship import ActorTagRelationship
 from Utils import LogUtil
 from routers.web_data import LinkActorForm
 
+
 def _distinct(id_list: list[int]) -> list[int]:
     return list(set(id_list))
+
 
 def unlinkActors(session: Session, actor_ids: list[int]) -> ErrorCode:
     actor_ids = _distinct(actor_ids)
@@ -175,23 +177,21 @@ def setActorLinkChecked(session: Session, actor_id: int):
     session.execute(stmt)
 
 
-def checkActorLink(session, actor_infos: list[ActorInfo], init_group: int):
-    actor_infos.sort(key=lambda x: x.actor_name)
+def checkActorLink(session, actor_ids: list[int]):
+    actor_list = [ActorCtrl.getActor(session, actor_id)
+                  for actor_id in actor_ids]
+    actor_list.sort(key=lambda x: x.actor_name)
     main_actor_ids = set()
-    for actor_info in actor_infos:
-        actor = ActorCtrl.getActorByInfo(session, actor_info)
-        if actor is None:
-            actor = ActorCtrl.addActor(session, actor_info, init_group)
-        actor_info.actor_id = actor.actor_id
+    for actor in actor_list:
         main_actor_ids.add(actor.main_actor_id)
 
-    if len(main_actor_ids) > 1 or 0 in main_actor_ids:
-        actor_names = [actor_info.actor_name for actor_info in actor_infos]
+    if len(main_actor_ids) > 1 or (0 in main_actor_ids):
+        actor_names = [actor.actor_name for actor in actor_list]
         NoticeCtrl.addNoticeStrict(
             session, NoticeType.HasLinkedAccount, actor_names)
     else:
-        names = ",".join([actor_info.actor_name for actor_info in actor_infos])
-        LogUtil.info(f"actors linked: {names}")
+        actor_names = ",".join([actor.actor_name for actor in actor_list])
+        LogUtil.info(f"actors already linked: {actor_names}")
 
-    for actor_info in actor_infos:
-        setActorLinkChecked(session, actor_info.actor_id)
+    for actor in actor_list:
+        actor.link_checked = True

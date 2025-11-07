@@ -21,8 +21,7 @@ class FetchPostWorker(BaseFetchWorker):
     def __init__(self, task):
         super().__init__(worker_type=WorkerType.FetchPost, task=task)
         self.thumbnail_wait = PostThumbnailWait()
-        self.thumbnail_wait.set_wait(task.download_limit.allowResDownload(
-            ResType.Image))
+        self.thumbnail_wait.set_wait(task.wait_thumbnail)
 
     async def _getResUrl(self, res_node: Locator):
         a_node = res_node.locator("a")
@@ -33,14 +32,16 @@ class FetchPostWorker(BaseFetchWorker):
         if href.endswith("f=undefined"):
             # LogUtil.warn(f"{item} undefined res")
             return None
-
+        index = href.find("?")
+        if index > 0:
+            href = href[:index]
         return RequestCtrl.formatFullUrl(href)
 
     def _loadSelector(self) -> str:
         return ".post__body"
 
     def _url(self, item: FetchPostQueueItem) -> str:
-        return RequestCtrl.formatPostUrl(item.actor_info, item.post_id, item.is_dm)
+        return RequestCtrl.formatPostUrl(item.actor_info, item.post_id_str)
 
     def _checkFetch(self, session: Session, item: FetchPostQueueItem):
         # check actor folder
@@ -52,14 +53,18 @@ class FetchPostWorker(BaseFetchWorker):
             LogUtil.error(
                 f"post {item.post_id} of actor {item.actor_info.actor_name} not found")
             return False
-        if post.completed:
-            return False
-        # check res exists, no need to fetch
-        res = ResCtrl.getResByIndex(session, item.post_id, 1)
-        if res is not None:
-            LogUtil.error(
-                f"post {item.post_id} of actor {item.actor_info.actor_name} already fetched, but not completed")
-            return False
+        if self.task.is_fix_res:
+            if not post.completed:
+                return False
+        else:
+            if post.completed:
+                return False
+            # check res exists, no need to fetch
+            res = ResCtrl.getResByIndex(session, item.post_id, 1)
+            if res is not None:
+                LogUtil.error(
+                    f"post {item.post_id} of actor {item.actor_info.actor_name} already fetched, but not completed")
+                return False
 
         return True
 
@@ -93,15 +98,22 @@ class FetchPostWorker(BaseFetchWorker):
         # write to db, enqueue items
         with DbCtrl.getSession() as session, session.begin():
             post = PostCtrl.getPost(session, item.post_id)
+            if self.task.is_fix_res:
+                ResCtrl.fixResUrls(session, item.post_id,
+                                   url_list, item.actor_info.actor_name)
+            else:
+                if len(url_list) > 0:
+                    # add records for the resources
+                    ResCtrl.addAllRes(session, item.post_id, url_list)
+                    # enqueue all resources of the post
+                    await self.queue_mgr().enqueueAllRes(item.actor_info, post, self.DownloadLimit())
 
-            if len(url_list) > 0:
-                # add records for the resources
-                ResCtrl.addAllRes(session, item.post_id, url_list)
-                # enqueue all resources of the post
-                await self.queue_mgr().enqueueAllRes(item.actor_info, post, self.DownloadLimit())
-
-            # mark the post as analysed
-            post.completed = True
+                # mark the post as analysed
+                post.completed = True
+            # update last fetch time
+            post.last_fetch_time = func.now()
+            # notify download limit progress
+            self.DownloadLimit().onPost()
 
         await self.thumbnail_wait.wait(page)
 

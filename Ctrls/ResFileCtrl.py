@@ -1,3 +1,7 @@
+"""
+ResFileCtrl is responsible for traversing related files of the resources.
+"""
+
 import asyncio
 import os
 import re
@@ -6,12 +10,12 @@ from collections.abc import Callable
 from sqlalchemy.orm import Session
 
 import Configs
-from Consts import ResType
+from Consts import ResState, ResType
 from Ctrls import ResCtrl
 from Models.ActorModel import ActorModel
 from Models.PostModel import PostModel
 from Utils import LogUtil
-from routers.schemas_others import ResFileInfo, DownloadingVideoStats
+from routers.schemas_others import ActorAbstract, ResFileInfo, DownloadingVideoStats
 
 # region traverse file functions
 
@@ -24,7 +28,7 @@ def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback
         for entry in it:
             if entry.is_dir():
                 continue
-            match_obj = re.match(r'^(\d+)_(\d+)\.\w+$', entry.name)
+            match_obj = re.match(r'^(?:[lp]_)?(\d+)_(\d+)\.\w+$', entry.name)
             if match_obj is None:
                 continue
             post_id = int(match_obj.group(1))
@@ -122,12 +126,12 @@ async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorMo
 # endregion
 
 
-def remove_file_process(session: Session, path: str, post_id: int, res_index: int, extra_data: any = None):
+def _remove_file_process(session: Session, path: str, post_id: int, res_index: int, extra_data: any = None):
     os.remove(path)
 
 
 def removeActorDownloadingFiles(session: Session, actor: ActorModel):
-    traverseDownloadingFilesOfActor(session, actor, remove_file_process)
+    traverseDownloadingFilesOfActor(session, actor, _remove_file_process)
 
 
 def __getResVideoInfo(session: Session, file_path: str, post_id: int, res_index: int) -> ResFileInfo:
@@ -157,7 +161,7 @@ def getDownloadingFilesOfActor(session: Session, actor: ActorModel) -> list[ResF
 
 
 def removeDownloadingFilesOfActor(session: Session, actor: ActorModel):
-    traverseDownloadingFilesOfActor(session, actor, remove_file_process)
+    traverseDownloadingFilesOfActor(session, actor, _remove_file_process)
 
 
 def _get_downloading_video_stats_process(session: Session, file, post_id, res_index, ret: dict[int, DownloadingVideoStats]):
@@ -166,13 +170,18 @@ def _get_downloading_video_stats_process(session: Session, file, post_id, res_in
         return
     if res.res_type == ResType.Image:
         return
-    actor = res.post.actor
-    if actor.actor_id not in ret:
-        ret[actor.actor_id] = DownloadingVideoStats(
+    post = res.post
+    if post.actor_id not in ret:
+        actor = post.actor
+        actor_abstract = ActorAbstract(
             actor_id=actor.actor_id,
-            actor_name=actor.actor_name
+            actor_name=actor.actor_name,
+            actor_group_id=actor.actor_group_id
         )
-    ret[actor.actor_id].add_info(os.path.getsize(file), res.res_size)
+        ret[post.actor_id] = DownloadingVideoStats(
+            actor_abstract=actor_abstract
+        )
+    ret[post.actor_id].add_info(os.path.getsize(file), res.res_size)
 
 
 def get_downloading_video_stats(session: Session) -> list[DownloadingVideoStats]:
@@ -190,13 +199,39 @@ def _rename_actor_file_process(session: Session, path: str, post_id: int, res_in
         return
     if res.res_width == 0 or res.res_height == 0 or res.res_duration == 0:
         return
-    prefix = res.res_width >= res.res_height and "l" or "p"
     actor_folder, file_name = os.path.split(path)
+    if file_name[0] in ["l", "p"]:
+        return
+    prefix = res.res_width >= res.res_height and "l" or "p"
     os.rename(path, os.path.join(actor_folder, f"{prefix}_{file_name}"))
 
 
 def rename_actor_files(session: Session, actor: ActorModel):
     traverseDownloadedFilesOfActor(session, actor, _rename_actor_file_process)
+
+
+def _remove_by_dir_process(session: Session, path: str, post_id: int, res_index: int, is_landscape: bool):
+    # 必须是已经rename过的才删除，防止误删
+    base_name = os.path.basename(path)
+    if is_landscape:
+        if not base_name.startswith("l"):
+            return
+    else:
+        if not base_name.startswith("p"):
+            return
+
+    res = ResCtrl.getResByIndex(session, post_id, res_index)
+    if res is None:
+        return
+
+    res.setState(ResState.Del)
+    os.remove(path)
+
+
+def remove_by_dir(session, actor: ActorModel, is_landscape: bool):
+    traverseDownloadedFilesOfActor(
+        session, actor, _remove_by_dir_process, is_landscape)
+    return
 
 
 def _remove_thumbnail_image_process(session: Session, path: str, post_id: int, res_index: int, thumbnail_folder: str):
@@ -216,3 +251,25 @@ def remove_thumbnail_images(session: Session, actor: ActorModel):
         actor.actor_id, actor.actor_name)
     traverseDownloadedFilesOfActor(
         session, actor, _remove_thumbnail_image_process, thumbnail_folder)
+
+
+def _add_size_process(_0: Session, file: str, _1: int, _2: int, sum: list[int]):
+    if os.path.exists(file):
+        sum[0] += os.path.getsize(file)
+
+
+def getTotalDownloadingSize(session: Session) -> int:
+    sum = [0]
+    traverseDownloadingFiles(session, _add_size_process, sum)
+    return sum[0]
+
+
+def __remove_outdated_process(session: Session, file_path: str, post_id: int, res_index: int, extra_data: any = None):
+    res = ResCtrl.getResByIndex(session, post_id, res_index)
+    if res.res_state == ResState.Del:
+        LogUtil.info(f"remove downloading file {file_path}")
+        os.remove(file_path)
+
+
+def removeOutdatedFiles(session: Session):
+    traverseDownloadingFiles(session, __remove_outdated_process)

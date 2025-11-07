@@ -23,6 +23,9 @@ class DownloadLimit(object):
     def morePost(self, post_count: int) -> bool:
         return self.limit.post_count == 0 or post_count < self.limit.post_count
 
+    def onPost(self):
+        self.progress.post_count += 1
+
     def allowResDownload(self, res_type: ResType) -> bool:
         return self.limit.res_type == res_type.value
 

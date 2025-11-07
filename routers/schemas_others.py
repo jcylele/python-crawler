@@ -1,6 +1,7 @@
 from typing import Generic, TypeAlias, TypeVar
 from pydantic import BaseModel
 from Consts import CacheKey, ErrorCode, TaskType
+from Models.ModelInfos import ActorInfo
 from routers.schemas import ActorFileInfoResponse
 from routers.web_data import DownloadLimitForm
 
@@ -18,6 +19,7 @@ CommonResponse: TypeAlias = UnifiedResponse[None]
 
 class DownloadProgress(BaseModel):
     actor_count: int = 0
+    post_count: int = 0
     file_count: int = 0
     total_file_size: int = 0
 
@@ -37,31 +39,6 @@ class ResFileInfo(BaseModel):
     file_path: str
     file_size: int
     res_size: int
-
-
-class ActorVideoInfo(BaseModel):
-    is_landscape: bool
-    duration: int = 0
-    file_count: int = 0
-    file_size: int = 0
-
-    def add_info(self, duration: int, file_size: int):
-        self.duration += duration
-        self.file_count += 1
-        self.file_size += file_size
-
-
-class DownloadingVideoStats(BaseModel):
-    actor_id: int
-    actor_name: str
-    file_count: int = 0
-    file_size: int = 0
-    res_size: int = 0
-
-    def add_info(self, file_size: int, res_size: int):
-        self.file_count += 1
-        self.file_size += file_size
-        self.res_size += res_size
 
 
 class ActorPostInfo(BaseModel):
@@ -93,6 +70,7 @@ class CommentCount(BaseModel):
     comment: str
     count: int
 
+
 class ActorAbstract(BaseModel):
     actor_id: int
     actor_name: str
@@ -106,7 +84,7 @@ class DownloadTaskResponse(BaseModel):
     download_limit: DownloadLimitResponse
     worker_count: dict[str, int]
     queue_count: dict[str, int]
-    actor_abstract: ActorAbstract|None = None
+    actor_abstract: ActorAbstract | None = None
 
 
 class Settings(BaseModel):
@@ -119,4 +97,38 @@ class Settings(BaseModel):
 
 class SettingItem(BaseModel):
     key: CacheKey
-    value: str|int|bool
+    value: str | int | bool
+
+
+class GroupTimeStats(BaseModel):
+    stat_date: str
+    actor_group_id: int
+    actor_count: int
+
+
+class ActorVideoInfo(BaseModel):
+    is_landscape: bool
+    duration: int = 0
+    file_count: int = 0
+    file_size: int = 0
+
+    def add_info(self, duration: int, file_size: int):
+        self.duration += duration
+        self.file_count += 1
+        self.file_size += file_size
+
+
+class DownloadingVideoStats(BaseModel):
+    actor_abstract: ActorAbstract
+    file_count: int = 0
+    file_size: int = 0
+    res_size: int = 0
+
+    def add_info(self, file_size: int, res_size: int):
+        self.file_count += 1
+        self.file_size += file_size
+        self.res_size += res_size
+
+class PostFetchTimeStats(BaseModel):
+    stat_date: str
+    post_count: int

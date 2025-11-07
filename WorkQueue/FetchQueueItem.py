@@ -1,7 +1,5 @@
 from turtle import pos
-from Models import PostInfo
-from Models.ActorInfo import ActorInfo
-from Models.PostInfo import PostInfo
+from Models.ModelInfos import ActorInfo, PostInfo
 from WorkQueue.BaseQueueItem import BaseQueueItem
 
 
@@ -40,14 +38,14 @@ class FetchPostQueueItem(BaseQueueItem):
         super().__init__()
         self.actor_info = actor_info
         self.post_id = post_info.post_id
-        self.is_dm = post_info.is_dm
+        self.post_id_str = post_info.post_id_str
         self.has_thumbnail = post_info.has_thumbnail
 
     def priority(self):
         if self.has_thumbnail:
-            return 0
-        else:
             return 1
+        else:
+            return 0
 
     def __repr__(self):
         return f"FetchPostQueueItem({self.actor_info.actor_name}, {self.post_id})"

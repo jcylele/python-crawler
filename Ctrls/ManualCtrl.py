@@ -3,11 +3,13 @@ import os
 import re
 import shutil
 import aiofiles
+import aiohttp
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 import Configs
-from Ctrls import ActorCtrl, ActorFileCtrl, ActorSimilarCtrl, ResCtrl, ResFileCtrl
+from Consts import NoticeType
+from Ctrls import ActorCtrl, ActorFileCtrl, ActorSimilarCtrl, RequestCtrl, ResCtrl, ResFileCtrl
 from Models.FavoriteFolderModel import FavoriteFolderModel
 from Models.ActorGroupModel import ActorGroupModel
 from Models.ActorFileInfoModel import ActorFileInfoModel
@@ -16,6 +18,7 @@ from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagModel import ActorTagModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from Models.NoticeModel import NoticeModel
 from Models.ResModel import ResModel
 from Utils import LogUtil
 
@@ -115,3 +118,35 @@ def renameThumbnailFolder(session: Session):
                     if entry2.name == Configs.ThumbnailFolder:
                         os.rename(entry2.path, os.path.join(
                             entry1.path, f"_{actor_name}"))
+
+
+def printResUrl(session: Session):
+    stmt = select(ResModel).where(ResModel.post_id == 762440076)
+    res = session.scalar(stmt)
+    print(res.res_url_info.full_url)
+
+
+async def testRedirect(url: str):
+    requestSession = aiohttp.ClientSession()
+    headers = RequestCtrl.createRequestHeaders()
+    # headers["referer"] = item.from_url
+    try:
+        async with requestSession.head(url, headers=headers, allow_redirects=False) as res:
+            if res.status == 200:
+                content_length = res.headers.get('Content-Length')
+                print(content_length or 0)
+            elif res.status in (301, 302, 307, 308):  # redirect
+                url = res.headers['Location']
+                new_url = RequestCtrl.formatFullUrl(url)
+                print(new_url)
+            else:
+                print(res.status, res.url)
+    except Exception as e:
+        print("Error:")
+        print(e)
+
+def fixNotice(session: Session):
+    stmt = select(NoticeModel).where(NoticeModel.notice_type == NoticeType.InvalidPost)
+    notices = session.scalars(stmt)
+    for notice in notices:
+        notice.refreshChecksum()

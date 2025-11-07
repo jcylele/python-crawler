@@ -1,4 +1,10 @@
-from enum import Enum, auto, IntEnum
+from enum import Enum, IntFlag, auto, IntEnum
+
+
+class DateFormat(Enum):
+    Date = '%Y-%m-%d'
+    MonthDay = '%m-%d'
+    Full = '%Y-%m-%d %H:%M:%S'
 
 
 class CacheFile(Enum):
@@ -79,11 +85,11 @@ class QueueType(IntEnum):
     FetchActors = auto()
     FetchActor = auto()
     FetchActorLink = auto()
-    
+    FetchPost = auto()
+
     # above queues are FIFO queues, below are priority queues
     MinPriorityQueue = 100
 
-    FetchPost = auto()
     FileDownload = auto()
     ResInfo = auto()
 
@@ -97,16 +103,17 @@ class PostFilter(IntEnum):
 
 class TaskType(IntEnum):
     Default = 0
-    Specific = 1
-    Resume = 2
+    Specific = auto()
+    Resume = auto()
+    FixPost = auto()
+    FixRes = auto()
 
     MaxSingleActor = 100  # above are single actor tasks, below are multiple actor tasks
 
-    New = 101
-    Url = 102
-    Group = 103
-    FixPost = 104
-    Manual = 105
+    New = auto()
+    Url = auto()
+    Group = auto()
+    Manual = auto()
 
 
 class BoolEnum(Enum):
@@ -126,6 +133,15 @@ class SortType(Enum):
     TotalFileSize = auto()
     LastPostFetchTime = auto()
     LastResDownloadTime = auto()
+
+
+class EActorGroupFlag(IntFlag):
+    """
+    actor group flag, used to store actor group boolean properties
+    """
+    HasFolder = 1
+    IsInitial = 1 << 1
+    ShowVideoInfo = 1 << 2
 
 
 class ErrorCode(IntEnum):

@@ -1,5 +1,10 @@
+"""
+Utility functions collection.
+"""
+
 import base64
 import binascii
+from datetime import datetime
 import functools
 import os
 from pathlib import Path
@@ -8,6 +13,7 @@ import time
 import ffmpeg
 from math import floor
 
+from Consts import DateFormat
 from Utils import LogUtil
 
 
@@ -96,19 +102,21 @@ def get_project_root() -> Path:
             raise FileNotFoundError("无法定位项目根目录。请确保 main.py 文件在项目根目录中。")
         current_path = parent_path
 
+
 def fileCount(folder_path: str) -> int:
     path = Path(folder_path)
     if not path.exists():
         return 0
     if not path.is_dir():
         return 0
-    
+
     try:
         thumbnail_count = len([f for f in path.iterdir() if f.is_file()])
         return thumbnail_count
     except PermissionError:
         LogUtil.error(f"no permission to access folder: {folder_path}")
         return 0
+
 
 def formatStaticFile(relative_path: str) -> str:
     if getattr(sys, 'frozen', False):
@@ -120,3 +128,20 @@ def formatStaticFile(relative_path: str) -> str:
 
     # print(bundle_dir)
     return os.path.join(bundle_dir, relative_path)
+
+
+def datetime_format(time: datetime, format: DateFormat) -> str:
+    return time.strftime(format.value)
+
+
+def to_datetime(str_time: str, format: DateFormat) -> datetime:
+    return datetime.strptime(str_time, format.value)
+
+
+def to_date(str_time: str, format: DateFormat, is_begin: bool = False) -> datetime:
+    date = to_datetime(str_time, format)
+    if is_begin:
+        date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        date = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return date

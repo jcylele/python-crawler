@@ -1,4 +1,5 @@
 import asyncio
+from Consts import TaskType
 from Download.DownloadTask import DownloadTask
 
 next_task_id = 0
@@ -11,9 +12,9 @@ def nextTaskId() -> int:
     return next_task_id
 
 
-def NewTask() -> DownloadTask:
+def NewTask(task_type: TaskType) -> DownloadTask:
     task_uid = nextTaskId()
-    task = DownloadTask(task_uid)
+    task = DownloadTask(task_uid, task_type)
     task_dict[task_uid] = task
     return task
 

@@ -1,3 +1,4 @@
+from Consts import EActorGroupFlag
 from Models.ActorGroupCondModel import ActorGroupCondModel
 from sqlalchemy import String
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
@@ -13,8 +14,7 @@ class ActorGroupModel(BaseModel):
     group_name: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
     group_desc: Mapped[str] = mapped_column(String(DB_STR_LEN_LONG))
     group_color: Mapped[str] = mapped_column(String(DB_STR_LEN_COLOR))
-    has_folder: Mapped[bool] = mapped_column(default=False)
-    is_initial: Mapped[bool] = mapped_column(default=False)
+    flags: Mapped[int] = mapped_column(default=0)
     group_priority: Mapped[int] = mapped_column(default=0)
 
     group_cond_list: Mapped[list[ActorGroupCondModel]] = relationship(
@@ -34,3 +34,7 @@ class ActorGroupModel(BaseModel):
     @property
     def cond_list(self) -> list[ActorGroupCondModel]:
         return [cond for cond in self.group_cond_list]
+
+    @property
+    def has_folder(self) -> bool:
+        return self.flags & EActorGroupFlag.HasFolder == EActorGroupFlag.HasFolder

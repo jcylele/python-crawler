@@ -88,6 +88,10 @@ class DownloadLimitForm(BaseModel):
     def fixPostsLimit():
         return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=1)
 
+    @staticmethod
+    def fixResLimit():
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=1)
+
 
 class ActorGroupCond(BaseModel):
     cond_type: int
@@ -127,5 +131,10 @@ class CommonGroupForm(BaseModel):
 
 class ActorGroupForm(CommonGroupForm):
     group_color: str
-    has_folder: bool
-    is_initial: bool
+    flags: int
+
+
+class GroupTimeStatsForm(BaseModel):
+    start_date: str
+    end_date: str
+    group_ids: list[int]

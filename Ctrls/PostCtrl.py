@@ -1,12 +1,12 @@
 # PostModel related operations
 
-from sqlalchemy import ScalarResult, func, select, update, Select
+from sqlalchemy import ScalarResult, func, select, update, Select, exists, or_
 from sqlalchemy.orm import Session
 
-from Consts import ResState
+from Consts import ResState, ResType
 from Ctrls import ActorFileCtrl
 from Models.ActorModel import ActorModel
-from Models.PostInfo import PostInfo
+from Models.ModelInfos import PostInfo
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from Utils import PyUtil
@@ -34,8 +34,8 @@ def addPost(session: Session, actor_id: int, post_info: PostInfo):
     """
     post = PostModel()
     post.post_id = post_info.post_id
+    post.post_id_str = post_info.post_id_str
     post.actor_id = actor_id
-    post.is_dm = post_info.is_dm
     post.has_thumbnail = post_info.has_thumbnail
     session.add(post)
     session.flush()
@@ -71,8 +71,10 @@ def filterQuery(_query: Select, form: PostFilterForm) -> Select:
         _query = _query.where(PostModel.actor_id == form.actor_id)
     # post_id_prefix
     if len(form.post_id_prefix) > 0:
-        _query = _query.where(
-            PostModel.post_id_str.like(f"{form.post_id_prefix}%"))
+        _query = _query.where(or_(
+            PostModel.post_id_str.like(f"{form.post_id_prefix}%"),
+            PostModel.post_id_str.like(f"DM{form.post_id_prefix}%")
+            ))
     # comment
     if form.has_comment:
         _query = _query.where(PostModel.has_comment == True)
@@ -115,20 +117,33 @@ def setPostComment(session: Session, post_id: int, comment: str):
     post.comment = real_comment
 
 
-def getNewPosts(session: Session, actor_id: int, last_post_id: int) -> ScalarResult[PostModel]:
+def getPostsOfActor(session: Session, actor_id: int, last_post_id: int = 0, only_complete: bool = False) -> ScalarResult[PostModel]:
     _query = (select(PostModel)
-              .where(PostModel.actor_id == actor_id)
-              .where(PostModel.post_id > last_post_id)
-              .order_by(PostModel.post_id.desc()))
+              .where(PostModel.actor_id == actor_id))
+    if last_post_id > 0:
+        _query = _query.where(PostModel.post_id > last_post_id)
+    if only_complete:
+        _query = _query.where(PostModel.completed == True)
+    _query = _query.order_by(PostModel.has_thumbnail,
+                             PostModel.post_id.desc())
     return session.scalars(_query)
 
 
-def getCompletedPosts(session, actor_id: int, last_post_id: int) -> ScalarResult[PostModel]:
+def getPostsToFixVideoUrls(session: Session, actor_id: int) -> ScalarResult[PostModel]:
+    # 创建一个子查询来检查是否存在 res_type 为 Video 的 ResModel
+    video_res_subquery = (
+        select(1)
+        .where(ResModel.post_id == PostModel.post_id)
+        .where(ResModel.res_type == ResType.Video)
+    )
+
     _query = (select(PostModel)
               .where(PostModel.actor_id == actor_id)
               .where(PostModel.completed == True)
-              .where(PostModel.post_id > last_post_id)
-              .order_by(PostModel.post_id.desc()))
+              .where(exists(video_res_subquery))
+              .order_by(PostModel.last_fetch_time.is_(None).desc(),
+                        PostModel.last_fetch_time,
+                        PostModel.post_id))
     return session.scalars(_query)
 
 

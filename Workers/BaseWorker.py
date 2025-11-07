@@ -23,7 +23,7 @@ class BaseWorker:
     def __init__(self, worker_type: WorkerType, task: DownloadTask):
         self.__workerType = worker_type
         self.__queueType = Configs.getQueueTypeByWorkerType(worker_type)
-        self.task = task
+        self.task: DownloadTask = task
 
     def queue_mgr(self) -> TaskQueueMgr:
         return self.task.queue_mgr
@@ -64,8 +64,8 @@ class BaseWorker:
                 item = await self.get_item()
                 if isinstance(item, SentinelQueueItem):
                     self.item_done()
-                    LogUtil.info(
-                        f"{self.workerType().name}  received sentinel, shutting down.")
+                    # LogUtil.info(
+                    #     f"{self.workerType().name}  received sentinel, shutting down.")
                     break
                 await self.queue_mgr().add_worker(self.__queueType)
                 # LogUtil.info(f"{self.workerType().name} worker got item: {item}")

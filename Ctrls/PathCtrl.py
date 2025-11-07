@@ -1,5 +1,5 @@
 import Configs
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 
 
 def icon_file_name(actor_info: ActorInfo) -> str:

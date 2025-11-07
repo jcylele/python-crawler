@@ -24,13 +24,21 @@ class ResUrlModel(BaseModel):
     )
 
     @property
+    def hash_hex(self) -> str:
+        return PyUtil.bytes2hex(self.hash_binary)
+
+    @property
     def full_url(self) -> str:
         """重构完整URL"""
         hex_sha256 = PyUtil.bytes2hex(self.hash_binary)
         hash_part = f"{hex_sha256[:2]}/{hex_sha256[2:4]}/{hex_sha256}"
-        return f"https://{self.domain.domain_name}/data/{hash_part}.{self.extension}"
+        return f"https://{self.domain_name}/data/{hash_part}.{self.extension}"
 
     @property
     def file_name(self) -> str:
         hex_sha256 = PyUtil.bytes2hex(self.hash_binary)
         return f"{hex_sha256}.{self.extension}"
+
+    @property
+    def domain_name(self) -> str:
+        return self.domain.domain_name

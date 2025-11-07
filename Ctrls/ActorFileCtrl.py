@@ -8,17 +8,17 @@ from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
 import Configs
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Models.ActorModel import ActorModel
 from Utils import PyUtil
 from Utils.PyUtil import time_cost
-from routers.schemas_others import ActorVideoInfo, ActorFileDetail
+from routers.schemas_others import ActorVideoInfo, ActorFileDetail, PostFetchTimeStats
 
 from Ctrls import ActorLogCtrl, DbCtrl, PostCtrl, ResCtrl, ResFileCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-from Consts import ActorLogType, ResState, ResType
+from Consts import ActorLogType, DateFormat, ResState, ResType
 from Utils import LogUtil
 
 _dirty_lock = threading.Lock()
@@ -285,6 +285,9 @@ def __collect_dirty_posts(session, context):
 
 @time_cost
 def validate_all_file_info_new(session: Session) -> int:
+    """
+    全面检查ActorFileInfoModel，太耗时了，暂时弃用
+    """
     __process_dirty(session)
 
     # 获取所有 actor_id
@@ -327,53 +330,6 @@ def validate_all_file_info_new(session: Session) -> int:
         deleteActorFileInfos(all_unmatched_ids)
 
     return len(all_unmatched_ids)
-    __process_dirty(session)
-
-    stmt = select(ActorFileInfoModel.actor_id.distinct())
-    actor_ids = list(session.scalars(stmt))
-    new_stmt = __build_batch_stmt(actor_ids)
-    # right data, no function, just rows
-    new_list = list(session.execute(new_stmt))
-
-    old_stmt = select(ActorFileInfoModel).order_by(
-        ActorFileInfoModel.actor_id, ActorFileInfoModel.res_state)
-    # cached data, model with functions
-    old_list: list[ActorFileInfoModel] = list(session.scalars(old_stmt))
-
-    # compare 2 sorted list
-    unmatch_actor_ids = set()
-    new_i = 0
-    old_j = 0
-    while new_i < len(new_list) and old_j < len(old_list):
-        new_info, old_info = new_list[new_i], old_list[old_j]
-        if new_info.actor_id == old_info.actor_id:
-            if new_info.res_state == old_info.res_state:
-                if not old_info.equal(new_info):
-                    unmatch_actor_ids.add(new_info.actor_id)
-                new_i += 1
-                old_j += 1
-            elif new_info.res_state < old_info.res_state:
-                unmatch_actor_ids.add(new_info.actor_id)
-                new_i += 1
-            else:
-                unmatch_actor_ids.add(old_info.actor_id)
-                old_j += 1
-        elif new_info.actor_id < old_info.actor_id:
-            unmatch_actor_ids.add(new_info.actor_id)
-            new_i += 1
-        else:
-            unmatch_actor_ids.add(old_info.actor_id)
-            old_j += 1
-    while new_i < len(new_list):
-        unmatch_actor_ids.add(new_info.actor_id)
-        new_i += 1
-    while old_j < len(old_list):
-        unmatch_actor_ids.add(old_info.actor_id)
-        old_j += 1
-
-    # just put to waiting list
-    deleteActorFileInfos(unmatch_actor_ids)
-    return len(unmatch_actor_ids)
 
 
 def validateActorFileInfo(session: Session, actor_id: int) -> list[ActorFileInfoModel]:
@@ -415,17 +371,6 @@ def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
     )
 
 
-def __remove_outdated_process(session: Session, file_path: str, post_id: int, res_index: int, extra_data: any = None):
-    res = ResCtrl.getResByIndex(session, post_id, res_index)
-    if res.res_state == ResState.Del:
-        LogUtil.info(f"remove downloading file {file_path}")
-        os.remove(file_path)
-
-
-def removeOutdatedFiles(session: Session):
-    ResFileCtrl.traverseDownloadingFiles(session, __remove_outdated_process)
-
-
 def deleteAllRes(session: Session, actor: ActorModel):
     actor_folder = Configs.formatActorFolderPath(
         actor.actor_id, actor.actor_name)
@@ -465,6 +410,8 @@ def getActorVideoStats(session: Session, actor_id: int) -> list[ActorVideoInfo]:
 
     ret = session.scalars(stmt)
     for res in ret:
+        if res.res_duration == 0:
+            continue
         if res.res_width >= res.res_height:
             landscape_info.add_info(res.res_duration, res.res_size)
         else:
@@ -479,5 +426,41 @@ def createActorFolder(actor: ActorInfo | ActorModel):
     thumbnail_folder_path = Configs.formatActorThumbnailFolderPath(
         actor.actor_id, actor.actor_name)
     os.makedirs(thumbnail_folder_path, exist_ok=True)
+
+
+def getPostFetchTimeStats(session: Session, actor_id: int) -> list[PostFetchTimeStats]:
+    formatted_results: list[PostFetchTimeStats] = []
+    # none count
+    none_stmt = select(
+        func.count(PostModel.post_id)
+    ).where(
+        PostModel.actor_id == actor_id,
+        PostModel.last_fetch_time.is_(None)
+    )
+    none_count = session.scalar(none_stmt)
+    if none_count and none_count > 0:
+        formatted_results.append(PostFetchTimeStats(
+            stat_date="",
+            post_count=none_count
+        ))
+    # count by date
+    stmt = select(
+        func.date(PostModel.last_fetch_time),
+        func.count(PostModel.post_id)
+    ).where(
+        PostModel.actor_id == actor_id,
+        PostModel.last_fetch_time.isnot(None)
+    ).group_by(
+        func.date(PostModel.last_fetch_time)
+    ).order_by(
+        func.date(PostModel.last_fetch_time)
+    )
+    ret = session.execute(stmt)
+    for stat_date, post_count in ret:
+        formatted_results.append(PostFetchTimeStats(
+            stat_date=PyUtil.datetime_format(stat_date, DateFormat.Date),
+            post_count=post_count
+        ))
+    return formatted_results
 
 # endregion

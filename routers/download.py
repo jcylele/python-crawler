@@ -3,6 +3,7 @@ import asyncio
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from Consts import TaskType
 from Ctrls import DbCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
@@ -21,7 +22,7 @@ router = APIRouter(
 @router.post("/new", response_model=CommonResponse)
 async def download_new_actors(form: NewDownloadForm):
     limit = DownloadLimit(form.download_limit)
-    task = NewTask()
+    task = NewTask(TaskType.New)
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
     await task.downloadNewActors(form.start_page)
@@ -31,7 +32,7 @@ async def download_new_actors(form: NewDownloadForm):
 @router.post("/group", response_model=CommonResponse)
 async def download_by_group(form: GroupDownloadForm):
     limit = DownloadLimit(form.download_limit)
-    task = NewTask()
+    task = NewTask(TaskType.Group)
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
     await task.downloadByActorGroup(form.actor_group_id)
@@ -41,7 +42,7 @@ async def download_by_group(form: GroupDownloadForm):
 @router.patch("/resume/{actor_id}", response_model=CommonResponse)
 async def resume_actor(actor_id: int):
     limit = DownloadLimit(DownloadLimitForm.resumeVideoLimit())
-    task = NewTask()
+    task = NewTask(TaskType.Resume)
     task.setLimit(limit)
     await task.resumeActor(actor_id)
     return CommonResponse()
@@ -50,16 +51,24 @@ async def resume_actor(actor_id: int):
 @router.patch("/fix_posts/{actor_id}", response_model=CommonResponse)
 async def fix_posts(actor_id: int):
     limit = DownloadLimit(DownloadLimitForm.fixPostsLimit())
-    task = NewTask()
+    task = NewTask(TaskType.FixPost)
     task.setLimit(limit)
     await task.fix_posts_of_actor(actor_id)
+    return CommonResponse()
+
+@router.patch("/fix_res/{actor_id}", response_model=CommonResponse)
+async def fix_res(actor_id: int):
+    limit = DownloadLimit(DownloadLimitForm.fixResLimit())
+    task = NewTask(TaskType.FixRes)
+    task.setLimit(limit)
+    await task.fix_video_of_actor(actor_id)
     return CommonResponse()
 
 
 @router.post("/manual", response_model=CommonResponse)
 async def manual(form: GroupDownloadForm):
     limit = DownloadLimit(form.download_limit)
-    task = NewTask()
+    task = NewTask(TaskType.Manual)
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
     await task.manual()
@@ -68,7 +77,7 @@ async def manual(form: GroupDownloadForm):
 
 async def _start_actor_download_task(actor_id: int, download_limit: DownloadLimitForm):
     limit = DownloadLimit(download_limit)
-    task = NewTask()
+    task = NewTask(TaskType.Specific)
     task.setLimit(limit)
     await task.downloadSpecificActor(actor_id)
 
@@ -84,7 +93,7 @@ async def download_specific(form: ActorIdDownloadForm):
 @router.post("/urls", response_model=CommonResponse)
 async def download_by_urls(form: UrlDownloadForm):
     limit = DownloadLimit(form.download_limit)
-    task = NewTask()
+    task = NewTask(TaskType.Url)
     task.setLimit(limit)
     task.setInitGroup(form.actor_group_id)
     await task.downloadByUrls(form.urls)
@@ -118,6 +127,3 @@ async def stop_all_task():
 async def stop_task(task_uid: int):
     await StopTask(task_uid)
     return CommonResponse()
-
-
-

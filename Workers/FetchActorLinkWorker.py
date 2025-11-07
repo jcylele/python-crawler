@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from Consts import WorkerType
 from Ctrls import ActorLinkCtrl, DbCtrl, RequestCtrl
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.ImageWait.ActorIconWait import ActorIconWait

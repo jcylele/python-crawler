@@ -4,7 +4,7 @@ import subprocess
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from Ctrls import ActorFileCtrl, ActorSimilarCtrl, DbCtrl, ManualCtrl
+from Ctrls import ActorFileCtrl, ActorSimilarCtrl, DbCtrl, ManualCtrl, ResFileCtrl
 from Utils import CacheUtil
 from routers.schemas_others import CommonResponse, SettingItem, Settings, UnifiedResponse
 
@@ -31,7 +31,7 @@ def similar_names(session: Session = Depends(DbCtrl.get_db_session)):
 
 @router.get("/remove_outdated", response_model=CommonResponse)
 def remove_outdated_files(session: Session = Depends(DbCtrl.get_db_session)):
-    ActorFileCtrl.removeOutdatedFiles(session)
+    ResFileCtrl.removeOutdatedFiles(session)
     return CommonResponse()
 
 

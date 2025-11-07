@@ -1,7 +1,7 @@
 # extra information attached to queue items
 # use composite pattern instead of inheritance
 from Consts import QueueType, ResType
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 
 
 class BaseExtraInfo(object):

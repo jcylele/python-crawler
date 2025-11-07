@@ -7,12 +7,12 @@ from Utils import CacheUtil
 
 async def async_main():
     with DbCtrl.getSession() as session, session.begin():
-        await ManualCtrl.check_size(session, r"D:\OnlyFans\_downloading\gothscumbag_32004825_3.m4v", 3196801)
+        await ManualCtrl.testRedirect("https://n4.coomer.su/data/ef/95/ef95b882d0e0cfb5b6738d12362a00efa39e05dd4125022d388279f75b4c1a2d.mp4")
 
 
 def main():
     with DbCtrl.getSession() as session, session.begin():
-        ManualCtrl.removeActorFolders(session)
+        ManualCtrl.fixNotice(session)
 
 
 if __name__ == '__main__':

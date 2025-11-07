@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from Consts import ErrorCode, NoticeType, ActorLogType, ResState
 from Ctrls import DbCtrl, PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl, ResFileCtrl
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
@@ -261,6 +261,9 @@ def getLinkedActorIds(session: Session, main_actor_id: int) -> list[int]:
 
 
 def refreshActorPostCount(session: Session, actor_id: int):
+    """
+    强制刷新actor的post计数
+    """
     actor = getActor(session, actor_id)
     completed, uncompleted = PostCtrl.getPostCountsOfActor(session, actor_id)
     actor.current_post_count = completed + uncompleted
@@ -308,29 +311,25 @@ def after_post_delete(mapper, connection, target: PostModel):
         _updateActorPostCount(session, target.actor_id, target.completed, -1)
 
 
-def _updateCompletedPostCount(session: Session, actor_id: int, delta: int):
-    actor = getActor(session, actor_id)
-    actor.completed_post_count += delta
-    if delta > 0:
-        actor.last_post_fetch_time = func.now()
-
-
 @event.listens_for(PostModel, 'after_update')
 def after_post_update(mapper, connection, target: PostModel):
     # 检查 'completed' 字段是否发生变化
-    history = inspect(target).attrs.completed.history
-    if not history.has_changes():
-        return
+    completed_history = inspect(target).attrs.completed.history
+    completed_changed = completed_history.has_changes()
+    # 检查 'last_fetch_time' 是否发生变化
+    last_fetch_time_history = inspect(target).attrs.last_fetch_time.history
+    last_fetch_time_changed = last_fetch_time_history.has_changes()
 
-    delta = 0
-    if history.added[0] and not history.deleted[0]:  # False -> True
-        delta = 1
-    elif not history.added[0] and history.deleted[0]:  # True -> False
-        delta = -1
-    else:
+    if not completed_changed and not last_fetch_time_changed:
         return
 
     with DbCtrl.innerSession(connection) as session, session.begin():
-        _updateCompletedPostCount(session, target.actor_id, delta)
+        actor = getActor(session, target.actor_id)
+        # 逻辑上一定是False变True，所以+1
+        if completed_changed:
+            actor.completed_post_count += 1
+        # 如果有更新，一定是func.now(), 所以直接拷贝赋值即可
+        if last_fetch_time_changed:
+            actor.last_post_fetch_time = target.last_fetch_time
 
 # endregion

@@ -2,14 +2,15 @@
 
 from pydantic import BaseModel, field_validator, computed_field, model_validator
 
-from Consts import ActorLogType, GroupCondType, NoticeType, ResState
+from Consts import ActorLogType, DateFormat, GroupCondType, NoticeType, ResState
 from Ctrls import PathCtrl, RequestCtrl
 from Models.ActorModel import ActorModel
+from Utils import PyUtil
 
 
 class PostResponse(BaseModel):
     post_id: str
-    comment: str|None = None
+    comment: str | None = None
 
     @field_validator('post_id', mode='before')
     @classmethod
@@ -45,7 +46,7 @@ class ActorLogResponse(BaseModel):
     @field_validator('log_time', mode='before')
     @classmethod
     def log_time_to_str(cls, v):
-        return v.isoformat(sep=' ')
+        return PyUtil.datetime_format(v, DateFormat.Full)
 
     class Config:
         from_attributes = True
@@ -65,8 +66,7 @@ class ActorGroupResponse(BaseModel):
     group_name: str
     group_desc: str
     group_color: str
-    has_folder: bool
-    is_initial: bool
+    flags: int
     group_priority: int
 
     # properties from ORM
@@ -137,7 +137,7 @@ class ActorResponse(BaseModel):
     actor_platform: str
     actor_link: str  # need this to calculate href
     actor_group_id: int
-    comment: str|None = None  # may be None
+    comment: str | None = None  # may be None
 
     # properties from ORM
 
@@ -146,9 +146,9 @@ class ActorResponse(BaseModel):
     commented_posts: list[PostResponse]
 
     # properties from main actor
- 
+
     score: int
-    remark: str|None = None
+    remark: str | None = None
     tag_ids: list[int] = []
 
     # use field_validator to handle None value

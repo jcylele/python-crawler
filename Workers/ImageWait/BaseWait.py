@@ -3,7 +3,7 @@ from playwright.async_api import Page, Response, TimeoutError as PlaywrightTimeo
 
 import Configs
 from Ctrls import PathCtrl
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
 
 
@@ -28,13 +28,13 @@ class BaseWait:
 
     async def wait(self, page: Page):
         if not self.get_wait():
-            LogUtil.info(f"wait {self.get_class_name()} is not wait")
+            # LogUtil.info(f"wait {self.get_class_name()} is not wait")
             return
         try:
             if self.need_scroll:
                 await self.scroll_to_bottom(page)
             await page.wait_for_function(self.js_func, timeout=self.time_out)
-            LogUtil.info(f"wait {self.get_class_name()} finished")
+            # LogUtil.info(f"wait {self.get_class_name()} finished")
         except PlaywrightTimeoutError:
             LogUtil.warning(f"wait {self.get_class_name()} timeout")
 

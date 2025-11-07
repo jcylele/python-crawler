@@ -35,6 +35,8 @@ DB_STR_LEN_MD5 = 32
 DB_STR_LEN_DOMAIN = 50
 DB_STR_LEN_LONG = 100
 DB_STR_LEN_REMARK = 200
+# length of dm post is 2 + N * this length
+DM_LEN_SINGLE_ID = 18
 
 
 def getSetting(cache_key: CacheKey):

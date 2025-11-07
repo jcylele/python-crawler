@@ -4,7 +4,7 @@ from playwright.async_api import Page, Response, TimeoutError as PlaywrightTimeo
 
 import Configs
 from Ctrls import PathCtrl
-from Models import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
 from Workers.ImageWait.BaseWait import BaseWait
 

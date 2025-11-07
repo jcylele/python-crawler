@@ -1,4 +1,4 @@
-from sqlalchemy import Index, String, ForeignKey, BigInteger, event
+from sqlalchemy import Index, String, ForeignKey, BigInteger, event, DateTime
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
 from Configs import DB_STR_LEN_LONG, DB_STR_LEN_BIG_INT
@@ -11,10 +11,9 @@ class PostModel(BaseModel):
     post_id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True, autoincrement=False)
     post_id_str: Mapped[str] = mapped_column(
-        String(DB_STR_LEN_BIG_INT), default="")
+        String(DB_STR_LEN_LONG), nullable=False)
     actor_id: Mapped[int] = mapped_column(
         ForeignKey("tab_actor.actor_id", ondelete="CASCADE"))
-    is_dm: Mapped[bool] = mapped_column(default=False)
     completed: Mapped[bool] = mapped_column(default=False)
     comment: Mapped[str] = mapped_column(
         String(DB_STR_LEN_LONG), nullable=True, default=None)
@@ -27,11 +26,13 @@ class PostModel(BaseModel):
         default=False,
         nullable=False
     )
+    last_fetch_time: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
 
     # 在类定义后添加索引定义
     __table_args__ = (
         Index('idx_post_id_str', 'post_id_str',
-              mysql_length=8),  # 使用 mysql_length 参数
+              mysql_length=8),  # 使用 mysql_length 参数, 至少6位数字(DM开头)已经足够
     )
 
     actor: Mapped["ActorModel"] = relationship(
@@ -57,6 +58,4 @@ class PostModel(BaseModel):
 @event.listens_for(PostModel, 'before_insert')
 @event.listens_for(PostModel, 'before_update')
 def update_post_id_str(mapper, connection, target):
-    if target.post_id is not None:
-        target.post_id_str = str(target.post_id)
     target.has_comment = target.comment is not None

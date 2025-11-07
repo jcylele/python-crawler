@@ -1,17 +1,19 @@
 import os
-from Ctrls import ResFileCtrl
-from routers.schemas_others import TagCount
-from sqlalchemy import BigInteger, func, select
+from datetime import datetime
+from sqlalchemy import BigInteger, func, select, and_
 from sqlalchemy.orm import Session, aliased
 
 import Configs
-from Consts import ResState
+from Consts import ActorLogType, DateFormat, ResState
+from Ctrls import ResFileCtrl
+from Models.ActorLogModel import ActorLogModel
+from routers.schemas_others import GroupTimeStats, TagCount
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-from Utils import LogUtil
+from Utils import LogUtil, PyUtil
 
 
 def getTagRelative(session: Session, tag_id: int, limit: int) -> list[TagCount]:
@@ -70,17 +72,6 @@ def getTagCountsByScore(session: Session, min_score: int, max_score: int, limit:
     return [TagCount(tag_id=tag_id, count=count) for tag_id, count in ret]
 
 
-def _add_size_process(_0: Session, file: str, _1: int, _2: int, sum: list[int]):
-    if os.path.exists(file):
-        sum[0] += os.path.getsize(file)
-
-
-def getTotalDownloadingSize(session: Session) -> int:
-    sum = [0]
-    ResFileCtrl.traverseDownloadingFiles(session, _add_size_process, sum)
-    return sum[0]
-
-
 def getResSizeStats(session: Session) -> dict[int, int]:
     # 构建查询
     query = (
@@ -107,3 +98,31 @@ def getResSizeStats(session: Session) -> dict[int, int]:
         size_map[group_id] = total_size
         LogUtil.info(f"Group {group_id} total size: {total_size}")
     return size_map
+
+
+def get_actor_group_time_stats(session: Session, start_date: datetime, end_date: datetime, group_ids: list[int]) -> list[GroupTimeStats]:
+    query = session.query(
+        func.date(ActorLogModel.log_time),
+        ActorLogModel.log_param,
+        func.count(ActorLogModel.actor_id)
+    ).filter(
+        and_(
+            ActorLogModel.log_type == ActorLogType.Group,
+            ActorLogModel.log_time >= start_date,
+            ActorLogModel.log_time <= end_date,
+            ActorLogModel.log_param.in_(group_ids)
+        )
+    ).group_by(
+        func.date(ActorLogModel.log_time),
+        ActorLogModel.log_param
+    )
+
+    formatted_results: list[GroupTimeStats] = []
+    for row in query.all():
+        formatted_results.append({
+            'stat_date': PyUtil.datetime_format(row[0], DateFormat.Date),
+            'actor_group_id': int(row[1]),
+            'actor_count': row[2]
+        })
+
+    return formatted_results

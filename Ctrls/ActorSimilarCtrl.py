@@ -34,6 +34,10 @@ def _check_and_report_group(session: Session, actor_names: Iterable[str], main_a
 
 
 def _check_similar_names_by_substring(session: Session, main_actor_map: dict[str, int]):
+    """
+    通过类似滚动窗口的方式，检查具有公共子串的pairs
+    每一轮检查，字符串s分裂为s[:-1], s[1:]并进行相等判定
+    """
     actor_names = [
         name for name in main_actor_map.keys()
         if not _substring_skip_pattern.search(name)
@@ -150,6 +154,9 @@ def _possible_pure_name(actor_name: str) -> str | None:
         return "".join(cleaned_parts)
 
 def _check_similar_names_by_pure_name(session: Session, main_actor_map: dict[str, int]):
+    """
+    通过去除常见前后缀，特殊符号和其他规则，得到“词根”，并检查具有相同词根的pairs
+    """
     pure_name_map: dict[str, list[str]] = {}
     for actor_name in main_actor_map.keys():
         pure_name = _possible_pure_name(actor_name)

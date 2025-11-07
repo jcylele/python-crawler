@@ -9,7 +9,7 @@ import Configs
 from Consts import ErrorCode
 from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, ActorSimilarCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl, ResFileCtrl
 from routers.schemas import ActorFileInfoResponse, ActorLogResponse, ActorResponse
-from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
+from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, PostFetchTimeStats, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
 from routers.web_data import ActorConditionForm, BatchActorGroup, LinkActorForm
 
 router = APIRouter(
@@ -209,6 +209,11 @@ def rename_actor_files(actor_id: int, session: Session = Depends(DbCtrl.get_db_s
     ResFileCtrl.rename_actor_files(session, actor)
     return CommonResponse()
 
+@router.patch("/{actor_id}/remove_by_dir", response_model=CommonResponse)
+def remove_by_dir(actor_id: int, is_landscape: bool = Query(default=False), session: Session = Depends(DbCtrl.get_db_session)):
+    actor = ActorCtrl.getActor(session, actor_id)
+    ResFileCtrl.remove_by_dir(session, actor, is_landscape)
+    return CommonResponse()
 
 @router.get("/{actor_id}/linked", response_model=UnifiedResponse[list[int]])
 def get_linked_actors(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
@@ -236,3 +241,10 @@ def get_logs(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
 def get_video_sizes(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     video_sizes = ResCtrl.getResSizesOfActor(session, actor_id)
     return UnifiedListResponse[ResSizeCount](data=video_sizes)
+
+
+@router.get("/{actor_id}/post_fetch_time_stats", response_model=UnifiedListResponse[PostFetchTimeStats])
+def get_post_fetch_time_stats(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    post_fetch_time_stats = ActorFileCtrl.getPostFetchTimeStats(
+        session, actor_id)
+    return UnifiedListResponse[PostFetchTimeStats](data=post_fetch_time_stats)

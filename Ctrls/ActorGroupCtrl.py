@@ -21,8 +21,7 @@ def __assign_form_to_group(group: ActorGroupModel, form: ActorGroupForm):
     group.group_desc = form.desc
     group.group_priority = form.priority
     group.group_color = form.group_color
-    group.has_folder = form.has_folder
-    group.is_initial = form.is_initial
+    group.flags = form.flags
 
 def addNewActorGroup(session: Session, form: ActorGroupForm) -> ActorGroupModel:
     group = ActorGroupModel()

@@ -4,31 +4,45 @@ import os
 from sqlalchemy.orm import Session
 
 import Configs
-from Consts import PostFilter, TaskType, WorkerType
+from Consts import PostFilter, ResType, TaskType, WorkerType
 from Ctrls import ActorQueryCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ResFileCtrl
 from Download import WorkerMgr
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskQueueMgr import TaskQueueMgr
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
 from routers.web_data import ActorUrl
 from routers.schemas_others import DownloadTaskResponse
 
 
 class DownloadTask:
-    def __init__(self, task_uid):
+    def __init__(self, task_uid, task_type: TaskType):
         self.uid = task_uid
+        self.task_type = task_type
+
         self.running = False
         self.worker_tasks = []
         self.watcher_task: asyncio.Task | None = None
-        self.queue_mgr = TaskQueueMgr()
+        self.queue_mgr = TaskQueueMgr(task_type)
         self.download_limit: DownloadLimit | None = None
         self.init_group_id = 0
-        self.task_type = TaskType.Default
         self.task_desc = ""
         self.task_arg = 0
         self.actor_ids = []
-        self.is_fix_posts = False
+
+    @property
+    def is_fix_posts(self) -> bool:
+        return self.task_type == TaskType.FixPost
+
+    @property
+    def is_fix_res(self) -> bool:
+        return self.task_type == TaskType.FixRes
+
+    @property
+    def wait_thumbnail(self) -> bool:
+        if self.task_type == TaskType.FixPost or self.task_type == TaskType.FixRes:
+            return False
+        return self.download_limit.allowResDownload(ResType.Image)
 
     async def start(self):
         """
@@ -121,8 +135,8 @@ class DownloadTask:
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
-                posts = PostCtrl.getCompletedPosts(
-                    session, actor_id, actor.last_post_id)
+                posts = PostCtrl.getPostsOfActor(
+                    session, actor_id, actor.last_post_id, True)
                 for post in posts:
                     await self.queue_mgr.enqueueAllRes(
                         actor_info, post, self.download_limit)
@@ -132,7 +146,7 @@ class DownloadTask:
             for actor_id in actor_ids:
                 actor = ActorCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
-                posts = PostCtrl.getNewPosts(
+                posts = PostCtrl.getPostsOfActor(
                     session, actor_id, actor.last_post_id)
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
@@ -157,7 +171,6 @@ class DownloadTask:
         await self.start()
 
     async def downloadByUrls(self, actor_urls: list[ActorUrl]):
-        self.task_type = TaskType.Url
         self.task_desc = "Specific Urls"
         actor_ids: list[int] = []
         with DbCtrl.getSession() as session, session.begin():
@@ -189,7 +202,6 @@ class DownloadTask:
             actor = ActorCtrl.getActor(session, actor_id)
             # in case linked actors found, set the group id to the actor's group id
             self.setInitGroup(actor.actor_group_id)
-            self.task_type = TaskType.Specific
             self.task_desc = f"Specific Actor {actor.actor_name}"
             self.task_arg = actor_id
         await self.downloadActors([actor_id])
@@ -198,7 +210,6 @@ class DownloadTask:
         """
         download new actors
         """
-        self.task_type = TaskType.New
         self.task_desc = "New Actors"
         await self.queue_mgr.enqueueFetchActors(start_page)
         await self.start()
@@ -210,7 +221,6 @@ class DownloadTask:
         actor_ids = []
         with DbCtrl.getSession() as session, session.begin():
             group = ActorGroupCtrl.getActorGroup(session, group_id)
-            self.task_type = TaskType.Group
             self.task_desc = f"Actors in group {group.group_name}"
             self.task_arg = group_id
             actors = ActorQueryCtrl.getActorsByGroup(session, group_id)
@@ -229,7 +239,6 @@ class DownloadTask:
             if actor is None or not actor.actor_group.has_folder:
                 return
             self.actor_ids = [actor_id]
-            self.task_type = TaskType.Resume
             self.task_desc = f"resume actor {actor.actor_name}"
             self.task_arg = actor_id
             await ResFileCtrl.traverseDownloadingFilesOfActor_async(
@@ -250,19 +259,36 @@ class DownloadTask:
                 return
             ActorCtrl.refreshActorPostCount(session, actor_id)
 
-            self.is_fix_posts = True
             self.actor_ids = [actor_id]
-            self.task_type = TaskType.FixPost
             self.task_desc = f"fix posts of actor {actor.actor_name}"
             self.task_arg = actor_id
             await self.normalPosts(self.actor_ids)
+            await self.start()
+
+    async def _fix_video_urls_of_actor(self, actor_id: int):
+        with DbCtrl.getSession() as session, session.begin():
+            actor = ActorCtrl.getActor(session, actor_id)
+            actor_info = ActorInfo(actor)
+            posts = PostCtrl.getPostsToFixVideoUrls(session, actor_id)
+            for post in posts:
+                await self.queue_mgr.enqueueFetchPost(actor_info, post)
+
+    async def fix_video_of_actor(self, actor_id: int):
+        with DbCtrl.getSession() as session, session.begin():
+            actor = ActorCtrl.getActor(session, actor_id)
+            if actor is None:
+                return
+
+            self.actor_ids = [actor_id]
+            self.task_desc = f"fix video of actor {actor.actor_name}"
+            self.task_arg = actor_id
+            await self._fix_video_urls_of_actor(actor_id)
             await self.start()
 
     async def manual(self):
         """
         custom logic to fix bugs etc
         """
-        self.task_type = TaskType.Manual
         self.task_desc = f"manual op"
         # TODO: implement manual logic
 

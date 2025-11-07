@@ -14,7 +14,7 @@ class ActorLogModel(BaseModel):
         ForeignKey("tab_actor.actor_id", ondelete="CASCADE"),
         index=True,
     )
-    log_type: Mapped[ActorLogType] = mapped_column(IntEnum(ActorLogType))
+    log_type: Mapped[ActorLogType] = mapped_column(IntEnum(ActorLogType), index=True)
     # maximal possible length
     log_param: Mapped[str] = mapped_column(String(DB_STR_LEN_REMARK), default="")
     log_time: Mapped[DateTime] = mapped_column(

@@ -1,6 +1,6 @@
 # Resource related operations
 import re
-from sqlalchemy import select, ScalarResult
+from sqlalchemy import select, ScalarResult, update
 from sqlalchemy.orm import Session
 
 from Configs import getResSizeList
@@ -30,40 +30,47 @@ def getResByIndex(session: Session, post_id: int, res_index: int) -> ResModel:
     return session.scalar(stmt)
 
 
-def getAllRes(session: Session, post_id: int) -> ScalarResult[ResModel]:
+def getAllResUrls(session: Session, post_id: int) -> ScalarResult[ResUrlModel]:
     """
-    get all resource records of a post
+    get all resource records of a post, order by res_index
     """
-    stmt = select(ResModel).where(ResModel.post_id == post_id)
+    stmt = (select(ResUrlModel)
+            .join(ResModel, ResUrlModel.url_id == ResModel.res_url_id)
+            .where(ResModel.post_id == post_id))
     return session.scalars(stmt)
 
 
-def addResUrl(session: Session, url: str) -> int:
-    index = url.find("?")
-    if index > 0:
-        url = url[:index]
+def parseResUrl(url: str) -> tuple[str, str, str]:
     match = re.match(
-        r'https://([^/]+)/data/[^/]+/[^/]+/([a-f0-9]{64})\.(\w+)', url)
+        r'https://([^/]+)/data/[a-f0-9]{2}/[a-f0-9]{2}/([a-f0-9]{64})\.(\w+)', url)
     if not match:
         LogUtil.error(f"无法解析资源URL: {url}")
-        return 0
+        return None
+    return match.group(1), match.group(2), match.group(3)
 
-    domain_name = match.group(1)
-    hash_hex = match.group(2)
-    extension = match.group(3)
 
-    # 获取或创建domain
+def getOrCreateResDomain(session: Session, domain_name: str) -> int:
     domain = session.scalar(select(ResDomainModel).where(
         ResDomainModel.domain_name == domain_name))
     if domain is None:
         domain = ResDomainModel(domain_name=domain_name)
         session.add(domain)
         session.flush()  # 获取domain.domain_id
+    return domain.domain_id
+
+
+def addResUrl(session: Session, url: str) -> int:
+    domain_name, hash_hex, extension = parseResUrl(url)
+    if domain_name is None:
+        return 0
+
+    # 获取或创建domain
+    domain_id = getOrCreateResDomain(session, domain_name)
 
     # 创建ResUrlModel
     hash_binary = PyUtil.hex2bytes(hash_hex)
     res_url = ResUrlModel(
-        domain_id=domain.domain_id,
+        domain_id=domain_id,
         hash_binary=hash_binary,
         extension=extension
     )
@@ -90,13 +97,31 @@ def addAllRes(session: Session, post_id: int, url_list: list[tuple[ResType, str]
 
     session.flush()
 
-def resetSkipToInit(session: Session, actor_id: int):
-    stmt = select(ActorFileInfoModel).where(ActorFileInfoModel.actor_id == actor_id)
-    actor_file_info = session.scalar(stmt)
-    if actor_file_info is None:
-        actor_file_info = ActorFileInfoModel(actor_id=actor_id)
-        session.add(actor_file_info)
-    actor_file_info.res_state = ResState.Init
+
+def fixResUrls(session: Session, post_id: int, url_list: list[tuple[ResType, str]], actor_name: str):
+    res_url_list = getAllResUrls(session, post_id)
+    res_url_dict = {res_url.hash_hex: res_url for res_url in res_url_list}
+
+    for _, url in url_list:
+        domain_name, hash_hex, extension = parseResUrl(url)
+        if domain_name is None:
+            continue
+        if hash_hex not in res_url_dict:
+            LogUtil.error(f"新增资源, {post_id} of {actor_name}, 资源URL: {url}")
+            continue
+        res_url = res_url_dict[hash_hex]
+        new_domain_id = getOrCreateResDomain(session, domain_name)
+        if res_url.domain_id != new_domain_id:
+            LogUtil.info(
+                f"资源域名更新, {post_id} of {actor_name}, {res_url.domain_name} to {domain_name}")
+            res_url.domain_id = new_domain_id
+        if res_url.extension != extension:
+            LogUtil.info(
+                f"资源扩展名更新, {post_id} of {actor_name}, {res_url.extension} to {extension}")
+            res_url.extension = extension
+
+    session.flush()
+
 
 def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
     _query = (select(ResModel.res_state, ResModel.res_size)
@@ -131,7 +156,7 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
     # print(state_arr)
     rsc_list: list[ResSizeCount] = []
     for i, state_map in enumerate(state_arr):
-        item = ResSizeCount(count_map = state_map)
+        item = ResSizeCount(count_map=state_map)
         if i == 0:
             item.min = 0
             item.max = res_size_list[i]
@@ -143,4 +168,3 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
             item.max = res_size_list[i]
         rsc_list.append(item)
     return rsc_list
-

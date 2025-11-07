@@ -7,8 +7,7 @@ from playwright.async_api import Page, Response, expect, TimeoutError as Playwri
 import Configs
 from Consts import ResType, WorkerType, NoticeType, ActorLogType
 from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
-from Models.ActorInfo import ActorInfo
-from Models.PostInfo import PostInfo
+from Models.ModelInfos import ActorInfo, PostInfo
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
 from Workers.ImageWait.ActorIconWait import ActorIconWait
@@ -29,8 +28,7 @@ class FetchActorWorker(BaseFetchWorker):
         self.actor_info: ActorInfo | None = None
         self.actor_icon_wait = ActorIconWait()
         self.actor_thumbnail_wait = ActorThumbnailWait()
-        self.actor_thumbnail_wait.set_wait(task.download_limit.allowResDownload(
-            ResType.Image))
+        self.actor_thumbnail_wait.set_wait(task.wait_thumbnail)
 
     async def processPosts(self, post_list: list[PostInfo], from_url: str) -> bool:
         reach_last = False
@@ -57,8 +55,7 @@ class FetchActorWorker(BaseFetchWorker):
                             await self.task.fix_more_posts(owner_actor.actor_id)
 
                     elif not post.completed:  # the post is not analysed yet
-                        await self.queue_mgr().enqueueFetchPost(
-                            self.actor_info, post_info)
+                        posts_to_enqueue.append(post_info)
                     else:  # all resources of the post are already added
                         await self.queue_mgr().enqueueAllRes(
                             self.actor_info, post, self.DownloadLimit())
@@ -80,10 +77,10 @@ class FetchActorWorker(BaseFetchWorker):
                     session, actor_id, ActorLogType.PostCount, post_count)
 
     @staticmethod
-    def addInvalidPostNotice(actor_name: str, page: int, post_id_str: str):
+    def addInvalidPostNotice(actor_name: str, post_id_str: str):
         with DbCtrl.getSession() as session, session.begin():
             NoticeCtrl.addNotice(
-                session, NoticeType.InvalidPost, actor_name, str(page), post_id_str)
+                session, NoticeType.InvalidPost, actor_name, post_id_str)
 
     def _loadSelector(self) -> str:
         return ".user-header"
@@ -164,22 +161,17 @@ class FetchActorWorker(BaseFetchWorker):
                 post_id_str = await article_locator.get_attribute("data-id")
                 if post_id_str is None:
                     continue
-                is_dm = post_id_str.startswith('DM')
-                try:
-                    post_id = int(post_id_str[2:]) if is_dm else int(
-                        post_id_str)
-                    if post_id > MAX_POST_ID:
-                        raise ValueError
-                except (ValueError, TypeError):
+                post_id = PostInfo.parsePostId(post_id_str)
+                if post_id == 0:
                     FetchActorWorker.addInvalidPostNotice(
-                        actor_name, i, post_id_str)
+                        actor_name, post_id_str)
                     LogUtil.error(
                         f"actor {actor_name} page {i} post {post_id_str} invalid")
                     continue
                 thumbnail_locator = article_locator.locator(
                     ".post-card__image-container")
                 has_thumbnail = (await thumbnail_locator.count()) > 0
-                post_list.append(PostInfo(post_id, is_dm, has_thumbnail))
+                post_list.append(PostInfo(post_id, post_id_str, has_thumbnail))
 
             reach_last_post = await self.processPosts(post_list, page.url)
             post_count += len(post_list)

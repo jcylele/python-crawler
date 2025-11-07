@@ -6,7 +6,7 @@ from playwright.async_api import Page, Locator, Response, TimeoutError as Playwr
 import Configs
 from Consts import WorkerType
 from Ctrls import DbCtrl, ActorCtrl, PathCtrl
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
 from Download import WebPool
 from WorkQueue.BaseQueueItem import BaseQueueItem

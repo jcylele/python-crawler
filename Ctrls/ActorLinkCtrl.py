@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from Consts import ActorLogType, ErrorCode, NoticeType
 from Ctrls import ActorCtrl, ActorLogCtrl, NoticeCtrl
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
@@ -22,7 +22,7 @@ def unlinkActors(session: Session, actor_ids: list[int]) -> ErrorCode:
                   for actor_id in actor_ids]
     main_actor_id = 0
     for actor in actor_list:
-        if not actor.is_linked():  # not linked
+        if not actor.is_linked:  # not linked
             return ErrorCode.UnlinkedActor
         if main_actor_id == 0:
             main_actor_id = actor.main_actor_id

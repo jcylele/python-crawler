@@ -4,7 +4,7 @@ from requests import Session
 
 import Configs
 from Consts import CacheKey
-from Models.ActorInfo import ActorInfo
+from Models.ModelInfos import ActorInfo
 
 __user_agents = [
     "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
@@ -77,9 +77,8 @@ def formatActorLinksUrl(actor_info: ActorInfo) -> str:
     return f"{formatActorHref(actor_info)}/links"
 
 
-def formatPostUrl(actor_info: ActorInfo, post_id: int, is_dm: bool) -> str:
-    post_prefix = is_dm and "DM" or ""
-    return f"{getRootUrl()}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_prefix}{post_id}"
+def formatPostUrl(actor_info: ActorInfo, post_id_str: str) -> str:
+    return f"{getRootUrl()}/{actor_info.actor_platform}/user/{actor_info.actor_link}/post/{post_id_str}"
 
 
 def formatFullUrl(relative_url: str) -> str:

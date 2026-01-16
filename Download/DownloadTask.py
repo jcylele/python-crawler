@@ -1,18 +1,19 @@
 import asyncio
+from datetime import datetime
 import os
 
 from sqlalchemy.orm import Session
 
 import Configs
-from Consts import PostFilter, ResType, TaskType, WorkerType
+from Consts import DateFormat, PostFilter, ResType, TaskType, WorkerType
 from Ctrls import ActorQueryCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ResFileCtrl
 from Download import WorkerMgr
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskQueueMgr import TaskQueueMgr
 from Models.ModelInfos import ActorInfo
-from Utils import LogUtil
+from Utils import LogUtil, PyUtil
 from routers.web_data import ActorUrl
-from routers.schemas_others import DownloadTaskResponse
+from routers.schemas_others import DownloadTaskResponse, WorkerProcessStats
 
 
 class DownloadTask:
@@ -29,6 +30,7 @@ class DownloadTask:
         self.task_desc = ""
         self.task_arg = 0
         self.actor_ids = []
+        self.worker_process_stats: dict[WorkerType, WorkerProcessStats] = {}
 
     @property
     def is_fix_posts(self) -> bool:
@@ -40,9 +42,31 @@ class DownloadTask:
 
     @property
     def wait_thumbnail(self) -> bool:
-        if self.task_type == TaskType.FixPost or self.task_type == TaskType.FixRes:
-            return False
         return self.download_limit.allowResDownload(ResType.Image)
+
+    def _getWorkerStats(self, worker_type: WorkerType) -> WorkerProcessStats:
+        worker_stats = self.worker_process_stats.get(worker_type)
+        if worker_stats is None:
+            worker_stats = WorkerProcessStats(
+                worker_type=worker_type.name,
+                failed_count=0,
+                process_count=0,
+                total_process_time=0,
+                last_process_time=""
+            )
+            self.worker_process_stats[worker_type] = worker_stats
+        return worker_stats
+
+    def onItemFailed(self, worker_type: WorkerType):
+        worker_stats = self._getWorkerStats(worker_type)
+        worker_stats.failed_count += 1
+
+    def onItemProcessed(self, worker_type: WorkerType, process_time: float):
+        worker_stats = self._getWorkerStats(worker_type)
+
+        worker_stats.process_count += 1
+        worker_stats.total_process_time += process_time
+        worker_stats.last_process_time = PyUtil.format_now(DateFormat.Time)
 
     async def start(self):
         """
@@ -180,7 +204,7 @@ class DownloadTask:
                 actor_info = ActorInfo()
                 actor_info.actor_platform = href_list[-3]
                 actor_info.actor_link = href_list[-1]
-                actor_info.actor_name = actor_url.actor_name
+                actor_info.actor_name = actor_url.actor_name or href_list[-1]
 
                 # enqueue actor if not exists
                 actor = ActorCtrl.getActorByInfo(session, actor_info)
@@ -263,17 +287,15 @@ class DownloadTask:
             self.task_desc = f"fix posts of actor {actor.actor_name}"
             self.task_arg = actor_id
             await self.normalPosts(self.actor_ids)
-            await self.start()
+        await self.start()
 
-    async def _fix_video_urls_of_actor(self, actor_id: int):
-        with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_id)
-            actor_info = ActorInfo(actor)
-            posts = PostCtrl.getPostsToFixVideoUrls(session, actor_id)
-            for post in posts:
-                await self.queue_mgr.enqueueFetchPost(actor_info, post)
+    async def _fix_video_urls_of_actor(self, session: Session, actor_info: ActorInfo, end_date: datetime):
+        posts = PostCtrl.getPostsToFixVideoUrls(
+            session, actor_info.actor_id, end_date)
+        for post in posts:
+            await self.queue_mgr.enqueueFetchPost(actor_info, post)
 
-    async def fix_video_of_actor(self, actor_id: int):
+    async def fix_video_of_actor(self, actor_id: int, end_date: datetime):
         with DbCtrl.getSession() as session, session.begin():
             actor = ActorCtrl.getActor(session, actor_id)
             if actor is None:
@@ -282,8 +304,14 @@ class DownloadTask:
             self.actor_ids = [actor_id]
             self.task_desc = f"fix video of actor {actor.actor_name}"
             self.task_arg = actor_id
-            await self._fix_video_urls_of_actor(actor_id)
-            await self.start()
+            await self._fix_video_urls_of_actor(session, ActorInfo(actor), end_date)
+        await self.start()
+
+    async def fix_actor_link(self):
+        pass
+
+    async def fix_actor_icon(self):
+        pass
 
     async def manual(self):
         """
@@ -291,6 +319,10 @@ class DownloadTask:
         """
         self.task_desc = f"manual op"
         # TODO: implement manual logic
+        actor_ids: list[int] = []
+        with DbCtrl.getSession() as session, session.begin():
+            actor_ids = ActorQueryCtrl.getActorsWithoutTotalPostCount(session)
+        await self.downloadActors(actor_ids)
 
     @staticmethod
     def initEnv():
@@ -314,8 +346,10 @@ class DownloadTask:
             type=self.task_type,
             arg=self.task_arg,
             download_limit=self.download_limit.toResponse(),
-            worker_count=self.queue_mgr.get_worker_count_map(),
-            queue_count=self.queue_mgr.get_queue_count_map()
+            worker_count=self.queue_mgr.get_worker_counts(),
+            queue_count=self.queue_mgr.get_queue_counts(),
+            worker_process_stats=sorted(
+                list(self.worker_process_stats.values()), key=lambda x: x.worker_type)
         )
         if self.task_type < TaskType.MaxSingleActor:
             response.actor_abstract = ActorCtrl.getActorAbstract(

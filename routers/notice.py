@@ -42,3 +42,4 @@ def delete_notice(notice_id: int, session: Session = Depends(DbCtrl.get_db_sessi
 def search_notice(actor_name: str, session: Session = Depends(DbCtrl.get_db_session)):
     notices = NoticeCtrl.searchNotice(session, actor_name)
     return UnifiedListResponse[NoticeResponse](data=notices)
+

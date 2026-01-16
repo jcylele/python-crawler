@@ -4,6 +4,7 @@ import asyncio
 
 from Consts import QueueType
 from WorkQueue.BaseQueueItem import BaseQueueItem, SentinelQueueItem
+from routers.schemas_others import CommonCount
 
 
 class QueueMgr(object):
@@ -40,19 +41,20 @@ class QueueMgr(object):
                 return False
         return True
 
-    def get_queue_count_map(self) -> dict[str, int]:
-        size_map = {}
+    def get_queue_counts(self) -> list[CommonCount]:
+        count_list = []
         for q_type, q in self.__all_queues.items():
             if not q.empty():
-                size_map[q_type.name] = q.qsize()
-        return size_map
+                count_list.append(CommonCount(
+                    name=q_type.name, count=q.qsize()))
+        return sorted(count_list, key=lambda x: x.name)
 
-    def get_worker_count_map(self) -> dict[str, int]:
-        size_map = {}
+    def get_worker_counts(self) -> list[CommonCount]:
+        count_list = []
         for q_type, count in self.__worker_count_map.items():
             if count > 0:
-                size_map[q_type.name] = count
-        return size_map
+                count_list.append(CommonCount(name=q_type.name, count=count))
+        return sorted(count_list, key=lambda x: x.name)
 
     async def put(self, queue_type: QueueType, item: BaseQueueItem):
         """

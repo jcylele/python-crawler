@@ -19,6 +19,7 @@ router = APIRouter(
 
 ActorTagFullResult: TypeAlias = UnifiedResponse[ActorTagFullResponse]
 
+
 def _format_full_tag(tag: ActorTagModel, used_info: TagUsedInfo | None = None) -> ActorTagFullResponse:
     base_tag_data = ActorTagResponse.model_validate(tag)
     if used_info is None:
@@ -66,8 +67,6 @@ def update_priorities(priority_list: list[CommonPriority], session: Session = De
 @router.get("/{tag_id}", response_model=ActorTagFullResult)
 def get_actor_tag(tag_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     tag = ActorTagCtrl.getActorTag(session, tag_id)
-    if tag is None:
-        return ActorTagFullResult(error_code=ErrorCode.TagNotFound)
     used_info = ActorTagCtrl.getTagUsedInfo(session, tag_id)
     return ActorTagFullResult(data=_format_full_tag(tag, used_info))
 

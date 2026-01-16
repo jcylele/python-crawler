@@ -80,15 +80,3 @@ class BaseWait:
             new_height = await page.evaluate("document.body.scrollHeight")
             if new_height == last_height:
                 break
-
-    async def save_icon(self, actor_info: ActorInfo, response: Response):
-        try:
-            icon_path = PathCtrl.icon_file_path(actor_info)
-            if not os.path.exists(icon_path):
-                with open(icon_path, "wb") as f:
-                    f.write(await response.body())
-                LogUtil.info(f"icon {icon_path} saved")
-            else:
-                LogUtil.info(f"icon {icon_path} already exists")
-        except Exception as e:
-            LogUtil.exception(e)

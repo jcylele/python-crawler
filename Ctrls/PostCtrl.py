@@ -1,12 +1,13 @@
 # PostModel related operations
 
+from datetime import datetime
 from sqlalchemy import ScalarResult, func, select, update, Select, exists, or_
 from sqlalchemy.orm import Session
 
 from Consts import ResState, ResType
 from Ctrls import ActorFileCtrl
 from Models.ActorModel import ActorModel
-from Models.ModelInfos import PostInfo
+from Models.ModelInfos import ActorInfo, PostInfo
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
 from Utils import PyUtil
@@ -28,15 +29,16 @@ def getMaxPostId(session: Session, actor_id: int) -> int:
     return result or 0
 
 
-def addPost(session: Session, actor_id: int, post_info: PostInfo):
+def addPost(session: Session, actor_info: ActorInfo, post_info: PostInfo):
     """
     add a post record
     """
     post = PostModel()
     post.post_id = post_info.post_id
     post.post_id_str = post_info.post_id_str
-    post.actor_id = actor_id
     post.has_thumbnail = post_info.has_thumbnail
+    post.actor_id = actor_info.actor_id
+    post.scan_version = actor_info.post_scan_version
     session.add(post)
     session.flush()
 
@@ -74,7 +76,7 @@ def filterQuery(_query: Select, form: PostFilterForm) -> Select:
         _query = _query.where(or_(
             PostModel.post_id_str.like(f"{form.post_id_prefix}%"),
             PostModel.post_id_str.like(f"DM{form.post_id_prefix}%")
-            ))
+        ))
     # comment
     if form.has_comment:
         _query = _query.where(PostModel.has_comment == True)
@@ -129,7 +131,7 @@ def getPostsOfActor(session: Session, actor_id: int, last_post_id: int = 0, only
     return session.scalars(_query)
 
 
-def getPostsToFixVideoUrls(session: Session, actor_id: int) -> ScalarResult[PostModel]:
+def getPostsToFixVideoUrls(session: Session, actor_id: int, end_date: datetime) -> ScalarResult[PostModel]:
     # 创建一个子查询来检查是否存在 res_type 为 Video 的 ResModel
     video_res_subquery = (
         select(1)
@@ -140,10 +142,9 @@ def getPostsToFixVideoUrls(session: Session, actor_id: int) -> ScalarResult[Post
     _query = (select(PostModel)
               .where(PostModel.actor_id == actor_id)
               .where(PostModel.completed == True)
-              .where(exists(video_res_subquery))
-              .order_by(PostModel.last_fetch_time.is_(None).desc(),
-                        PostModel.last_fetch_time,
-                        PostModel.post_id))
+              .where(PostModel.last_fetch_time is not None)
+              .where(PostModel.last_fetch_time < end_date)
+              .where(exists(video_res_subquery)))
     return session.scalars(_query)
 
 
@@ -160,3 +161,28 @@ def getPostCountsOfActor(session: Session, actor_id: int) -> tuple[int, int]:
         else:
             uncompleted_count = count
     return completed_count, uncompleted_count
+
+
+def hasMissingPosts(session: Session, actor_id: int, scan_version: int) -> bool:
+    """
+    Check if there are any posts with scan_version less than the actor's post_scan_version
+    """
+    stmt = (select(1)
+            .where(PostModel.actor_id == actor_id)
+            .where(PostModel.scan_version < scan_version).limit(1))
+    return session.scalar(stmt) is not None
+
+
+def refreshHasMissingPosts(session: Session):
+    """
+    Refresh the has_missing_posts flag for all actors
+    """
+    stmt = update(ActorModel).values(
+        has_missing_posts=exists(
+            select(1)
+            .where(PostModel.actor_id == ActorModel.actor_id)
+            .where(PostModel.scan_version < ActorModel.post_scan_version)
+        )
+    )
+    session.execute(stmt)
+    session.flush()

@@ -1,13 +1,15 @@
 import asyncio
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from Consts import TaskType
+from Consts import DateFormat, TaskType
 from Ctrls import DbCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
-from routers.web_data import GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, \
+from Utils import PyUtil
+from routers.web_data import FixVideoForm, GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, \
     NewDownloadForm, DownloadLimitForm
 from routers.schemas_others import CommonResponse, DownloadTaskResponse, UnifiedListResponse, UnifiedResponse
 
@@ -48,20 +50,36 @@ async def resume_actor(actor_id: int):
     return CommonResponse()
 
 
-@router.patch("/fix_posts/{actor_id}", response_model=CommonResponse)
-async def fix_posts(actor_id: int):
+async def _fix_posts_process(actor_id: int):
     limit = DownloadLimit(DownloadLimitForm.fixPostsLimit())
     task = NewTask(TaskType.FixPost)
     task.setLimit(limit)
     await task.fix_posts_of_actor(actor_id)
+
+
+@router.post("/fix_posts", response_model=CommonResponse)
+async def fix_posts(actor_ids: list[int]):
+    tasks = []
+    for actor_id in actor_ids:
+        tasks.append(asyncio.create_task(_fix_posts_process(actor_id)))
+    await asyncio.gather(*tasks)
     return CommonResponse()
 
-@router.patch("/fix_res/{actor_id}", response_model=CommonResponse)
-async def fix_res(actor_id: int):
+
+async def _fix_res_process(actor_id: int, end_date: datetime):
     limit = DownloadLimit(DownloadLimitForm.fixResLimit())
     task = NewTask(TaskType.FixRes)
     task.setLimit(limit)
-    await task.fix_video_of_actor(actor_id)
+    await task.fix_video_of_actor(actor_id, end_date)
+
+
+@router.post("/fix_res", response_model=CommonResponse)
+async def fix_res(form: FixVideoForm):
+    end_date = PyUtil.to_date(form.end_date, DateFormat.Date, True)
+    tasks = []
+    for actor_id in form.actor_ids:
+        tasks.append(asyncio.create_task(_fix_res_process(actor_id, end_date)))
+    await asyncio.gather(*tasks)
     return CommonResponse()
 
 
@@ -75,7 +93,7 @@ async def manual(form: GroupDownloadForm):
     return CommonResponse()
 
 
-async def _start_actor_download_task(actor_id: int, download_limit: DownloadLimitForm):
+async def _download_specific_process(actor_id: int, download_limit: DownloadLimitForm):
     limit = DownloadLimit(download_limit)
     task = NewTask(TaskType.Specific)
     task.setLimit(limit)
@@ -84,9 +102,11 @@ async def _start_actor_download_task(actor_id: int, download_limit: DownloadLimi
 
 @router.post("/specific", response_model=CommonResponse)
 async def download_specific(form: ActorIdDownloadForm):
+    tasks = []
     for actor_id in form.actor_ids:
-        asyncio.create_task(_start_actor_download_task(
-            actor_id, form.download_limit))
+        tasks.append(asyncio.create_task(_download_specific_process(
+            actor_id, form.download_limit)))
+    await asyncio.gather(*tasks)
     return CommonResponse()
 
 

@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from Consts import BoolEnum, ResType, SortType
+from Consts import BoolEnum, EFixFilter, ResType, SortType
 
 
 class TagUsedInfo(BaseModel):
@@ -22,12 +22,18 @@ class TagFilter(BaseModel):
     must_not_have: list[int]
 
 
+class LinkFilter(BaseModel):
+    linked: BoolEnum
+    min_link_count: int
+    contain_group_id: int
+
+
 class ActorConditionForm(BaseModel):
     name: str
-    linked: bool
     group_id_list: list[int]
     folder_id: int
     tag_filter: TagFilter
+    link_filter: LinkFilter
     min_score: int
     max_score: int
     has_remark: BoolEnum
@@ -36,6 +42,7 @@ class ActorConditionForm(BaseModel):
     comment_str: str
     post_completed: BoolEnum
     res_completed: BoolEnum
+    fix_filter: EFixFilter
 
     sort_items: list[SortItem]
 
@@ -86,11 +93,11 @@ class DownloadLimitForm(BaseModel):
 
     @staticmethod
     def fixPostsLimit():
-        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=1)
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size=0)
 
     @staticmethod
     def fixResLimit():
-        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=1)
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size=0)
 
 
 class ActorGroupCond(BaseModel):
@@ -122,6 +129,9 @@ class ActorUrl(BaseModel):
 class UrlDownloadForm(GroupDownloadForm):
     urls: list[ActorUrl]
 
+class FixVideoForm(BaseModel):
+    actor_ids: list[int]
+    end_date: str
 
 class CommonGroupForm(BaseModel):
     name: str
@@ -138,3 +148,9 @@ class GroupTimeStatsForm(BaseModel):
     start_date: str
     end_date: str
     group_ids: list[int]
+
+
+class ActorNameStatsForm(BaseModel):
+    min_len: int
+    max_len: int
+    limit: int

@@ -28,11 +28,13 @@ class PostModel(BaseModel):
     )
     last_fetch_time: Mapped[DateTime | None] = mapped_column(
         DateTime(timezone=True), nullable=True)
+    scan_version: Mapped[int] = mapped_column(default=0)
 
     # 在类定义后添加索引定义
     __table_args__ = (
         Index('idx_post_id_str', 'post_id_str',
               mysql_length=8),  # 使用 mysql_length 参数, 至少6位数字(DM开头)已经足够
+        Index('idx_actor_id_scan_version', 'actor_id', 'scan_version'),
     )
 
     actor: Mapped["ActorModel"] = relationship(

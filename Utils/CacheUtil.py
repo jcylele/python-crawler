@@ -1,6 +1,9 @@
+"""
+json文件管理，默认情况单层kv的json，不支持多层嵌套，不支持新增key
+"""
 import json
 
-from Consts import CacheFile, CacheKey
+from Consts import CacheFile, CacheKey, DateFormat
 from Utils import PyUtil
 
 _json_map: dict[CacheFile, dict[str, any]] = {}
@@ -24,7 +27,11 @@ def getValue(cache_file: CacheFile, key: CacheKey):
 
 def setValue(cache_file: CacheFile, key: CacheKey, value: any, save: bool = True):
     init(cache_file)
-    _json_map[cache_file][key.value] = value
+    _file = _json_map[cache_file]
+    # 默认不允许设置不存在的key
+    if key.value not in _file:
+        return
+    _file[key.value] = value
     if save:
         saveFile(cache_file)
 
@@ -55,3 +62,18 @@ def getSettings() -> dict[str, any]:
 
 def changeSetting(setting_name: CacheKey, setting_value: any):
     setValue(CacheFile.Settings, setting_name, setting_value)
+
+# 新增：获取上次运行时间的字典
+
+
+def getLastRunTimes() -> dict[str, str]:
+    return getJson(CacheFile.LastRunTime)
+
+
+# 新增：尝试更新上次运行时间
+def tryUpdateLastRunTime(api_path: str):
+    last_run_times = getLastRunTimes()
+
+    if api_path in last_run_times:
+        last_run_times[api_path] = PyUtil.format_now(DateFormat.Full)
+        saveFile(CacheFile.LastRunTime)

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 
 from Consts import CacheFile, CacheKey, QueueType, WorkerType
@@ -123,7 +124,36 @@ def formatActorFolderPath(actor_id: int, actor_name: str) -> str:
 
 
 def formatActorThumbnailFolderPath(actor_id: int, actor_name: str) -> str:
-    return f"{formatActorFolderPath(actor_id, actor_name)}\\_{actor_name}"
+    return f"{formatActorFolderPath(actor_id, actor_name)}\\{formatThumbnailFolderName(actor_name)}"
+
+
+def formatThumbnailFolderName(actor_name: str) -> str:
+    return f"_{actor_name}"
+
+
+def regex_thumbnail_file_name(url: str) -> str | None:
+    # clean file name from parameters
+    pure_file_name = url.split("/")[-1].split("?")[0]
+    if not pure_file_name:
+        return None
+
+    # 查找64个十六进制字符，后跟一个点，然后是文件扩展名
+    # 使用 re.fullmatch 来确保整个字符串都符合模式
+    # 使用 re.IGNORECASE 标志来忽略哈希值中字母的大小写
+    if not re.fullmatch(r"[0-9a-f]{64}\.\w+", pure_file_name, re.IGNORECASE):
+        return None
+
+    return pure_file_name
+
+
+def regex_actor_icon_file_name(url: str) -> tuple[str, str] | tuple[None, None]:
+    match = re.search(r"/icons/(\w+)/([\w\-\.]+)$", url)
+    if not match:
+        return (None, None)
+
+    platform = match.group(1)
+    actor_link = match.group(2)
+    return (platform, actor_link)
 
 
 def getQueueTypeByWorkerType(worker_type: WorkerType) -> QueueType:

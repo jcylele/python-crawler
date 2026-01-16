@@ -3,10 +3,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from fastapi.params import Query
 from Consts import DateFormat
-from Ctrls import ChartCtrl, DbCtrl, ResFileCtrl
+from Ctrls import ActorSimilarCtrl, ChartCtrl, DbCtrl, ResFileCtrl
 from Utils import PyUtil
-from routers.schemas_others import GroupTimeStats, TagCount, DownloadingVideoStats, UnifiedListResponse, UnifiedResponse
-from routers.web_data import GroupTimeStatsForm
+from routers.schemas_others import ActorNameStatsData, ActorNameStatsNode, GroupTimeStats, TagCount, DownloadingVideoStats, UnifiedListResponse, UnifiedResponse
+from routers.web_data import ActorNameStatsForm, GroupTimeStatsForm
 
 router = APIRouter(
     prefix="/api/chart",
@@ -57,3 +57,24 @@ def actor_group_time_stats(form: GroupTimeStatsForm, session: Session = Depends(
     actor_group_time_stats = ChartCtrl.get_actor_group_time_stats(
         session, start_date, end_date, form.group_ids)
     return UnifiedListResponse[GroupTimeStats](data=actor_group_time_stats)
+
+
+@router.post("/actor_name_prefix_stats", response_model=UnifiedResponse[ActorNameStatsNode])
+def actor_name_prefix_stats(form: ActorNameStatsForm, session: Session = Depends(DbCtrl.get_db_session)):
+    actor_name_prefix_stats = ActorSimilarCtrl.get_name_prefix_stats(
+        session, form.min_len, form.max_len, form.limit)
+    return UnifiedResponse[ActorNameStatsNode](data=actor_name_prefix_stats)
+
+
+@router.post("/actor_name_postfix_stats", response_model=UnifiedResponse[ActorNameStatsNode])
+def actor_name_postfix_stats(form: ActorNameStatsForm, session: Session = Depends(DbCtrl.get_db_session)):
+    actor_name_postfix_stats = ActorSimilarCtrl.get_name_postfix_stats(
+        session, form.min_len, form.max_len, form.limit)
+    return UnifiedResponse[ActorNameStatsNode](data=actor_name_postfix_stats)
+
+
+@router.post("/actor_name_substring_stats", response_model=UnifiedResponse[list[list[ActorNameStatsData]]])
+def actor_name_substring_stats(form: ActorNameStatsForm, session: Session = Depends(DbCtrl.get_db_session)):
+    actor_name_common_substring_stats = ActorSimilarCtrl.get_common_substring_stats(
+        session, form.min_len, form.max_len, form.limit)
+    return UnifiedResponse[list[list[ActorNameStatsData]]](data=actor_name_common_substring_stats)

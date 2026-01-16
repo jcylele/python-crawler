@@ -86,10 +86,12 @@ class TaskQueueMgr(QueueMgr):
         out_item = UrlQueueItem(item.url, item.from_url, out_extra)
         await self.put(QueueType.FileDownload, out_item)
 
-    async def requeueItem(self, queueType: QueueType, item: UrlQueueItem):
+    async def requeueItem(self, queueType: QueueType, item: UrlQueueItem) -> bool:
         item.onFailed()
         if item.shouldRetry():
             await self.put(queueType, item)
+            return True
+        return False
 
     async def enqueueResValid(self, item: UrlQueueItem):
         if not self.can_fetch_res:

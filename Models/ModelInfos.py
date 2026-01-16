@@ -14,14 +14,24 @@ class ActorInfo(object):
     actor_name: str
     actor_platform: str
     actor_link: str
+    post_scan_version: int
+    favorite_count: int
 
     def __init__(self, actor: "ActorModel" = None):
         if actor is None:
-            return
-        self.actor_id = actor.actor_id
-        self.actor_name = actor.actor_name
-        self.actor_platform = actor.actor_platform
-        self.actor_link = actor.actor_link
+            self.actor_id = 0
+            self.actor_name = ""
+            self.actor_platform = ""
+            self.actor_link = ""
+            self.post_scan_version = 0
+            self.favorite_count = 0
+        else:
+            self.actor_id = actor.actor_id
+            self.actor_name = actor.actor_name
+            self.actor_platform = actor.actor_platform
+            self.actor_link = actor.actor_link
+            self.post_scan_version = actor.post_scan_version
+            self.favorite_count = actor.favorite_count
 
     def __repr__(self):
         return f"{self.actor_name} of {self.actor_platform}"
@@ -45,11 +55,11 @@ class PostInfo(object):
         is_dm = id_str.startswith('DM')
         if is_dm:
             id_len = len(id_str)
-            if id_len > DB_STR_LEN_LONG: # DB varchar长度限制 目前未发现更长的
+            if id_len > DB_STR_LEN_LONG:  # DB varchar长度限制 目前未发现更长的
                 return 0
-            if id_len % DM_LEN_SINGLE_ID != 2: # DM开头，长度为2 + N * DM_LEN_SINGLE_ID
+            if id_len % DM_LEN_SINGLE_ID != 2:  # DM开头，长度为2 + N * DM_LEN_SINGLE_ID
                 return 0
-            id_str = id_str[2:2 + DM_LEN_SINGLE_ID] # 取第一个id作为post_id, 实测无重复
+            id_str = id_str[2:2 + DM_LEN_SINGLE_ID]  # 取第一个id作为post_id, 实测无重复
         try:
             post_id = int(id_str)
         except Exception:

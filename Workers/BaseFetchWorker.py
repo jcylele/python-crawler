@@ -1,11 +1,10 @@
 import asyncio
-import os
 from sqlalchemy.orm import Session
-from playwright.async_api import Page, Locator, Response, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Page, Locator, Response, Route, TimeoutError as PlaywrightTimeoutError
 
 import Configs
 from Consts import WorkerType
-from Ctrls import DbCtrl, ActorCtrl, PathCtrl
+from Ctrls import DbCtrl, ActorCtrl
 from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
 from Download import WebPool
@@ -37,7 +36,8 @@ class BaseFetchWorker(BaseWorker):
                     actor = ActorCtrl.addActor(
                         session, actor_info, self.init_category())
                     new_actor_ids.append(actor.actor_id)
-                
+
+                actor.favorite_count = actor_info.favorite_count
                 all_actor_ids.append(actor.actor_id)
 
         for actor_id in new_actor_ids:
@@ -51,11 +51,11 @@ class BaseFetchWorker(BaseWorker):
         if not href:
             raise SystemError("actor href attribute not found")
         href_list = href.split("/")
-
+        # platform and link are already in href_list
         actor_info = ActorInfo()
         actor_info.actor_platform = href_list[-3]
         actor_info.actor_link = href_list[-1]
-
+        # name
         actor_name_locator = actor_locator.locator(".user-card__name")
         actor_name = await actor_name_locator.text_content()
         if not actor_name:
@@ -64,28 +64,18 @@ class BaseFetchWorker(BaseWorker):
             raise SystemError("actor name is empty")
 
         actor_info.actor_name = actor_name.strip()
+
+        # favorite count
+        fav_locator = actor_locator.locator(".user-card__count b")
+        if (await fav_locator.count()) > 0:
+            fav_count = await fav_locator.text_content()
+            if fav_count and fav_count.strip():
+                try:
+                    actor_info.favorite_count = int(fav_count.strip())
+                except ValueError:
+                    pass
+
         return actor_info
-
-    async def _onFetched(self, item: BaseQueueItem, page: Page) -> bool:
-        raise NotImplementedError(
-            "subclasses of BaseFetchWorker must implement method _onFetched")
-
-    def _loadSelector(self) -> str:
-        raise NotImplementedError(
-            "subclasses of BaseFetchWorker must implement method _loadSelector")
-
-    def _url(self, item: BaseQueueItem) -> str:
-        raise NotImplementedError(
-            "subclasses of BaseFetchWorker must implement method _url")
-
-    def _checkFetch(self, session: Session, item: BaseQueueItem):
-        """check if the item should be fetched"""
-        raise NotImplementedError(
-            "subclasses of BaseFetchWorker must implement method _checkFetch")
-
-    def _beforeFetch(self, session: Session, item: BaseQueueItem):
-        """do some extra work before fetching"""
-        pass
 
     async def scrollToBottom(self, page: Page):
         await page.wait_for_timeout(1000)
@@ -113,6 +103,43 @@ class BaseFetchWorker(BaseWorker):
             if new_height == last_height:
                 break
 
+    async def _thumbnail_block_handler(self, route: Route):
+        request = route.request
+
+        # abort thumbnail request
+        if request.resource_type == "image":
+            pure_file_name = Configs.regex_thumbnail_file_name(request.url)
+            if pure_file_name:
+                await route.abort()
+                return
+
+        await route.continue_()
+
+    async def _onFetched(self, item: BaseQueueItem, page: Page) -> bool:
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _onFetched")
+
+    def _loadSelector(self) -> str:
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _loadSelector")
+
+    def _url(self, item: BaseQueueItem) -> str:
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _url")
+
+    def _checkFetch(self, session: Session, item: BaseQueueItem):
+        """check if the item should be fetched"""
+        raise NotImplementedError(
+            "subclasses of BaseFetchWorker must implement method _checkFetch")
+
+    def _beforeFetch(self, session: Session, item: BaseQueueItem):
+        """do some extra work before fetching"""
+        pass
+
+    async def _setup_page(self, page: Page):
+        """钩子：允许子类在页面导航前进行设置 (如请求拦截)"""
+        pass
+
     async def on_response(response: Response):
         pass
 
@@ -125,6 +152,7 @@ class BaseFetchWorker(BaseWorker):
         page = None
         try:
             page = await WebPool.acquire_page(self.workerType())
+            await self._setup_page(page)
             page.on("response", self.on_response)
             await page.goto(self._url(item), timeout=60000)
             fetch_succeed = False

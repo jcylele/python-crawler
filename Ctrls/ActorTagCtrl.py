@@ -1,9 +1,11 @@
-from sqlalchemy import ScalarResult, select, func, update
+from sqlalchemy import ScalarResult, delete, select, func, update
 from sqlalchemy.orm import Session
 
+from Consts import ErrorCode
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorTagModel import ActorTagModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from Models.Exceptions import BusinessException
 from routers.web_data import TagUsedInfo
 
 
@@ -26,7 +28,8 @@ def getAllTagsUsedInfo(session: Session) -> dict[int, TagUsedInfo]:
     result = session.execute(_query).fetchall()
     count_map: dict[int, TagUsedInfo] = {}
     for data in result:
-        count_map[data[0]] = TagUsedInfo(used_count=data[1], avg_score=float(data[2]))
+        count_map[data[0]] = TagUsedInfo(
+            used_count=data[1], avg_score=float(data[2]))
     return count_map  # type: ignore
 
 
@@ -49,7 +52,10 @@ def getTagUsedInfo(session: Session, tag_id: int) -> TagUsedInfo:
 
 
 def getActorTag(session: Session, tag_id: int) -> ActorTagModel:
-    return session.get(ActorTagModel, tag_id)
+    tag = session.get(ActorTagModel, tag_id)
+    if tag is None:
+        raise BusinessException(ErrorCode.TagNotFound)
+    return tag
 
 
 def setTagName(session: Session, tag_id: int, tag_name: str):
@@ -66,7 +72,6 @@ def addActorTag(session: Session, tag: ActorTagModel) -> ActorTagModel:
 
 
 def deleteActorTag(session: Session, tag_id: int):
-    tag = getActorTag(session, tag_id)
-    if tag is None:
-        return
-    session.delete(tag)
+    _query = delete(ActorTagModel) \
+        .where(ActorTagModel.tag_id == tag_id)
+    session.execute(_query)

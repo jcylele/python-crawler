@@ -2,7 +2,6 @@ from typing import TypeAlias
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from Consts import ErrorCode
 from Ctrls import ActorTagGroupCtrl, DbCtrl
 from routers.schemas import ActorTagGroupResponse
 from routers.schemas_others import CommonResponse, UnifiedResponse
@@ -16,6 +15,7 @@ router = APIRouter(
 )
 
 ActorTagGroupResult: TypeAlias = UnifiedResponse[ActorTagGroupResponse]
+
 
 @router.get("/list", response_model=UnifiedResponse[list[ActorTagGroupResponse]])
 def get_actor_tag_group_list(session: Session = Depends(DbCtrl.get_db_session)):
@@ -40,14 +40,13 @@ def update_priorities(priority_list: list[CommonPriority], session: Session = De
 @router.get("/{group_id}", response_model=ActorTagGroupResult)
 def get_actor_tag_group(group_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actor_tag_group = ActorTagGroupCtrl.getActorTagGroup(session, group_id)
-    if actor_tag_group is None:
-        return ActorTagGroupResult(error_code=ErrorCode.TagGroupNotFound)
     return ActorTagGroupResult(data=actor_tag_group)
 
 
 @router.post("/{group_id}/update", response_model=ActorTagGroupResult)
 def update_actor_tag_group(group_id: int, form: CommonGroupForm, session: Session = Depends(DbCtrl.get_db_session)):
-    actor_tag_group = ActorTagGroupCtrl.updateActorTagGroup(session, group_id, form)
+    actor_tag_group = ActorTagGroupCtrl.updateActorTagGroup(
+        session, group_id, form)
     return ActorTagGroupResult(data=actor_tag_group)
 
 
@@ -59,12 +58,12 @@ def delete_actor_tag_group(group_id: int, session: Session = Depends(DbCtrl.get_
 
 @router.patch("/{group_id}/add_tag/{tag_id}", response_model=CommonResponse)
 def add_tag_to_actor_tag_group(group_id: int, tag_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    error_code = ActorTagGroupCtrl.addTagToGroup(session, group_id, tag_id)
-    return CommonResponse(error_code=error_code)
+    ActorTagGroupCtrl.addTagToGroup(session, group_id, tag_id)
+    return CommonResponse()
 
 
 @router.patch("/{group_id}/remove_tag/{tag_id}", response_model=CommonResponse)
 def remove_tag_from_actor_tag_group(group_id: int, tag_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    error_code = ActorTagGroupCtrl.removeTagFromGroup(
+    ActorTagGroupCtrl.removeTagFromGroup(
         session, group_id, tag_id)
-    return CommonResponse(error_code=error_code)
+    return CommonResponse()

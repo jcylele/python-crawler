@@ -1,18 +1,19 @@
 
-from sqlalchemy import and_, or_, asc, desc, exists, func, select, Select
+from sqlalchemy import and_, or_, asc, desc, exists, func, select, Select, case
 from sqlalchemy.orm import Session, aliased
 
 import Configs
-from Consts import ResState, SortType, BoolEnum
+from Consts import EFixFilter, ResState, SortType, BoolEnum
 from Ctrls import ActorFileCtrl
+from Models.PostModel import PostModel
 from Models.ActorMainModel import ActorMainModel
-from Models.ActorModel import ActorModel
+from Models.ActorModel import ActorModel, actor_all_post_completed
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
 from Utils import PyUtil
 from routers.schemas_others import CommentCount
-from routers.web_data import ActorConditionForm, TagFilter
+from routers.web_data import ActorConditionForm, LinkFilter, TagFilter
 
 _sort_file_size_map: dict[SortType, list[ResState]] = {
     SortType.InitFileSize: [ResState.Init],
@@ -75,6 +76,43 @@ def _filterTagQuery(query: Select, form: TagFilter) -> Select:
     return query
 
 
+def _filterLinkQuery(query: Select, form: LinkFilter) -> Select:
+    if form.linked == BoolEnum.ALL:
+        return query
+    if form.linked == BoolEnum.FALSE:
+        query = query.where(ActorModel.main_actor_id == ActorModel.actor_id)
+        return query
+
+    # linked
+    query = query.where(ActorModel.main_actor_id != ActorModel.actor_id)
+
+    # 使用 GROUP BY 聚合查询，一次扫描解决数量和条件判断
+    stmt = select(ActorModel.main_actor_id).where(
+        ActorModel.main_actor_id.is_not(None)
+    ).group_by(ActorModel.main_actor_id)
+
+    having_clauses = []
+
+    # 1. 数量筛选 (Count)
+    if form.min_link_count > 0:
+        count_expr = func.count(ActorModel.actor_id)
+        having_clauses.append(count_expr >= form.min_link_count)
+
+    # 2. 分组逻辑筛选 (Group Logic)
+    if form.contain_group_id > 0:
+        cond = func.max(
+            case((ActorModel.actor_group_id == form.contain_group_id, 1), else_=0)
+        ) == 1
+        having_clauses.append(cond)
+
+    # 如果有筛选条件，则应用 HAVING 并通过 IN 子查询过滤主查询
+    if having_clauses:
+        stmt = stmt.having(and_(*having_clauses))
+        query = query.where(ActorMainModel.main_actor_id.in_(stmt))
+
+    return query
+
+
 def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
     form.name = form.name.strip()
     if form.name:
@@ -86,24 +124,27 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
             query = query.where(
                 ActorModel.actor_name.like(f"%{real_name_list[0]}%"))
 
-    if form.linked:
-        query = query.where(ActorModel.main_actor_id != ActorModel.actor_id)
-
     if form.group_id_list:
         query = query.where(ActorModel.actor_group_id.in_(form.group_id_list))
 
-    if form.folder_id:
-        query = query.where(
-            exists().where(
-                and_(
-                    ActorFavoriteRelationship.actor_id == ActorModel.actor_id,
-                    ActorFavoriteRelationship.folder_id == form.folder_id
-                )
+    if form.folder_id != 0:
+        folder_id_abs = abs(form.folder_id)  # 取绝对值
+        exists_condition = exists().where(
+            and_(
+                ActorFavoriteRelationship.actor_id == ActorModel.actor_id,
+                ActorFavoriteRelationship.folder_id == folder_id_abs
             )
         )
+        if form.folder_id < 0:
+            query = query.where(~exists_condition)
+        else:
+            query = query.where(exists_condition)
 
     # tag filter
     query = _filterTagQuery(query, form.tag_filter)
+
+    # link filter
+    query = _filterLinkQuery(query, form.link_filter)
 
     if form.min_score > 0:
         query = query.where(ActorMainModel.score >= form.min_score)
@@ -120,7 +161,7 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
         query = query.where(ActorMainModel.has_remark == False)
     else:
         pass
-    
+
     # comment filter, exact match
     if form.has_comment == BoolEnum.TRUE:
         query = query.where(ActorModel.has_comment == True)
@@ -131,12 +172,9 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
         query = query.where(ActorModel.has_comment == False)
     else:
         pass
-
+    # progess, including post and res
     if form.post_completed == BoolEnum.TRUE:
-        query = query.where(and_(
-            ActorModel.last_post_fetch_time is not None,
-            ActorModel.completed_post_count == ActorModel.total_post_count
-        ))
+        query = query.where(actor_all_post_completed(True))
         if form.res_completed != BoolEnum.ALL:
             subquery = select(ActorFileInfoModel.actor_id).where(
                 and_(
@@ -150,13 +188,23 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
             else:
                 query = query.where(subquery)
     elif form.post_completed == BoolEnum.FALSE:
-        query = query.where(or_(
-            ActorModel.last_post_fetch_time is None,
-            ActorModel.completed_post_count != ActorModel.total_post_count
-        ))
+        query = query.where(actor_all_post_completed(False))
     else:
         pass
-    
+
+    # post count filter
+    if form.fix_filter & EFixFilter.Overflow:
+        query = query.where(ActorModel.current_post_count >
+                            ActorModel.total_post_count)
+    if form.fix_filter & EFixFilter.TotalZero:
+        query = query.where(ActorModel.total_post_count == 0)
+    if form.fix_filter & EFixFilter.LinkNotChecked:
+        query = query.where(ActorModel.link_checked == False)
+    if form.fix_filter & EFixFilter.IconNotExists:
+        query = query.where(ActorModel.icon_hash.is_(None))
+    if form.fix_filter & EFixFilter.MissingPosts:
+        query = query.where(ActorModel.has_missing_posts == True)
+
     return query
 
 
@@ -182,27 +230,29 @@ def getActorCountInGroups(session: Session) -> dict[int, int]:
     return count_map
 
 
+def getActorCountInFolders(session: Session) -> dict[int, int]:
+    stmt = (select(ActorFavoriteRelationship.folder_id,
+                   func.count(ActorFavoriteRelationship.actor_id)).group_by(ActorFavoriteRelationship.folder_id))
+    count_map: dict[int, int] = {}
+    for row in session.execute(stmt):
+        count_map[row[0]] = row[1]
+    return count_map
+
+
 def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
     for sort_item in form.sort_items:
         order_func = sort_item.sort_asc and asc or desc
         if sort_item.sort_type == SortType.Score:
             _query = _query.order_by(order_func(ActorMainModel.score))
+        elif sort_item.sort_type == SortType.FavoriteCount:
+            _query = _query.order_by(order_func(ActorModel.favorite_count))
         elif sort_item.sort_type == SortType.TotalPostCount:
             _query = _query.order_by(order_func(ActorModel.total_post_count))
         elif sort_item.sort_type == SortType.CompletedPostCount:
-            _query = _query.order_by(order_func(ActorModel.completed_post_count))
+            _query = _query.order_by(order_func(
+                ActorModel.completed_post_count))
         elif sort_item.sort_type == SortType.CategoryTime:
             _query = _query.order_by(order_func(ActorModel.group_time))
-        elif sort_item.sort_type == SortType.LastPostFetchTime:
-            _query = _query.order_by(
-                order_func(ActorModel.last_post_fetch_time.is_(None)),
-                order_func(ActorModel.last_post_fetch_time)
-            )
-        elif sort_item.sort_type == SortType.LastResDownloadTime:
-            _query = _query.order_by(
-                order_func(ActorModel.last_res_download_time.is_not(None)),
-                order_func(ActorModel.last_res_download_time)
-            )
         elif sort_item.sort_type in _sort_file_size_map:
             res_state_list = _sort_file_size_map[sort_item.sort_type]
             subq = (
@@ -234,7 +284,7 @@ def _unsortedActorList(session: Session, form: ActorConditionForm) -> list[int]:
 
 
 def _needFileInfo(form: ActorConditionForm) -> bool:
-    if form.post_completed and form.res_completed:
+    if form.post_completed == BoolEnum.TRUE and form.res_completed != BoolEnum.ALL:
         return True
     if any(
         sort_item.sort_type in _sort_file_size_map
@@ -272,3 +322,10 @@ def getComments(session: Session) -> list[CommentCount]:
               .group_by(ActorModel.comment)
               .order_by(func.count(ActorModel.actor_id).desc(), ActorModel.comment))
     return [CommentCount(comment=row[0], count=row[1]) for row in session.execute(_query)]
+
+
+def getActorsWithoutTotalPostCount(session: Session) -> list[int]:
+    _query = (select(ActorModel.actor_id)
+              .where(ActorModel.total_post_count == 0)
+              .where(ActorModel.manual_done == False))
+    return list(session.scalars(_query))

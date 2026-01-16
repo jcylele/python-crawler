@@ -30,17 +30,24 @@ class DownloadLimit(object):
         return self.limit.res_type == res_type.value
 
     def allowResInfo(self, res_type: ResType) -> bool:
-        return self.limit.res_type <= res_type.value
+        allow_type = ResType(self.limit.res_type)
+        if allow_type == ResType.Image:
+            return True
+        elif allow_type == ResType.Video:
+            return res_type == ResType.Video
+        else:
+            return False
 
-    def canResInfo(self, res_type: ResType) -> bool:
+    def isSkipResInfo(self, res_type: ResType) -> bool:
         """
         skip unneeded res info
         """
         if res_type == ResType.Video:
-            return True
-        if self.progress.file_count >= self.limit.file_count > 0:
             return False
-        return True
+        elif res_type == ResType.Image:
+            return self.progress.file_count >= self.limit.file_count > 0
+        else:
+            return True
 
     def checkResSize(self, res_size: int) -> bool:
         return not (res_size > self.limit.single_file_size > 0)

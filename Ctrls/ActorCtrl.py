@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from Consts import ErrorCode, NoticeType, ActorLogType, ResState
 from Ctrls import DbCtrl, PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl, ResFileCtrl
+from Models.Exceptions import BusinessException
 from Models.ModelInfos import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
@@ -28,9 +29,6 @@ def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
 
 def getActorAbstract(session: Session, actor_id: int) -> ActorAbstract:
     actor = getActor(session, actor_id)
-    if actor is None:
-        LogUtil.error(f"get actorAbstract failed, actor {actor_id} not exist")
-        return None
     return ActorAbstract(
         actor_id=actor_id,
         actor_name=actor.actor_name,
@@ -39,7 +37,10 @@ def getActorAbstract(session: Session, actor_id: int) -> ActorAbstract:
 
 
 def getActor(session: Session, actor_id: int) -> ActorModel:
-    return session.get(ActorModel, actor_id)
+    actor = session.get(ActorModel, actor_id)
+    if actor is None:
+        raise BusinessException(ErrorCode.ActorNotFound)
+    return actor
 
 
 def getActors(session: Session, actor_ids: list[int]) -> list[ActorModel]:
@@ -202,23 +203,23 @@ def resetActorPosts(session: Session, actor_id: int):
     ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetPost)
 
 
-def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> tuple[ErrorCode, ActorModel]:
+def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> ActorModel:
     actor = getActor(session, actor_id)
     # no change
     if actor.actor_group_id == new_group_id:
-        return ErrorCode.GroupAlreadyIn, actor
+        raise BusinessException(ErrorCode.GroupAlreadyIn)
     # check group condition
     cond_id = ActorGroupCtrl.checkGroupCondition(
         session, actor, new_group_id)
     if cond_id != 0:
-        return ErrorCode.GroupCondFailed, actor
+        raise BusinessException(ErrorCode.GroupCondFailed)
 
     oldHas = actor.actor_group.has_folder
     new_group = ActorGroupCtrl.getActorGroup(session, new_group_id)
     newHas = new_group.has_folder
     if oldHas != newHas:
         if oldHas:
-            ActorFileCtrl.deleteAllRes(session, actor)
+            ActorFileCtrl.deleteActorFolder(session, actor)
             last_post_id = PostCtrl.getMaxPostId(session, actor_id)
             actor.last_post_id = last_post_id
         else:
@@ -231,7 +232,7 @@ def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> tupl
     ActorLogCtrl.addActorLog(
         session, actor_id, ActorLogType.Group, new_group_id)
 
-    return ErrorCode.Success, actor
+    return actor
 
 
 # endregion
@@ -274,12 +275,8 @@ def fixPostBelong(session: Session, post: PostModel, old_owner: ActorModel, new_
     LogUtil.info(
         f"fix post {post.post_id} belong changed from {old_owner.actor_name} to {new_owner.actor_name}")
     post.actor_id = new_owner.actor_id
-    # update post counts
-    old_owner.current_post_count -= 1
-    new_owner.current_post_count += 1
+    post.scan_version = new_owner.post_scan_version
     if post.completed:
-        old_owner.completed_post_count -= 1
-        new_owner.completed_post_count += 1
         # actor file info should be refreshed
         ActorFileCtrl.deleteActorFileInfos(
             [old_owner.actor_id, new_owner.actor_id])
@@ -313,23 +310,30 @@ def after_post_delete(mapper, connection, target: PostModel):
 
 @event.listens_for(PostModel, 'after_update')
 def after_post_update(mapper, connection, target: PostModel):
-    # 检查 'completed' 字段是否发生变化
+    # 检查 'completed', 有变化的话一定是False变True
     completed_history = inspect(target).attrs.completed.history
     completed_changed = completed_history.has_changes()
-    # 检查 'last_fetch_time' 是否发生变化
-    last_fetch_time_history = inspect(target).attrs.last_fetch_time.history
-    last_fetch_time_changed = last_fetch_time_history.has_changes()
+    # 检查 'actor_id' 是否发生变化
+    actor_id_history = inspect(target).attrs.actor_id.history
+    actor_id_changed = actor_id_history.has_changes()
 
-    if not completed_changed and not last_fetch_time_changed:
+    if not (completed_changed or actor_id_changed):
         return
 
     with DbCtrl.innerSession(connection) as session, session.begin():
-        actor = getActor(session, target.actor_id)
-        # 逻辑上一定是False变True，所以+1
-        if completed_changed:
-            actor.completed_post_count += 1
-        # 如果有更新，一定是func.now(), 所以直接拷贝赋值即可
-        if last_fetch_time_changed:
-            actor.last_post_fetch_time = target.last_fetch_time
+        if actor_id_changed:
+            old_actor = getActor(session, actor_id_history.deleted[0])
+            old_actor.current_post_count -= 1
+            if not completed_changed and target.completed:
+                old_actor.completed_post_count -= 1
+
+            new_actor = getActor(session, actor_id_history.added[0])
+            new_actor.current_post_count += 1
+            if target.completed:
+                new_actor.completed_post_count += 1
+        else:
+            new_actor = getActor(session, target.actor_id)
+            if completed_changed:
+                new_actor.completed_post_count += 1
 
 # endregion

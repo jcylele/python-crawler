@@ -1,17 +1,17 @@
 # Resource related operations
 import re
-from sqlalchemy import select, ScalarResult, update
+from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
 from Configs import getResSizeList
 from Consts import ResState, ResType
+from Ctrls import RequestCtrl
 from Models.PostModel import PostModel
 from Models.ResDomainModel import ResDomainModel
 from Models.ResModel import ResModel
 from Models.ResUrlModel import ResUrlModel
-from Models.ActorFileInfoModel import ActorFileInfoModel
 from Utils import LogUtil, PyUtil
-from routers.schemas_others import ResSizeCount
+from routers.schemas_others import ResSizeCount, MissingPost
 
 
 def getRes(session: Session, res_id: int) -> ResModel:
@@ -168,3 +168,20 @@ def getResSizesOfActor(session: Session, actor_id: int) -> list[ResSizeCount]:
             item.max = res_size_list[i]
         rsc_list.append(item)
     return rsc_list
+
+
+def get_missing_posts(session: Session, actor_id: int, scan_version: int) -> list[MissingPost]:
+    stmt = (select(PostModel.post_id_str, ResUrlModel.hash_binary)
+            .select_from(PostModel)
+            .join(ResModel, PostModel.post_id == ResModel.post_id)
+            .join(ResUrlModel, ResModel.res_url_id == ResUrlModel.url_id)
+            .where(PostModel.actor_id == actor_id)
+            .where(PostModel.scan_version < scan_version)
+            .order_by(PostModel.post_id)
+            .limit(5))
+    ret = session.execute(stmt).fetchall()
+    res_list: list[MissingPost] = []
+    for post_id_str, hash_binary in ret:
+        hash_url = RequestCtrl.formatHashUrl(PyUtil.bytes2hex(hash_binary))
+        res_list.append(MissingPost(post_id=post_id_str, hash_url=hash_url))
+    return res_list

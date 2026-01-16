@@ -14,12 +14,11 @@ class ResInfoWorker(BaseRequestWorker):
     def __init__(self, task):
         super().__init__(worker_type=WorkerType.ResInfo, task=task)
 
-
     async def _process(self, item: UrlQueueItem) -> bool:
         extra_info: ResInfoExtraInfo = item.extra_info
         download_limit = self.DownloadLimit()
         # skip (avoid DDOS protection)
-        if not download_limit.canResInfo(extra_info.res_type):
+        if download_limit.isSkipResInfo(extra_info.res_type):
             return True
 
         succeed, size = await self._head(item)
@@ -37,7 +36,7 @@ class ResInfoWorker(BaseRequestWorker):
 
             # update size
             res1.setSize(size)
-            
+
             # skip files which are too large for now
             if not download_limit.checkResSize(size):
                 LogUtil.info(f"{extra_info} too big: {size:,d}")

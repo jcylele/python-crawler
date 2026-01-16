@@ -17,10 +17,11 @@ router = APIRouter(
 
 ActorGroupResult: TypeAlias = UnifiedResponse[ActorGroupResponse]
 
+
 @router.get("/list", response_model=UnifiedResponse[list[ActorGroupResponse]])
 def get_actor_group_list(session: Session = Depends(DbCtrl.get_db_session)):
     actor_groups = ActorGroupCtrl.getAllActorGroups(session)
-    return UnifiedResponse[list[ActorGroupResponse]](data=actor_groups) 
+    return UnifiedResponse[list[ActorGroupResponse]](data=actor_groups)
 
 
 @router.post("/add", response_model=ActorGroupResult)
@@ -53,8 +54,8 @@ def update_actor_group(group_id: int, form: ActorGroupForm, session: Session = D
 
 @router.delete("/{group_id}", response_model=CommonResponse)
 def delete_actor_group(group_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    error_code = ActorGroupCtrl.deleteActorGroup(session, group_id)
-    return CommonResponse(error_code=error_code)
+    ActorGroupCtrl.deleteActorGroup(session, group_id)
+    return CommonResponse()
 
 
 @router.post("/{group_id}/set_condition", response_model=CommonResponse)

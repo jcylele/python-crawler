@@ -20,11 +20,6 @@ class ResValidWorker(BaseWorker):
     def __init__(self, task):
         super().__init__(worker_type=WorkerType.ResValid, task=task)
 
-    @staticmethod
-    def updateLastResDownloadTime(session: Session, actor_id: int):
-        actor = ActorCtrl.getActor(session, actor_id)
-        actor.last_res_download_time = func.now()
-
     async def _process(self, item: UrlQueueItem) -> bool:
         extra_info: ResFileExtraInfo = item.extra_info
 
@@ -72,8 +67,6 @@ class ResValidWorker(BaseWorker):
                     res2.res_duration = duration
 
             res2.setState(ResState.Down)
-            ResValidWorker.updateLastResDownloadTime(
-                dbSession, extra_info.actor_info.actor_id)
 
         # refresh downloaded progress
         self.DownloadLimit().onDownloaded(true_size)

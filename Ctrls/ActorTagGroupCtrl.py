@@ -1,9 +1,10 @@
-from sqlalchemy import ScalarResult, select, delete
+from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from Consts import ErrorCode
+from Ctrls import ActorTagCtrl
 from Models.ActorTagGroupModel import ActorTagGroupModel
-from Models.ActorTagModel import ActorTagModel
+from Models.Exceptions import BusinessException
 from routers.web_data import CommonGroupForm
 
 
@@ -14,7 +15,10 @@ def getAllActorTagGroups(session: Session) -> list[ActorTagGroupModel]:
 
 
 def getActorTagGroup(session: Session, group_id: int) -> ActorTagGroupModel:
-    return session.get(ActorTagGroupModel, group_id)
+    group = session.get(ActorTagGroupModel, group_id)
+    if group is None:
+        raise BusinessException(ErrorCode.TagGroupNotFound)
+    return group
 
 
 def __assign_form_to_group(group: ActorTagGroupModel, form: CommonGroupForm):
@@ -46,30 +50,24 @@ def deleteActorTagGroup(session: Session, group_id: int):
     )
 
 
-def addTagToGroup(session: Session, group_id: int, tag_id: int) -> ErrorCode:
-    tag = session.get(ActorTagModel, tag_id)
-    if tag is None:
-        return ErrorCode.TagNotFound
+def addTagToGroup(session: Session, group_id: int, tag_id: int):
+    tag = ActorTagCtrl.getActorTag(session, tag_id)
 
     if tag.tag_group_id is not None:
         if tag.tag_group_id == group_id:
-            return ErrorCode.Success
+            raise BusinessException(ErrorCode.TagInGroup)
         else:
-            return ErrorCode.TagInOtherGroup
+            raise BusinessException(ErrorCode.TagInOtherGroup)
 
     tag.tag_group_id = group_id
     session.flush()
-    return ErrorCode.Success
 
 
-def removeTagFromGroup(session: Session, group_id: int, tag_id: int) -> ErrorCode:
-    tag = session.get(ActorTagModel, tag_id)
-    if tag is None:
-        return ErrorCode.TagNotFound
+def removeTagFromGroup(session: Session, group_id: int, tag_id: int):
+    tag = ActorTagCtrl.getActorTag(session, tag_id)
 
     if tag.tag_group_id != group_id:
-        return ErrorCode.TagNotInGroup
+        raise BusinessException(ErrorCode.TagNotInGroup)
 
     tag.tag_group_id = None
     session.flush()
-    return ErrorCode.Success

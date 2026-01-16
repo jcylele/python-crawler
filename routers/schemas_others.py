@@ -1,7 +1,7 @@
+import string
 from typing import Generic, TypeAlias, TypeVar
-from pydantic import BaseModel
-from Consts import CacheKey, ErrorCode, TaskType
-from Models.ModelInfos import ActorInfo
+from pydantic import BaseModel, Field
+from Consts import CacheKey, ErrorCode, TaskType, WorkerType
 from routers.schemas import ActorFileInfoResponse
 from routers.web_data import DownloadLimitForm
 
@@ -15,6 +15,11 @@ class UnifiedResponse(BaseModel, Generic[T]):
 
 UnifiedListResponse: TypeAlias = UnifiedResponse[list[T]]
 CommonResponse: TypeAlias = UnifiedResponse[None]
+
+
+class CommonCount(BaseModel):
+    name: str
+    count: int = 0
 
 
 class DownloadProgress(BaseModel):
@@ -54,6 +59,7 @@ class ActorFileDetail(BaseModel):
     unfinished_post_count: int
     finished_post_count: int
     is_completed: bool
+    has_downloading: bool
 
 
 class NoticeCount(BaseModel):
@@ -77,14 +83,23 @@ class ActorAbstract(BaseModel):
     actor_group_id: int
 
 
+class WorkerProcessStats(BaseModel):
+    worker_type: str
+    failed_count: int
+    process_count: int
+    total_process_time: float
+    last_process_time: str
+
+
 class DownloadTaskResponse(BaseModel):
     uid: int
     type: TaskType
     arg: int
     download_limit: DownloadLimitResponse
-    worker_count: dict[str, int]
-    queue_count: dict[str, int]
+    worker_count: list[CommonCount]
+    queue_count: list[CommonCount]
     actor_abstract: ActorAbstract | None = None
+    worker_process_stats: list[WorkerProcessStats]
 
 
 class Settings(BaseModel):
@@ -129,6 +144,31 @@ class DownloadingVideoStats(BaseModel):
         self.file_size += file_size
         self.res_size += res_size
 
+
+class MissingPost(BaseModel):
+    post_id: str
+    hash_url: str
+
+
+class ActorWithMissingPosts(BaseModel):
+    actor_abstract: ActorAbstract
+    missing_posts: list[MissingPost]
+
+
 class PostFetchTimeStats(BaseModel):
     stat_date: str
     post_count: int
+    with_video_count: int
+
+
+class ActorNameStatsData(BaseModel):
+    segment: str
+    count: int
+
+
+class ActorNameStatsNode(ActorNameStatsData):
+    rank: int
+    children: list["ActorNameStatsNode"] = Field(default_factory=list)
+
+
+ActorNameStatsNode.model_rebuild()

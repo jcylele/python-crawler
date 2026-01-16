@@ -5,11 +5,10 @@ from playwright.async_api import Response
 
 from Ctrls import PathCtrl
 from Models.ModelInfos import ActorInfo
-from Utils import LogUtil
-from Workers.ImageWait.BaseWait import BaseWait
+from Workers.ImageWait.BaseIconWait import BaseIconWait
 
 
-class ActorIconsWait(BaseWait):
+class ActorIconsWait(BaseIconWait):
     def __init__(self):
         super().__init__(".user-card__user-icon > picture > img", False, True)
         self.actor_infos: list[ActorInfo] = []

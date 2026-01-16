@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from Consts import WorkerType
 from Ctrls import ActorCtrl, ActorQueryCtrl, DbCtrl, RequestCtrl
+from Models.ActorModel import ActorModel
 from Models.ModelInfos import ActorInfo
 from Utils import CacheUtil, LogUtil
 from WorkQueue.BaseQueueItem import BaseQueueItem

@@ -1,12 +1,12 @@
-from sqlalchemy import select, func, update
+from sqlalchemy import delete, select, func, update
 from sqlalchemy.orm import Session
 
 from Consts import ActorLogType, ErrorCode, NoticeType
 from Ctrls import ActorCtrl, ActorLogCtrl, NoticeCtrl
-from Models.ModelInfos import ActorInfo
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from Models.Exceptions import BusinessException
 from Utils import LogUtil
 from routers.web_data import LinkActorForm
 
@@ -15,7 +15,7 @@ def _distinct(id_list: list[int]) -> list[int]:
     return list(set(id_list))
 
 
-def unlinkActors(session: Session, actor_ids: list[int]) -> ErrorCode:
+def unlinkActors(session: Session, actor_ids: list[int]):
     actor_ids = _distinct(actor_ids)
     # check all actors belong to the same group, and all actors in the group are selected
     actor_list = [ActorCtrl.getActor(session, actor_id)
@@ -23,23 +23,22 @@ def unlinkActors(session: Session, actor_ids: list[int]) -> ErrorCode:
     main_actor_id = 0
     for actor in actor_list:
         if not actor.is_linked:  # not linked
-            return ErrorCode.UnlinkedActor
+            raise BusinessException(ErrorCode.UnlinkedActor)
         if main_actor_id == 0:
             main_actor_id = actor.main_actor_id
         elif main_actor_id != actor.main_actor_id:  # not in same link
-            return ErrorCode.MultiLinkGroups
+            raise BusinessException(ErrorCode.MultiLinkGroups)
 
     # check if all actors included
     stmt = select(func.count(ActorModel.actor_id)).where(
         ActorModel.main_actor_id == main_actor_id)
     linked_actor_count = session.scalar(stmt)
     if linked_actor_count > len(actor_ids):
-        return ErrorCode.NotAllLinkedActors
+        raise BusinessException(ErrorCode.NotAllLinkedActors)
 
     main_actor = ActorCtrl.getMainActor(session, main_actor_id)
     if main_actor is None:
-        LogUtil.error(f"main actor {main_actor_id} not found")
-        return ErrorCode.MainActorNotFound
+        raise BusinessException(ErrorCode.MainActorNotFound)
 
     for actor in actor_list:
         # copy main_actor
@@ -70,40 +69,34 @@ def unlinkActors(session: Session, actor_ids: list[int]) -> ErrorCode:
     session.delete(main_actor)
 
     session.flush()
-    return ErrorCode.Success
 
 
-def linkActors(session: Session, form: LinkActorForm) -> ErrorCode:
+def linkActors(session: Session, form: LinkActorForm):
     actor_ids = _distinct(form.actor_ids)
     # check all actors belong to the same link group or no group
     actor_list = [ActorCtrl.getActor(session, actor_id)
                   for actor_id in actor_ids]
     # will be removed at the end
     old_main_actor_ids = set()
-    old_main_actor_id = 0
-    linked_actor_count = 0
     for actor in actor_list:
         old_main_actor_ids.add(actor.main_actor_id)
-        if actor.is_linked:
-            linked_actor_count += 1
-            if old_main_actor_id == 0:
-                old_main_actor_id = actor.main_actor_id
-            elif old_main_actor_id != actor.main_actor_id:  # not in same link
-                return ErrorCode.MultiLinkGroups
 
     # check all linked actors are included
-    if old_main_actor_id != 0:
-        stmt = select(func.count(ActorModel.actor_id)).where(
-            ActorModel.main_actor_id == old_main_actor_id)
-        total_linked_actor_count = session.scalar(stmt)
-        if total_linked_actor_count > linked_actor_count:
-            return ErrorCode.NotAllLinkedActors
+    stmt = select(func.count(ActorModel.actor_id)).where(
+        ActorModel.main_actor_id.in_(old_main_actor_ids))
+    total_linked_actor_count = session.scalar(stmt)
+    if total_linked_actor_count > len(actor_ids):
+        raise BusinessException(ErrorCode.NotAllLinkedActors)
 
-    # choose a new main_actor_id from actor_ids, exclude old_main_actor_id
+    # choose a new main_actor_id from actor_ids, exclude old ones
+    new_main_actor_id = 0
     for actor_id in actor_ids:
-        new_main_actor_id = -actor_id
-        if new_main_actor_id != old_main_actor_id:
+        if (-actor_id) not in old_main_actor_ids:
+            new_main_actor_id = -actor_id
             break
+    if new_main_actor_id == 0:
+        raise BusinessException(ErrorCode.NoNewMainActor)
+
     # create a new main_actor
     new_main_actor = ActorMainModel(
         main_actor_id=new_main_actor_id,
@@ -142,12 +135,11 @@ def linkActors(session: Session, form: LinkActorForm) -> ErrorCode:
     session.flush()
 
     # remove old main_actors along with rel_tags
-    for main_actor_id in old_main_actor_ids:
-        main_actor = session.get(ActorMainModel, main_actor_id)
-        if main_actor:
-            session.delete(main_actor)
+    stmt = delete(ActorMainModel).where(
+        ActorMainModel.main_actor_id.in_(old_main_actor_ids))
+    session.execute(stmt)
+    session.flush()
 
-    return ErrorCode.Success
 
 
 def getGroupsOfLinkedActors(session: Session, actor_id: int) -> list[int]:

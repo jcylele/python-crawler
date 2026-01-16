@@ -7,9 +7,10 @@ from fastapi.params import Query, Body
 
 import Configs
 from Consts import ErrorCode
-from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, ActorSimilarCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ManualCtrl, ResFileCtrl
+from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ResFileCtrl
+from Models.Exceptions import BusinessException
 from routers.schemas import ActorFileInfoResponse, ActorLogResponse, ActorResponse
-from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, PostFetchTimeStats, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
+from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, MissingPost, PostFetchTimeStats, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
 from routers.web_data import ActorConditionForm, BatchActorGroup, LinkActorForm
 
 router = APIRouter(
@@ -29,10 +30,16 @@ def get_actor_count(form: ActorConditionForm, session: Session = Depends(DbCtrl.
     return UnifiedResponse[int](data=actor_count)
 
 
-@router.get("/group_count", response_model=UnifiedResponse[dict[int, int]])
+@router.get("/actor_count_in_groups", response_model=UnifiedResponse[dict[int, int]])
 def get_actor_count_of_groups(session: Session = Depends(DbCtrl.get_db_session)):
     group_count = ActorQueryCtrl.getActorCountInGroups(session)
     return UnifiedResponse[dict[int, int]](data=group_count)
+
+
+@router.get("/actor_count_in_folders", response_model=UnifiedResponse[dict[int, int]])
+def get_actor_count_of_folders(session: Session = Depends(DbCtrl.get_db_session)):
+    folder_count = ActorQueryCtrl.getActorCountInFolders(session)
+    return UnifiedResponse[dict[int, int]](data=folder_count)
 
 
 @router.post("/list", response_model=UnifiedResponse[list[int]])
@@ -44,10 +51,7 @@ def get_actor_list(*, form: ActorConditionForm, limit: int, start: int, session:
 @router.post("/link", response_model=ActorListResult)
 def link_actors(form: LinkActorForm, session: Session = Depends(DbCtrl.get_db_session)):
     # complex logic, ensure transaction is done
-    error_code = ActorLinkCtrl.linkActors(session, form)
-
-    if error_code != ErrorCode.Success:
-        return ActorListResult(error_code=error_code)
+    ActorLinkCtrl.linkActors(session, form)
 
     actors = [ActorCtrl.getActor(session, actor_id)
               for actor_id in form.actor_ids]
@@ -56,11 +60,7 @@ def link_actors(form: LinkActorForm, session: Session = Depends(DbCtrl.get_db_se
 
 @router.post("/unlink", response_model=ActorListResult)
 def unlink_actors(actor_ids: list[int], session: Session = Depends(DbCtrl.get_db_session)):
-    error_code = ActorLinkCtrl.unlinkActors(session, actor_ids)
-
-    if error_code != ErrorCode.Success:
-        return ActorListResult(error_code=error_code)
-
+    ActorLinkCtrl.unlinkActors(session, actor_ids)
     actors = [ActorCtrl.getActor(session, actor_id)
               for actor_id in actor_ids]
     return ActorListResult(data=actors)
@@ -70,9 +70,12 @@ def unlink_actors(actor_ids: list[int], session: Session = Depends(DbCtrl.get_db
 def batch_set_group(form: BatchActorGroup, session: Session = Depends(DbCtrl.get_db_session)):
     ar_list = []
     for actor_id in form.actor_ids:
-        error_code, actor = ActorCtrl.changeActorGroup(
-            session, actor_id, form.group_id)
-        ar_list.append(ActorResult(error_code=error_code, data=actor))
+        try:
+            actor = ActorCtrl.changeActorGroup(
+                session, actor_id, form.group_id)
+        except BusinessException as e:
+            ar_list.append(ActorResult(error_code=e.error_code))
+        ar_list.append(ActorResult(data=actor))
     return UnifiedResponse[list[ActorResult]](data=ar_list)
 
 
@@ -82,11 +85,6 @@ def clear_folder_by_group(group_id: int, session: Session = Depends(DbCtrl.get_d
     for actor in actors:
         ActorFileCtrl.clearActorFolder(session, actor)
     return CommonResponse()
-
-
-@router.get("/validate_all_file_info", response_model=UnifiedResponse[int])
-def validate_all_file_info(session: Session = Depends(DbCtrl.get_db_session)):
-    return CommonResponse(error_code=ErrorCode.Unavailable)
 
 
 @router.get("/comments", response_model=UnifiedListResponse[CommentCount])
@@ -100,24 +98,20 @@ def get_comments(session: Session = Depends(DbCtrl.get_db_session)):
 @router.get("/{actor_id}", response_model=ActorResult)
 def get_actor(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actor = ActorCtrl.getActor(session, actor_id)
-    if actor is None:
-        return ActorResult(error_code=ErrorCode.ActorNotFound)
     return ActorResult(data=actor)
 
 
 @router.get("/{actor_id}/abstract", response_model=UnifiedResponse[ActorAbstract])
 def get_actor_abstract(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actor_abstract = ActorCtrl.getActorAbstract(session, actor_id)
-    if actor_abstract is None:
-        return UnifiedResponse[ActorAbstract](error_code=ErrorCode.ActorNotFound)
     return UnifiedResponse[ActorAbstract](data=actor_abstract)
 
 
 @router.patch("/{actor_id}/group", response_model=ActorResult)
 def change_actor_group(actor_id: int, actor_group_id: int = Query(alias='val'), session: Session = Depends(DbCtrl.get_db_session)):
-    error_code, actor = ActorCtrl.changeActorGroup(
+    actor = ActorCtrl.changeActorGroup(
         session, actor_id, actor_group_id)
-    return ActorResult(error_code=error_code, data=actor)
+    return ActorResult(data=actor)
 
 
 @router.patch("/{actor_id}/score", response_model=ActorListResult)
@@ -197,23 +191,25 @@ def get_downloading_files(actor_id: int, session: Session = Depends(DbCtrl.get_d
 
 
 @router.delete("/{actor_id}/remove_downloading_files", response_model=CommonResponse)
-def remove_downloading_files(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+def remove_downloading_files(actor_id: int, percent: int = Query(default=100), session: Session = Depends(DbCtrl.get_db_session)):
     actor = ActorCtrl.getActor(session, actor_id)
-    ResFileCtrl.removeDownloadingFilesOfActor(session, actor)
+    ResFileCtrl.removeDownloadingFilesOfActor(session, actor, percent / 100)
     return CommonResponse()
 
 
 @router.get("/{actor_id}/rename_files", response_model=CommonResponse)
 def rename_actor_files(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actor = ActorCtrl.getActor(session, actor_id)
-    ResFileCtrl.rename_actor_files(session, actor)
+    ResFileCtrl.rename_actor_videos(session, actor)
     return CommonResponse()
+
 
 @router.patch("/{actor_id}/remove_by_dir", response_model=CommonResponse)
 def remove_by_dir(actor_id: int, is_landscape: bool = Query(default=False), session: Session = Depends(DbCtrl.get_db_session)):
     actor = ActorCtrl.getActor(session, actor_id)
     ResFileCtrl.remove_by_dir(session, actor, is_landscape)
     return CommonResponse()
+
 
 @router.get("/{actor_id}/linked", response_model=UnifiedResponse[list[int]])
 def get_linked_actors(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
@@ -248,3 +244,23 @@ def get_post_fetch_time_stats(actor_id: int, session: Session = Depends(DbCtrl.g
     post_fetch_time_stats = ActorFileCtrl.getPostFetchTimeStats(
         session, actor_id)
     return UnifiedListResponse[PostFetchTimeStats](data=post_fetch_time_stats)
+
+
+@router.get("/{actor_id}/post_fetch_dates", response_model=UnifiedListResponse[str])
+def get_post_fetch_dates(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    post_fetch_dates = ActorFileCtrl.getPostFetchDates(session, actor_id)
+    return UnifiedListResponse[str](data=post_fetch_dates)
+
+
+@router.get("/{actor_id}/missing_posts", response_model=UnifiedListResponse[MissingPost])
+def get_missing_posts(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    actor = ActorCtrl.getActor(session, actor_id)
+    missing_posts = ResCtrl.get_missing_posts(
+        session, actor_id, actor.post_scan_version)
+    return UnifiedListResponse[MissingPost](data=missing_posts)
+
+
+@router.post("/{actor_id}/rename", response_model=CommonResponse)
+def rename_actor(actor_id: int, actor_name: str = Body(default="", media_type="text/plain"), session: Session = Depends(DbCtrl.get_db_session)):
+    ActorFileCtrl.renameActor(session, actor_id, actor_name)
+    return CommonResponse()

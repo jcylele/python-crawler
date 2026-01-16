@@ -4,6 +4,7 @@ import re
 import shutil
 import aiofiles
 import aiohttp
+from imagehash import ImageHash, hex_to_hash
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
@@ -102,22 +103,37 @@ async def check_size(session: Session, file_path: str, res_id: int):
         print(file_size == res.res_size, file_size)
 
 
-def renameThumbnailFolder(session: Session):
+def renameThumbnailFolder():
     with os.scandir(Configs.getRootFolder()) as it1:
         for entry1 in it1:
             if entry1.is_file():
                 continue
             match_obj = re.match(r'^(\S+)_(\d+)$', entry1.name)
             if match_obj is None:
+                LogUtil.warning(
+                    f"skipping invalid actor folder name: {entry1.name}")
                 continue
             actor_name = match_obj.group(1)
             with os.scandir(entry1.path) as it2:
+                folder_found = False
+                folder_name = f"_{actor_name}"
                 for entry2 in it2:
                     if entry2.is_file():
                         continue
                     if entry2.name == Configs.ThumbnailFolder:
+                        LogUtil.info(
+                            f"renamed thumbnail folder of {entry1.name}")
                         os.rename(entry2.path, os.path.join(
-                            entry1.path, f"_{actor_name}"))
+                            entry1.path, folder_name))
+                        folder_found = True
+                        break
+                    if entry2.name == folder_name:
+                        folder_found = True
+                        break
+                if not folder_found:
+                    LogUtil.info(f"created thumbnail folder of {entry1.name}")
+                    os.makedirs(os.path.join(
+                        entry1.path, folder_name))
 
 
 def printResUrl(session: Session):
@@ -145,8 +161,37 @@ async def testRedirect(url: str):
         print("Error:")
         print(e)
 
+
 def fixNotice(session: Session):
-    stmt = select(NoticeModel).where(NoticeModel.notice_type == NoticeType.InvalidPost)
+    stmt = select(NoticeModel).where(
+        NoticeModel.notice_type == NoticeType.InvalidPost)
     notices = session.scalars(stmt)
     for notice in notices:
         notice.refreshChecksum()
+
+
+def allPureNames(session: Session):
+    stmt = select(ActorModel.actor_name).where(ActorModel.actor_group_id != 3)
+    actor_names = session.scalars(stmt)
+    all_pure_names = set()
+    for actor_name in actor_names:
+        pure_name = ActorSimilarCtrl._possible_pure_name(actor_name)
+        if pure_name is not None:
+            all_pure_names.add(pure_name)
+
+    sorted_list = sorted(all_pure_names)
+    with open(os.path.join(Configs.getRootFolder(), "pure_names.txt"), "w", encoding="utf-8") as f:
+        for pure_name in sorted_list:
+            f.write(pure_name + "\n")
+
+def differ_icon(session: Session):
+    actor_ids = [14799, 11852]
+    icon_hashes = []
+    for actor_id in actor_ids:
+        stmt = select(ActorModel.icon_hash).where(ActorModel.actor_id == actor_id)
+        icon_hash = session.scalar(stmt)
+        icon_hashes.append(int(icon_hash, 16))
+    for hash in icon_hashes:
+        print(hex(hash))
+
+

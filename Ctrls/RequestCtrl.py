@@ -64,6 +64,9 @@ def getRootUrl() -> str:
 def formatActorsUrl(start_index: int) -> str:
     return f"{getRootUrl()}/artists?o={start_index}"
 
+def formatHashUrl(hash_str: str) -> str:
+    return f"{getRootUrl()}/search_hash?hash={hash_str}"
+    
 
 def formatActorHref(actor_info: ActorInfo) -> str:
     return f"{getRootUrl()}/{actor_info.actor_platform}/user/{actor_info.actor_link}"

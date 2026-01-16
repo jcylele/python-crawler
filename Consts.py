@@ -2,6 +2,7 @@ from enum import Enum, IntFlag, auto, IntEnum
 
 
 class DateFormat(Enum):
+    Time = '%H:%M:%S'
     Date = '%Y-%m-%d'
     MonthDay = '%m-%d'
     Full = '%Y-%m-%d %H:%M:%S'
@@ -10,6 +11,8 @@ class DateFormat(Enum):
 class CacheFile(Enum):
     CustomPage = 'configs/cache.json'
     Settings = 'configs/settings.json'
+    LastRunTime = 'configs/last_run_time.json'
+    SimilarConfigs = 'configs/similar_configs.json'
 
 
 class CacheKey(Enum):
@@ -21,6 +24,15 @@ class CacheKey(Enum):
     ServerPort = 'ServerPort'
     RootFolder = 'RootFolder'
     ShowBrowser = 'ShowBrowser'
+    # SimilarConfigs
+    SimilarIconThreshold = 'similar_icon_threshold'
+    SimilarMinSubstringLen = 'min_substring_len'
+    SimilarMinPureNameLen = 'min_pure_name_len'
+    SimilarNameSubstringSkip = 'similar_name_substring_skip'
+    SimilarNamePreFix = 'similar_name_pre_fix'
+    SimilarNamePostFix = 'similar_name_post_fix'
+    SimilarSpSplitChars = 'sp_split_chars'
+    SimilarSpLastChars = 'sp_last_chars'
 
 
 class GroupCondType(Enum):
@@ -28,6 +40,7 @@ class GroupCondType(Enum):
     MaxScore = 1  # param: score
     HasAnyTag = 2  # param: bool
     Linked = 3  # param: bool
+    HasRemark = 4  # param: bool
 
 
 class NoticeType(Enum):
@@ -37,6 +50,7 @@ class NoticeType(Enum):
     SameActorName = 3  # same name, different platform
     HasLinkedAccount = 4  # actor has linked accounts
     SimilarActorName = 5  # actor name is similar
+    SimilarIcon = 6  # icon is similar
 
 
 class ActorLogType(Enum):
@@ -54,6 +68,7 @@ class ActorLogType(Enum):
 
 
 class ResType(Enum):
+    Null = 0
     Image = 1
     Video = 2
 
@@ -131,8 +146,7 @@ class SortType(Enum):
     InitFileSize = auto()
     DownFileSize = auto()
     TotalFileSize = auto()
-    LastPostFetchTime = auto()
-    LastResDownloadTime = auto()
+    FavoriteCount = auto()
 
 
 class EActorGroupFlag(IntFlag):
@@ -144,10 +158,19 @@ class EActorGroupFlag(IntFlag):
     ShowVideoInfo = 1 << 2
 
 
+class EFixFilter(IntFlag):
+    Overflow = 1  # current post count > total post count
+    TotalZero = 1 << 1  # total post count = 0
+    LinkNotChecked = 1 << 2  # link not checked
+    IconNotExists = 1 << 3  # icon not exists
+    MissingPosts = 1 << 4  # actor has missing posts
+
+
 class ErrorCode(IntEnum):
     Success = 0
 
     Unavailable = 1
+    ServerError = 2
 
     MainActorNotFound = 101
     ActorNotFound = 102
@@ -159,6 +182,7 @@ class ErrorCode(IntEnum):
     MultiLinkGroups = 201
     NotAllLinkedActors = 202
     UnlinkedActor = 203
+    NoNewMainActor = 204
 
     GroupAlreadyIn = 301
     GroupCondFailed = 302
@@ -166,3 +190,6 @@ class ErrorCode(IntEnum):
 
     TagInOtherGroup = 401
     TagNotInGroup = 402
+    TagInGroup = 403
+
+    BatchFileInfoTooLarge = 501

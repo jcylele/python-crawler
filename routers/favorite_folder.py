@@ -53,8 +53,6 @@ def delete_folder(folder_id: int, session: Session = Depends(DbCtrl.get_db_sessi
 @router.get("/{folder_id}", response_model=FavoriteFolderResult)
 def get_folder_detail(folder_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     folder = FavoriteFolderCtrl.getFolder(session, folder_id)
-    if folder is None:
-        return FavoriteFolderResult(error=ErrorCode.FolderNotFound)
     return FavoriteFolderResult(data=folder)
 
 

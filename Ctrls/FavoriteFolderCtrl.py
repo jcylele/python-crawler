@@ -1,6 +1,8 @@
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, func
 from sqlalchemy.orm import Session
 
+from Consts import ErrorCode
+from Models.Exceptions import BusinessException
 from routers.web_data import CommonGroupForm
 from Models.FavoriteFolderModel import FavoriteFolderModel
 from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
@@ -21,11 +23,14 @@ def createFolder(session: Session, form: CommonGroupForm) -> FavoriteFolderModel
 
 
 def getFolder(session: Session, folder_id: int) -> FavoriteFolderModel:
-    return session.get(FavoriteFolderModel, folder_id)
+    folder = session.get(FavoriteFolderModel, folder_id)
+    if folder is None:
+        raise BusinessException(ErrorCode.FolderNotFound)
+    return folder
 
 
 def updateFolder(session: Session, folder_id: int, form: CommonGroupForm) -> FavoriteFolderModel:
-    ff = session.get(FavoriteFolderModel, folder_id)
+    ff = getFolder(session, folder_id)
     __assign_form_to_folder(ff, form)
     session.flush()
     return ff

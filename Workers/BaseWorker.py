@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from Download.DownloadTask import DownloadTask
@@ -43,7 +44,8 @@ class BaseWorker:
 
     async def putback_item(self, item: BaseQueueItem):
         LogUtil.warning(f"{self.workerType().name} requeueing item: {item}")
-        await self.queue_mgr().requeueItem(self.__queueType, item)
+        if not await self.queue_mgr().requeueItem(self.__queueType, item):
+            self.task.onItemFailed(self.workerType())
 
     async def get_item(self) -> BaseQueueItem:
         return await self.queue_mgr().get(self.__queueType)
@@ -72,8 +74,12 @@ class BaseWorker:
                 processed = False
                 try:
                     LogUtil.debug(f"{self.workerType().name} process {item}")
+                    start_time = time.time()
                     processed = await self._process(item)
-                    if not processed:
+                    if processed:
+                        self.task.onItemProcessed(
+                            self.workerType(), time.time() - start_time)
+                    else:
                         await self.putback_item(item)
                 except asyncio.CancelledError:
                     # await self.putback_item(item)

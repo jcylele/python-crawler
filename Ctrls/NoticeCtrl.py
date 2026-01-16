@@ -31,9 +31,10 @@ def getNoticesOfType(session: Session, notice_type: NoticeType, limit: int = 0, 
 
 
 def deleteNoticesOfType(session: Session, notice_type: NoticeType):
-    _query = update(NoticeModel) \
-        .where(NoticeModel.notice_type == notice_type) \
-        .values(deleted=True)
+    _query = (update(NoticeModel)
+              .where(NoticeModel.notice_type == notice_type)
+              .where(NoticeModel.deleted == False)
+              .values(deleted=True))
     session.execute(_query)
 
 
@@ -56,9 +57,10 @@ def addNoticeStrict(session: Session, notice_type: NoticeType, params: Iterable[
     addNotice(session, notice_type, *strict_params)
 
 
-_LESS_IMPORTANT_NOTICE_TYPES = [
-    NoticeType.SimilarActorName
-]
+_LESS_IMPORTANT_NOTICE_TYPES = set([
+    NoticeType.SimilarActorName,
+    NoticeType.SimilarIcon
+])
 
 
 def addNotice(session: Session, notice_type: NoticeType, *params):
@@ -68,7 +70,8 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
 
     # length of params should <= 4, otherwise truncate it
     if len(params) > 4:
-        LogUtil.warning(f"too many params {params} for notice type {notice_type}")
+        LogUtil.warning(
+            f"too many params {params} for notice type {notice_type}")
         params = params[:4]
 
     notice = NoticeModel(
@@ -82,7 +85,8 @@ def addNotice(session: Session, notice_type: NoticeType, *params):
     notices = session.scalars(stmt)
     for n in notices:
         if not n.isSameParams(notice):
-            LogUtil.warning(f"same checksum but different notice params, {notice.notice_checksum}")
+            LogUtil.warning(
+                f"same checksum but different notice params, {notice.notice_checksum}")
             continue
         # identical notice
         if n.notice_type == notice_type:

@@ -1,15 +1,15 @@
 import os
 import re
-from playwright.async_api import Page, Response, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Response
 
 import Configs
 from Ctrls import PathCtrl
 from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
-from Workers.ImageWait.BaseWait import BaseWait
+from Workers.ImageWait.BaseIconWait import BaseIconWait
 
 
-class ActorIconWait(BaseWait):
+class ActorIconWait(BaseIconWait):
     def __init__(self):
         super().__init__(".user-header__avatar > picture > img", True)
         self.actor_info: ActorInfo | None = None
@@ -21,16 +21,14 @@ class ActorIconWait(BaseWait):
         self.set_wait(not os.path.exists(self.actor_icon_path))
 
     async def _on_response(self, response: Response):
-        match = re.search(r"/icons/(\w+)/([\w\-\.]+)$", response.url)
-        if not match:
-            return
+        platform, actor_link = Configs.regex_actor_icon_file_name(response.url)
 
-        LogUtil.info(f"actor icon {response.url}")
-        platform = match.group(1)
-        actor_link = match.group(2)
-        if platform != self.actor_info.actor_platform or \
-                actor_link != self.actor_info.actor_link:
-            LogUtil.warning(f"actor icon {response.url} not match {self.actor_info}")
+        if platform is None or actor_link is None:
+            return
+        if platform != self.actor_info.actor_platform \
+                or actor_link != self.actor_info.actor_link:
+            LogUtil.warning(
+                f"actor icon {response.url} not match {self.actor_info}")
             return
 
         # stop waiting for icon

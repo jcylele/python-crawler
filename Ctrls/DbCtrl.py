@@ -1,5 +1,6 @@
 # database connection related operations
 import json
+import logging
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -19,8 +20,8 @@ def init():
     """
     init database
     """
-    engine = create_engine(Configs.getSetting(CacheKey.DbConnectString), echo=False)
-
+    engine = create_engine(Configs.getSetting(
+        CacheKey.DbConnectString), echo=False)
     # create all table if not exist
     BaseModel.metadata.create_all(engine)
 

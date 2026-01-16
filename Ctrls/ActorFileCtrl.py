@@ -1,24 +1,25 @@
 import os
+import re
 import shutil
 import threading
-from pathlib import Path
 from collections.abc import Iterable
 from sqlalchemy import Select, delete, exists, select, func, case, event
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
 import Configs
+from Models.Exceptions import BusinessException
 from Models.ModelInfos import ActorInfo
 from Models.ActorModel import ActorModel
-from Utils import PyUtil
+from Utils import DirUtil, PyUtil
 from Utils.PyUtil import time_cost
 from routers.schemas_others import ActorVideoInfo, ActorFileDetail, PostFetchTimeStats
 
-from Ctrls import ActorLogCtrl, DbCtrl, PostCtrl, ResCtrl, ResFileCtrl
+from Ctrls import ActorCtrl, ActorLogCtrl, DbCtrl, PostCtrl, ResFileCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-from Consts import ActorLogType, DateFormat, ResState, ResType
+from Consts import ActorLogType, BoolEnum, DateFormat, ErrorCode, ResState, ResType
 from Utils import LogUtil
 
 _dirty_lock = threading.Lock()
@@ -228,6 +229,9 @@ def ensureBatchActorFileInfo(session: Session, actor_ids: list[int]):
     __process_dirty(session)
     if len(actor_ids) == 0:
         return
+    if len(actor_ids) > 3000:
+        raise BusinessException(ErrorCode.BatchFileInfoTooLarge)
+
     missing_ids = __filter_actor_ids(session, actor_ids)
     if len(missing_ids) > 0:
         __insert_batch_actor_file_info(session, missing_ids)
@@ -348,9 +352,7 @@ def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
     actor = session.get(ActorModel, actor_id)
     res_info = getActorFileInfo(session, actor_id)
     # compute is_completed
-    is_completed = True
-    if actor.last_post_fetch_time is None or actor.completed_post_count != actor.total_post_count:
-        is_completed = False
+    is_completed = actor.last_fetch_time is not None and actor.completed_post_count == actor.total_post_count
     if is_completed:
         for res in res_info:
             if res.res_state == ResState.Init and res.video_count > 0:
@@ -361,38 +363,114 @@ def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
         actor.actor_id, actor.actor_name)
     thumbnail_count = PyUtil.fileCount(thumbnail_folder)
 
+    has_downloading = ResFileCtrl.hasDownloadingVideo(session, actor)
+
     return ActorFileDetail(
         thumbnail_count=thumbnail_count,
         res_info=res_info,
         total_post_count=actor.total_post_count,
         unfinished_post_count=actor.current_post_count - actor.completed_post_count,
         finished_post_count=actor.completed_post_count,
-        is_completed=is_completed
+        is_completed=is_completed,
+        has_downloading=has_downloading
     )
 
 
-def deleteAllRes(session: Session, actor: ActorModel):
+def deleteActorFolder(session: Session, actor: ActorModel):
+    """
+    delete actor folder, downloading files and set all res state to deleted
+    """
     actor_folder = Configs.formatActorFolderPath(
         actor.actor_id, actor.actor_name)
     if os.path.exists(actor_folder):
         shutil.rmtree(actor_folder)
-        ResFileCtrl.removeActorDownloadingFiles(session, actor)
+    ResFileCtrl.removeActorDownloadingFiles(session, actor)
 
     PostCtrl.batchSetResStates(session, actor.actor_id, ResState.Del)
 
 
 def clearActorFolder(session: Session, actor: ActorModel):
+    """
+    clear actor folder, set downloaded res state to deleted
+    """
     actor_folder = Configs.formatActorFolderPath(
         actor.actor_id, actor.actor_name)
     if not os.path.exists(actor_folder):
         return
     # set res state according to file existence
     PostCtrl.removeCurrentResFiles(session, actor.actor_id)
-    ActorLogCtrl.addActorLog(session, actor.actor_id, ActorLogType.ClearFolder)
-    # remove folder
-    shutil.rmtree(actor_folder)
-    # recreate folder
-    createActorFolder(actor)
+    ActorLogCtrl.addActorLog(
+        session, actor.actor_id, ActorLogType.ClearFolder, DirUtil.allDirName())
+    # remove all files, keep thumbnail folder
+    with os.scandir(actor_folder) as it:
+        for entry in it:
+            if entry.is_dir():
+                continue
+            os.remove(entry.path)
+
+
+def createActorFolder(actor: ActorInfo | ActorModel):
+    actor_folder_path = Configs.formatActorFolderPath(
+        actor.actor_id, actor.actor_name)
+    os.makedirs(actor_folder_path, exist_ok=True)
+    thumbnail_folder_path = Configs.formatActorThumbnailFolderPath(
+        actor.actor_id, actor.actor_name)
+    os.makedirs(thumbnail_folder_path, exist_ok=True)
+
+
+def _fix_actor_folder_process(session: Session, path: str, actor_name: str, actor_id: int, extra_data: any):
+    actor = session.get(ActorModel, actor_id)
+    if actor is None:
+        return
+    if not actor.actor_group.has_folder:
+        LogUtil.info(f"delete actor folder of {actor_name}")
+        deleteActorFolder(session, actor)
+
+
+def fix_actor_folders(session: Session):
+    """
+    delete actor folder if actor is in group which has no folder
+    """
+    ResFileCtrl.traverseActorFolders(session, _fix_actor_folder_process)
+
+
+def _rename_downloading_file_process(session: Session, path: str, post_id: int, res_index: int, new_name: str):
+    file_name = os.path.basename(path)
+
+    match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.(\w+)$', file_name)
+    if match_obj is None:
+        return
+    new_file_name = f"{new_name}_{match_obj.group(2)}_{match_obj.group(3)}.{match_obj.group(4)}"
+    os.rename(path, os.path.join(os.path.dirname(path), new_file_name))
+
+
+def renameActor(session: Session, actor_id: int, new_name: str):
+    actor = ActorCtrl.getActor(session, actor_id)
+    old_name = actor.actor_name
+    if old_name == new_name:
+        return
+
+    # rename folders
+    old_actor_folder = Configs.formatActorFolderPath(
+        actor_id, old_name)
+    new_actor_folder = Configs.formatActorFolderPath(
+        actor_id, new_name)
+    if os.path.exists(old_actor_folder):
+        os.rename(old_actor_folder, new_actor_folder)
+    old_thumbnail_folder_path = os.path.join(new_actor_folder, Configs.formatThumbnailFolderName(
+        old_name))
+    new_thumbnail_folder_path = os.path.join(new_actor_folder, Configs.formatThumbnailFolderName(
+        new_name))
+
+    if os.path.exists(old_thumbnail_folder_path):
+        os.rename(old_thumbnail_folder_path, new_thumbnail_folder_path)
+
+    # rename downloading files
+    ResFileCtrl.traverseDownloadingFilesOfActor(
+        session, actor, _rename_downloading_file_process, new_name)
+
+    actor.actor_name = new_name
+    session.flush()
 
 
 def getActorVideoStats(session: Session, actor_id: int) -> list[ActorVideoInfo]:
@@ -419,13 +497,17 @@ def getActorVideoStats(session: Session, actor_id: int) -> list[ActorVideoInfo]:
     return [landscape_info, portrait_info]
 
 
-def createActorFolder(actor: ActorInfo | ActorModel):
-    actor_folder_path = Configs.formatActorFolderPath(
-        actor.actor_id, actor.actor_name)
-    os.makedirs(actor_folder_path, exist_ok=True)
-    thumbnail_folder_path = Configs.formatActorThumbnailFolderPath(
-        actor.actor_id, actor.actor_name)
-    os.makedirs(thumbnail_folder_path, exist_ok=True)
+def getPostFetchDates(session: Session, actor_id: int) -> list[str]:
+    stmt = select(
+        func.date(PostModel.last_fetch_time).distinct(),
+    ).where(
+        PostModel.actor_id == actor_id,
+        PostModel.last_fetch_time.isnot(None)
+    ).order_by(
+        func.date(PostModel.last_fetch_time)
+    )
+    ret = session.scalars(stmt)
+    return [PyUtil.datetime_format(date, DateFormat.Date) for date in ret]
 
 
 def getPostFetchTimeStats(session: Session, actor_id: int) -> list[PostFetchTimeStats]:
@@ -441,12 +523,23 @@ def getPostFetchTimeStats(session: Session, actor_id: int) -> list[PostFetchTime
     if none_count and none_count > 0:
         formatted_results.append(PostFetchTimeStats(
             stat_date="",
-            post_count=none_count
+            post_count=none_count,
+            with_video_count=0
         ))
+
+    video_res_subquery = (
+        select(1)
+        .where(ResModel.post_id == PostModel.post_id)
+        .where(ResModel.res_type == ResType.Video)
+    )
     # count by date
     stmt = select(
         func.date(PostModel.last_fetch_time),
-        func.count(PostModel.post_id)
+        func.count(PostModel.post_id),
+        func.sum(case(
+            (exists(video_res_subquery), 1),
+            else_=0
+        ))
     ).where(
         PostModel.actor_id == actor_id,
         PostModel.last_fetch_time.isnot(None)
@@ -456,10 +549,11 @@ def getPostFetchTimeStats(session: Session, actor_id: int) -> list[PostFetchTime
         func.date(PostModel.last_fetch_time)
     )
     ret = session.execute(stmt)
-    for stat_date, post_count in ret:
+    for stat_date, post_count, with_video_count in ret:
         formatted_results.append(PostFetchTimeStats(
             stat_date=PyUtil.datetime_format(stat_date, DateFormat.Date),
-            post_count=post_count
+            post_count=post_count,
+            with_video_count=with_video_count
         ))
     return formatted_results
 

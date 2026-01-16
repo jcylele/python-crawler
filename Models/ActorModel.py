@@ -1,5 +1,5 @@
 
-from sqlalchemy import String, ForeignKey, DateTime, func, BigInteger, event
+from sqlalchemy import ColumnElement, String, ForeignKey, DateTime, and_, func, BigInteger, event, or_
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
 from Configs import DB_STR_LEN_REMARK, DB_STR_LEN_SHORT
@@ -16,15 +16,18 @@ class ActorModel(BaseModel):
     actor_group_id: Mapped[int] = mapped_column(
         ForeignKey("tab_actor_group.group_id"))
     actor_platform: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
+    favorite_count: Mapped[int] = mapped_column(default=0, index=True)
     actor_link: Mapped[str] = mapped_column(String(DB_STR_LEN_SHORT))
     total_post_count: Mapped[int] = mapped_column(default=0, index=True)
     current_post_count: Mapped[int] = mapped_column(default=0)
     completed_post_count: Mapped[int] = mapped_column(default=0, index=True)
-    last_post_fetch_time: Mapped[DateTime | None] = mapped_column(
+    last_fetch_time: Mapped[DateTime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True)
-    last_res_download_time: Mapped[DateTime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True)
+    post_scan_version: Mapped[int] = mapped_column(default=0)
+    has_missing_posts: Mapped[bool] = mapped_column(
+        default=False, nullable=False, index=True)
 
+    # == actor_id when not linked, negative of one of linked actor ids when linked
     main_actor_id: Mapped[int | None] = mapped_column(
         ForeignKey("tab_actor_main.main_actor_id"),
         nullable=True
@@ -39,6 +42,10 @@ class ActorModel(BaseModel):
         default=False, nullable=False, index=True)
     comment: Mapped[str] = mapped_column(
         String(DB_STR_LEN_REMARK), nullable=True, default=None)
+    icon_hash: Mapped[str] = mapped_column(
+        String(16), nullable=True, default=None, index=True)
+    icon_hash_compared: Mapped[bool] = mapped_column(
+        default=False, nullable=False)
 
     actor_group: Mapped["ActorGroupModel"] = relationship()
     main_actor: Mapped["ActorMainModel"] = relationship()
@@ -65,6 +72,9 @@ class ActorModel(BaseModel):
         self.actor_group_id = group_id
         self.group_time = func.now()
 
+    def update_last_fetch_time(self):
+        self.last_fetch_time = func.now()
+
     @property
     def commented_posts(self):
         return [post for post in self.post_list if post.comment]
@@ -86,8 +96,25 @@ class ActorModel(BaseModel):
         return self.main_actor.remark
 
     @property
+    def has_last_post_id(self) -> bool:
+        return self.last_post_id > 0
+
+    @property
     def tag_ids(self) -> list[int]:
         return self.main_actor.tag_ids
+
+
+def actor_all_post_completed(val: bool) -> ColumnElement[bool]:
+    if val:
+        return and_(
+            ActorModel.last_fetch_time is not None,
+            ActorModel.completed_post_count == ActorModel.total_post_count
+        )
+    else:
+        return or_(
+            ActorModel.last_fetch_time is None,
+            ActorModel.completed_post_count != ActorModel.total_post_count
+        )
 
 
 @event.listens_for(ActorModel, 'before_insert')

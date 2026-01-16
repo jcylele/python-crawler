@@ -10,7 +10,7 @@ from Ctrls import DbCtrl, RequestCtrl, PostCtrl, ResCtrl
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchPostQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
-from Workers.ImageWait.PostThumbnailWait import PostThumbnailWait
+from Workers.ImageWait.ThumbnailWait import PostThumbnailWait
 
 
 class FetchPostWorker(BaseFetchWorker):
@@ -74,6 +74,10 @@ class FetchPostWorker(BaseFetchWorker):
                 Configs.formatActorThumbnailFolderPath(
                     item.actor_info.actor_id, item.actor_info.actor_name
                 ))
+
+    async def _setup_page(self, page: Page):
+        if not self.thumbnail_wait.get_wait():
+            await page.route("**/*", self._thumbnail_block_handler)
 
     async def on_response(self, response: Response):
         await self.thumbnail_wait.on_response(response)

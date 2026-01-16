@@ -13,7 +13,7 @@ class NoticeModel(BaseModel):
 
     notice_id: Mapped[int] = mapped_column(primary_key=True)
     notice_type: Mapped[NoticeType] = mapped_column(IntEnum(NoticeType))
-    notice_checksum: Mapped[str] = mapped_column(String(DB_STR_LEN_MD5))
+    notice_checksum: Mapped[str] = mapped_column(String(DB_STR_LEN_MD5), index=True)
     notice_param0: Mapped[str] = mapped_column(
         String(DB_STR_LEN_LONG), default="")
     notice_param1: Mapped[str] = mapped_column(
@@ -26,8 +26,9 @@ class NoticeModel(BaseModel):
 
     # 添加复合索引
     __table_args__ = (
-        Index('idx_notice_type_checksum', notice_type, notice_checksum),
+        Index('idx_notice_type_deleted', notice_type, deleted),
     )
+
 
     def __checksum(self) -> str:
         hasher = hashlib.md5()

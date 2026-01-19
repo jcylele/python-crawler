@@ -178,6 +178,8 @@ class ErrorCode(IntEnum):
     TagNotFound = 104
     TagGroupNotFound = 105
     FolderNotFound = 106
+    ResNotFound = 107
+    PostNotFound = 108
 
     MultiLinkGroups = 201
     NotAllLinkedActors = 202

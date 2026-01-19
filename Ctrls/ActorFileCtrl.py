@@ -1,5 +1,4 @@
 import os
-import re
 import shutil
 import threading
 from collections.abc import Iterable
@@ -15,11 +14,13 @@ from Utils import DirUtil, PyUtil
 from Utils.PyUtil import time_cost
 from routers.schemas_others import ActorVideoInfo, ActorFileDetail, PostFetchTimeStats
 
-from Ctrls import ActorCtrl, ActorLogCtrl, DbCtrl, PostCtrl, ResFileCtrl
+from Consts import ActorLogType, DateFormat, ErrorCode, ResState, ResType
+
+from Ctrls import  ActorLogCtrl, CommonCtrl, DbCtrl, PostCtrl, ResFileCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-from Consts import ActorLogType, BoolEnum, DateFormat, ErrorCode, ResState, ResType
+
 from Utils import LogUtil
 
 _dirty_lock = threading.Lock()
@@ -349,7 +350,7 @@ def validateActorFileInfo(session: Session, actor_id: int) -> list[ActorFileInfo
 
 
 def getActorFileDetail(session: Session, actor_id: int) -> ActorFileDetail:
-    actor = session.get(ActorModel, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     res_info = getActorFileInfo(session, actor_id)
     # compute is_completed
     is_completed = actor.last_fetch_time is not None and actor.completed_post_count == actor.total_post_count
@@ -418,12 +419,10 @@ def createActorFolder(actor: ActorInfo | ActorModel):
     os.makedirs(thumbnail_folder_path, exist_ok=True)
 
 
-def _fix_actor_folder_process(session: Session, path: str, actor_name: str, actor_id: int, extra_data: any):
-    actor = session.get(ActorModel, actor_id)
-    if actor is None:
-        return
+def _fix_actor_folder_process(session: Session, path: str, actor_id: int, extra_data: any):
+    actor = CommonCtrl.getActor(session, actor_id)
     if not actor.actor_group.has_folder:
-        LogUtil.info(f"delete actor folder of {actor_name}")
+        LogUtil.info(f"delete actor folder of {actor.actor_name}")
         deleteActorFolder(session, actor)
 
 
@@ -434,18 +433,9 @@ def fix_actor_folders(session: Session):
     ResFileCtrl.traverseActorFolders(session, _fix_actor_folder_process)
 
 
-def _rename_downloading_file_process(session: Session, path: str, post_id: int, res_index: int, new_name: str):
-    file_name = os.path.basename(path)
-
-    match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.(\w+)$', file_name)
-    if match_obj is None:
-        return
-    new_file_name = f"{new_name}_{match_obj.group(2)}_{match_obj.group(3)}.{match_obj.group(4)}"
-    os.rename(path, os.path.join(os.path.dirname(path), new_file_name))
-
 
 def renameActor(session: Session, actor_id: int, new_name: str):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     old_name = actor.actor_name
     if old_name == new_name:
         return
@@ -465,9 +455,8 @@ def renameActor(session: Session, actor_id: int, new_name: str):
     if os.path.exists(old_thumbnail_folder_path):
         os.rename(old_thumbnail_folder_path, new_thumbnail_folder_path)
 
-    # rename downloading files
-    ResFileCtrl.traverseDownloadingFilesOfActor(
-        session, actor, _rename_downloading_file_process, new_name)
+    # remove downloading files
+    ResFileCtrl.removeActorDownloadingFiles(session, actor)
 
     actor.actor_name = new_name
     session.flush()

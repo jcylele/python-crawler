@@ -4,7 +4,7 @@ from playwright.async_api import Page, Locator, Response, Route, TimeoutError as
 
 import Configs
 from Consts import WorkerType
-from Ctrls import DbCtrl, ActorCtrl
+from Ctrls import CommonCtrl, DbCtrl, ActorCtrl
 from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
 from Download import WebPool
@@ -22,7 +22,7 @@ class BaseFetchWorker(BaseWorker):
 
     def getActorInfo(self, actor_id: int) -> ActorInfo:
         with DbCtrl.getSession() as session, session.begin():
-            return ActorCtrl.getActorInfo(session, actor_id)
+            return CommonCtrl.getActorInfo(session, actor_id)
 
     async def processActors(self, actor_infos: list[ActorInfo]) -> list[int]:
         all_actor_ids = []

@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from playwright.async_api import Page, Response, expect, TimeoutError as PlaywrightTimeoutError
 
 import Configs
-from Consts import ResType, WorkerType, NoticeType, ActorLogType
-from Ctrls import ActorCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
+from Consts import WorkerType, NoticeType, ActorLogType
+from Ctrls import ActorCtrl, CommonCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
 from Models.ModelInfos import ActorInfo, PostInfo
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchActorQueueItem
@@ -35,19 +35,19 @@ class FetchActorWorker(BaseFetchWorker):
         posts_to_enqueue: list[PostInfo] = []
         with DbCtrl.getSession() as session, session.begin():
             actor_id = self.actor_info.actor_id
-            actor = ActorCtrl.getActor(session, actor_id)
+            actor = CommonCtrl.getActor(session, actor_id)
             last_post_id = 0 if self.task.is_all_posts() else actor.last_post_id
             for post_info in post_list:
                 if post_info.post_id <= last_post_id:
                     reach_last = True
                     continue
-                post = PostCtrl.getPost(session, post_info.post_id)
+                post = CommonCtrl.tryGetPost(session, post_info.post_id)
                 if post is None:
                     PostCtrl.addPost(session, self.actor_info, post_info)
                     posts_to_enqueue.append(post_info)
                 else:
                     if post.actor_id != actor_id:
-                        owner_actor = ActorCtrl.getActor(
+                        owner_actor = CommonCtrl.getActor(
                             session, post.actor_id)
                         ActorCtrl.fixPostBelong(
                             session, post, owner_actor, actor)
@@ -71,7 +71,7 @@ class FetchActorWorker(BaseFetchWorker):
     def updateActorPostScanVersion(self):
         with DbCtrl.getSession() as session, session.begin():
             new_version = self.actor_info.post_scan_version
-            actor = ActorCtrl.getActor(session, self.actor_info.actor_id)
+            actor = CommonCtrl.getActor(session, self.actor_info.actor_id)
             actor.post_scan_version = new_version
             actor.has_missing_posts = PostCtrl.hasMissingPosts(
                 session, self.actor_info.actor_id, new_version)
@@ -79,7 +79,7 @@ class FetchActorWorker(BaseFetchWorker):
     @staticmethod
     def updateActorPostCount(actor_id: int, post_count: int):
         with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_id)
+            actor = CommonCtrl.getActor(session, actor_id)
             if actor.total_post_count != post_count:
                 actor.total_post_count = post_count
                 ActorLogCtrl.addActorLog(

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 import Configs
 from Consts import NoticeType
-from Ctrls import ActorCtrl, ActorFileCtrl, ActorSimilarCtrl, RequestCtrl, ResCtrl, ResFileCtrl
+from Ctrls import ActorCtrl, ActorFileCtrl, ActorSimilarCtrl, CommonCtrl, RequestCtrl, ResCtrl, ResFileCtrl
 from Models.FavoriteFolderModel import FavoriteFolderModel
 from Models.ActorGroupModel import ActorGroupModel
 from Models.ActorFileInfoModel import ActorFileInfoModel
@@ -195,3 +195,25 @@ def differ_icon(session: Session):
         print(hex(hash))
 
 
+
+def rename_downloading_files(session: Session):
+    download_folder = Configs.formatTmpFolderPath()
+    try:
+        with os.scandir(download_folder) as it:
+            for entry in it:
+                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.(\w+)$', entry.name)
+                if match_obj is None:
+                    continue
+                post_id = int(match_obj.group(2))
+                res_index = int(match_obj.group(3))
+                
+                post = CommonCtrl.getPost(session, post_id)
+                res = ResCtrl.getResByIndex(session, post_id, res_index)
+
+                new_file_name = f"{post.actor_id}_{post_id}_{res.res_id}.{match_obj.group(4)}"
+                os.rename(entry.path, os.path.join(os.path.dirname(entry.path), new_file_name))
+
+    except Exception as e:
+        LogUtil.error(f"traverseDownloadingFiles failed, get Error")
+        LogUtil.exception(e)
+        pass

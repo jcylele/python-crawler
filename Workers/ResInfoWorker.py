@@ -1,5 +1,5 @@
-from Consts import WorkerType, QueueType
-from Ctrls import DbCtrl, ResCtrl
+from Consts import WorkerType
+from Ctrls import CommonCtrl, DbCtrl
 from Utils import LogUtil
 from WorkQueue.ExtraInfo import ResInfoExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
@@ -29,10 +29,7 @@ class ResInfoWorker(BaseRequestWorker):
         # keep session life short, no time-consuming things allowed
         # so head first, then start session
         with DbCtrl.getSession() as session, session.begin():
-            res1 = ResCtrl.getRes(session, extra_info.res_id)
-            if res1 is None:
-                LogUtil.warning(f"res not found {extra_info}")
-                return False
+            res1 = CommonCtrl.getRes(session, extra_info.res_id)
 
             # update size
             res1.setSize(size)

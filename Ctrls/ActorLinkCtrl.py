@@ -2,7 +2,7 @@ from sqlalchemy import delete, select, func, update
 from sqlalchemy.orm import Session
 
 from Consts import ActorLogType, ErrorCode, NoticeType
-from Ctrls import ActorCtrl, ActorLogCtrl, NoticeCtrl
+from Ctrls import ActorCtrl, ActorLogCtrl, CommonCtrl, NoticeCtrl
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
@@ -18,7 +18,7 @@ def _distinct(id_list: list[int]) -> list[int]:
 def unlinkActors(session: Session, actor_ids: list[int]):
     actor_ids = _distinct(actor_ids)
     # check all actors belong to the same group, and all actors in the group are selected
-    actor_list = [ActorCtrl.getActor(session, actor_id)
+    actor_list = [CommonCtrl.getActor(session, actor_id)
                   for actor_id in actor_ids]
     main_actor_id = 0
     for actor in actor_list:
@@ -74,7 +74,7 @@ def unlinkActors(session: Session, actor_ids: list[int]):
 def linkActors(session: Session, form: LinkActorForm):
     actor_ids = _distinct(form.actor_ids)
     # check all actors belong to the same link group or no group
-    actor_list = [ActorCtrl.getActor(session, actor_id)
+    actor_list = [CommonCtrl.getActor(session, actor_id)
                   for actor_id in actor_ids]
     # will be removed at the end
     old_main_actor_ids = set()
@@ -143,7 +143,7 @@ def linkActors(session: Session, form: LinkActorForm):
 
 
 def getGroupsOfLinkedActors(session: Session, actor_id: int) -> list[int]:
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     if not actor.is_linked:
         return [actor.actor_group_id]
 
@@ -156,7 +156,7 @@ def getGroupsOfLinkedActors(session: Session, actor_id: int) -> list[int]:
 
 
 def isLinkChecked(session: Session, actor_id: int):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     return actor.link_checked
 
 
@@ -170,7 +170,7 @@ def setActorLinkChecked(session: Session, actor_id: int):
 
 
 def checkActorLink(session, actor_ids: list[int]):
-    actor_list = [ActorCtrl.getActor(session, actor_id)
+    actor_list = [CommonCtrl.getActor(session, actor_id)
                   for actor_id in actor_ids]
     actor_list.sort(key=lambda x: x.actor_name)
     main_actor_ids = set()

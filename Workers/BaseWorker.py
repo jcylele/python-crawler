@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 import Configs
 from Consts import WorkerType
-from Ctrls import ActorCtrl
+from Ctrls import CommonCtrl
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskQueueMgr import TaskQueueMgr
 from Utils import LogUtil
@@ -39,7 +39,7 @@ class BaseWorker:
         return self.__workerType
 
     def hasActorFolder(self, session: Session, actor_id: int) -> bool:
-        actor = ActorCtrl.getActor(session, actor_id)
+        actor = CommonCtrl.getActor(session, actor_id)
         return actor.actor_group.has_folder
 
     async def putback_item(self, item: BaseQueueItem):

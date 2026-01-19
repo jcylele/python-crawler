@@ -5,7 +5,7 @@ from sqlalchemy import ScalarResult, func, select, update, Select, exists, or_
 from sqlalchemy.orm import Session
 
 from Consts import ResState, ResType
-from Ctrls import ActorFileCtrl
+from Ctrls import ActorFileCtrl, CommonCtrl
 from Models.ActorModel import ActorModel
 from Models.ModelInfos import ActorInfo, PostInfo
 from Models.PostModel import PostModel
@@ -13,13 +13,6 @@ from Models.ResModel import ResModel
 from Utils import PyUtil
 from routers.web_data import PostFilterForm
 from routers.schemas_others import ActorPostInfo
-
-
-def getPost(session: Session, post_id: int) -> PostModel:
-    """
-    get a post record by its id
-    """
-    return session.get(PostModel, post_id)
 
 
 def getMaxPostId(session: Session, actor_id: int) -> int:
@@ -96,9 +89,9 @@ def getPostCountList(session: Session, form: PostFilterForm) -> list[ActorPostIn
     result = session.execute(_query).fetchall()
     response = []
     for data in result:
-        actor = session.get(ActorModel, data[0])
+        actor = CommonCtrl.getActor(session, data[0])
         info = ActorPostInfo(
-            actor_id=data[0], actor_name=actor.actor_name, post_count=data[1])
+            actor_id=actor.actor_id, actor_name=actor.actor_name, post_count=data[1])
         response.append(info)
     return response
 
@@ -113,10 +106,10 @@ def getFilteredPosts(session: Session, form: PostFilterForm) -> list[PostModel]:
 
 def setPostComment(session: Session, post_id: int, comment: str):
     real_comment = PyUtil.stripToNone(comment)
-    post = getPost(session, post_id)
-    if not post:
-        return
-    post.comment = real_comment
+    update_query = update(PostModel).where(
+        PostModel.post_id == post_id).values(comment=real_comment)
+    session.execute(update_query)
+    session.flush()
 
 
 def getPostsOfActor(session: Session, actor_id: int, last_post_id: int = 0, only_complete: bool = False) -> ScalarResult[PostModel]:

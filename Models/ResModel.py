@@ -74,7 +74,7 @@ class ResModel(BaseModel):
         :return:
         """
         ext = self.res_url_info.extension
-        return f"{Configs.formatTmpFolderPath()}/{self.actor().actor_name}_{self.post_id}_{self.res_index}.{ext}"
+        return f"{Configs.formatTmpFolderPath()}/{self.actor().actor_id}_{self.post_id}_{self.res_id}.{ext}"
 
     def isCompleted(self) -> bool:
         return self.res_state == ResState.Down or self.res_state == ResState.Del

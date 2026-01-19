@@ -1,11 +1,11 @@
 # ActorModel related operations
 from collections.abc import Iterable
 
-from sqlalchemy import delete, exists, func, select, event, inspect
+from sqlalchemy import delete, exists, select, event, inspect
 from sqlalchemy.orm import Session
 
 from Consts import ErrorCode, NoticeType, ActorLogType, ResState
-from Ctrls import DbCtrl, PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl, ResFileCtrl
+from Ctrls import CommonCtrl, DbCtrl, PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl, ResFileCtrl
 from Models.Exceptions import BusinessException
 from Models.ModelInfos import ActorInfo
 from Models.ActorMainModel import ActorMainModel
@@ -17,30 +17,6 @@ from routers.schemas_others import ActorAbstract
 
 
 # region single actor
-
-
-def getActorInfo(session: Session, actor_id: int) -> ActorInfo:
-    actor = getActor(session, actor_id)
-    if actor is None:
-        LogUtil.error(f"get actorInfo failed, actor {actor_id} not exist")
-        return None
-    return ActorInfo(actor)
-
-
-def getActorAbstract(session: Session, actor_id: int) -> ActorAbstract:
-    actor = getActor(session, actor_id)
-    return ActorAbstract(
-        actor_id=actor_id,
-        actor_name=actor.actor_name,
-        actor_group_id=actor.actor_group_id
-    )
-
-
-def getActor(session: Session, actor_id: int) -> ActorModel:
-    actor = session.get(ActorModel, actor_id)
-    if actor is None:
-        raise BusinessException(ErrorCode.ActorNotFound)
-    return actor
 
 
 def getActors(session: Session, actor_ids: list[int]) -> list[ActorModel]:
@@ -120,7 +96,7 @@ def _innerSetActorTags(session: Session, main_actor_id: int, tag_list: Iterable[
 
 def changeActorTags(session: Session, actor_id: int, tag_list: list[int]) -> list[ActorModel]:
     # set tags for main_actor
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     _innerSetActorTags(session, actor.main_actor_id, tag_list)
 
     # add log for linked actors
@@ -135,7 +111,7 @@ def changeActorTags(session: Session, actor_id: int, tag_list: list[int]) -> lis
 
 def changeActorScore(session: Session, actor_id: int, score: int) -> list[ActorModel]:
     # change score for main_actor
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     main_actor = actor.main_actor
     if main_actor.score == score:
         return []  # no change
@@ -154,7 +130,7 @@ def changeActorScore(session: Session, actor_id: int, score: int) -> list[ActorM
 
 def changeActorComment(session: Session, actor_id: int, comment: str) -> ActorModel:
     # change comment for main_actor
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     actor.comment = comment
     ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.Comment, comment)
     session.flush()
@@ -165,7 +141,7 @@ def changeActorRemark(session: Session, actor_id: int, remark: str) -> list[Acto
     # process remark
     real_remark = PyUtil.stripToNone(remark)
     # change remark for main_actor
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     main_actor: ActorMainModel = actor.main_actor
 
     if main_actor.remark == real_remark:
@@ -192,7 +168,7 @@ def _setResStateToDowned(session: Session, file_path: str, post_id: int, res_ind
 
 
 def resetActorPosts(session: Session, actor_id: int):
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     actor.last_post_id = 0
 
     PostCtrl.batchSetResStates(session, actor_id, ResState.Init)
@@ -204,7 +180,7 @@ def resetActorPosts(session: Session, actor_id: int):
 
 
 def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> ActorModel:
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     # no change
     if actor.actor_group_id == new_group_id:
         raise BusinessException(ErrorCode.GroupAlreadyIn)
@@ -265,7 +241,7 @@ def refreshActorPostCount(session: Session, actor_id: int):
     """
     强制刷新actor的post计数
     """
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     completed, uncompleted = PostCtrl.getPostCountsOfActor(session, actor_id)
     actor.current_post_count = completed + uncompleted
     actor.completed_post_count = completed
@@ -290,7 +266,7 @@ def fixPostBelong(session: Session, post: PostModel, old_owner: ActorModel, new_
 
 
 def _updateActorPostCount(session: Session, actor_id: int, post_completed: bool, delta: int):
-    actor = getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     actor.current_post_count += delta
     if post_completed:
         actor.completed_post_count += delta
@@ -322,17 +298,18 @@ def after_post_update(mapper, connection, target: PostModel):
 
     with DbCtrl.innerSession(connection) as session, session.begin():
         if actor_id_changed:
-            old_actor = getActor(session, actor_id_history.deleted[0])
+            old_actor = CommonCtrl.getActor(
+                session, actor_id_history.deleted[0])
             old_actor.current_post_count -= 1
             if not completed_changed and target.completed:
                 old_actor.completed_post_count -= 1
 
-            new_actor = getActor(session, actor_id_history.added[0])
+            new_actor = CommonCtrl.getActor(session, actor_id_history.added[0])
             new_actor.current_post_count += 1
             if target.completed:
                 new_actor.completed_post_count += 1
         else:
-            new_actor = getActor(session, target.actor_id)
+            new_actor = CommonCtrl.getActor(session, target.actor_id)
             if completed_changed:
                 new_actor.completed_post_count += 1
 

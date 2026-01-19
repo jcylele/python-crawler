@@ -11,27 +11,25 @@ from sqlalchemy.orm import Session
 
 import Configs
 from Consts import ActorLogType, ResState, ResType
-from Ctrls import ActorLogCtrl, ResCtrl
+from Ctrls import ActorLogCtrl, CommonCtrl, ResCtrl
 from Models.ActorModel import ActorModel
-from Models.PostModel import PostModel
 from Utils import DirUtil, LogUtil
-from routers.schemas_others import ActorAbstract, ResFileInfo, DownloadingVideoStats
+from routers.schemas_others import ResFileInfo, DownloadingVideoStats
 
 # region traverse file functions
 
 
-def traverseActorFolders(session: Session, callback: Callable[[Session, str, str, int, any], None], extra_data: any = None):
+def traverseActorFolders(session: Session, callback: Callable[[Session, str, int, any], None], extra_data: any = None):
     with os.scandir(Configs.getRootFolder()) as it:
         try:
             for entry in it:
                 if entry.is_file():
                     continue
-                match_obj = re.match(r'^(\S+)_(\d+)$', entry.name)
+                match_obj = re.match(r'^(.+)_(\d+)$', entry.name)
                 if match_obj is None:
                     continue
-                actor_name = match_obj.group(1)
                 actor_id = int(match_obj.group(2))
-                callback(session, entry.path, actor_name, actor_id, extra_data)
+                callback(session, entry.path, actor_id, extra_data)
         except Exception as e:
             LogUtil.error(f"traverseActorFolders failed, get Error")
             LogUtil.exception(e)
@@ -59,12 +57,12 @@ def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str,
     try:
         with os.scandir(download_folder) as it:
             for entry in it:
-                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', entry.name)
+                match_obj = re.match(r'^(\d+)_(\d+)_(\d+)\.\w+$', entry.name)
                 if match_obj is None:
                     continue
-                post_id = int(match_obj.group(2))
-                res_index = int(match_obj.group(3))
-                callback(session, entry.path, post_id, res_index, extra_data)
+                actor_id = int(match_obj.group(1))
+                res_id = int(match_obj.group(3))
+                callback(session, entry.path, actor_id, res_id, extra_data)
     except Exception as e:
         LogUtil.error(f"traverseDownloadingFiles failed, get Error")
         LogUtil.exception(e)
@@ -76,20 +74,14 @@ def existDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: 
     try:
         with os.scandir(download_folder) as it:
             for entry in it:
-                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', entry.name)
+                match_obj = re.match(r'^(\d+)_(\d+)_(\d+)\.\w+$', entry.name)
                 if match_obj is None:
                     continue
-                actor_name = match_obj.group(1)
-                post_id = int(match_obj.group(2))
-                res_index = int(match_obj.group(3))
-                if actor_name != actor.actor_name:
+                actor_id = int(match_obj.group(1))
+                res_id = int(match_obj.group(3))
+                if actor_id != actor.actor_id:
                     continue
-                post = session.get(PostModel, post_id)
-                if post is None:
-                    continue
-                if post.actor_id != actor.actor_id:
-                    continue
-                if callback(session, entry.path, post_id, res_index, extra_data):
+                if callback(session, entry.path, actor_id, res_id, extra_data):
                     return True
     except Exception as e:
         LogUtil.error(
@@ -104,20 +96,14 @@ def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callbac
     try:
         with os.scandir(download_folder) as it:
             for entry in it:
-                match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', entry.name)
+                match_obj = re.match(r'^(\d+)_(\d+)_(\d+)\.\w+$', entry.name)
                 if match_obj is None:
                     continue
-                actor_name = match_obj.group(1)
-                post_id = int(match_obj.group(2))
-                res_index = int(match_obj.group(3))
-                if actor_name != actor.actor_name:
+                actor_id = int(match_obj.group(1))
+                res_id = int(match_obj.group(3))
+                if actor_id != actor.actor_id:
                     continue
-                post = session.get(PostModel, post_id)
-                if post is None:
-                    continue
-                if post.actor_id != actor.actor_id:
-                    continue
-                callback(session, entry.path, post_id, res_index, extra_data)
+                callback(session, entry.path, actor_id, res_id, extra_data)
     except Exception as e:
         LogUtil.error(
             f"traverseDownloadingFilesOfActor {actor.actor_name} failed, get error")
@@ -137,27 +123,18 @@ async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorMo
 
         callback_tasks = []
         for file_name in all_file_names:
-            match_obj = re.match(r'^(.+)_(\d+)_(\d+)\.\w+$', file_name)
+            match_obj = re.match(r'^(\d+)_(\d+)_(\d+)\.\w+$', file_name)
             if not match_obj:
                 continue
-
-            actor_name = match_obj.group(1)
-            if actor_name != actor.actor_name:
-                continue
-
-            post_id = int(match_obj.group(2))
-            res_index = int(match_obj.group(3))
-
-            # 注意: session.get() 是一个同步的数据库调用。
-            # 如果这里成为性能瓶颈，可以考虑使用异步数据库驱动和异步 session。
-            post = session.get(PostModel, post_id)
-            if post is None or post.actor_id != actor.actor_id:
+            actor_id = int(match_obj.group(1))
+            res_id = int(match_obj.group(3))
+            if actor_id != actor.actor_id:
                 continue
 
             # 创建一个异步回调任务
             callback_tasks.append(
                 callback(session, os.path.join(
-                    download_folder, file_name), post_id, res_index, extra_data)
+                    download_folder, file_name), actor_id, res_id, extra_data)
             )
 
         # 并发执行所有回调任务
@@ -172,7 +149,7 @@ async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorMo
 # endregion
 
 
-def _remove_file_process(session: Session, path: str, post_id: int, res_index: int, extra_data: any = None):
+def _remove_file_process(session: Session, path: str, _1: int, _2: int, extra_data: any = None):
     os.remove(path)
 
 
@@ -180,10 +157,8 @@ def removeActorDownloadingFiles(session: Session, actor: ActorModel):
     traverseDownloadingFilesOfActor(session, actor, _remove_file_process)
 
 
-def __hasDownloadingVideo_process(session: Session, path: str, post_id: int, res_index: int, extra_data: any = None) -> bool:
-    res = ResCtrl.getResByIndex(session, post_id, res_index)
-    if res is None:
-        return False
+def __hasDownloadingVideo_process(session: Session, path: str, _1: int, res_id: int, extra_data: any = None) -> bool:
+    res = CommonCtrl.getRes(session, res_id)
     if res.res_type == ResType.Image:
         return False
     return True
@@ -193,10 +168,8 @@ def hasDownloadingVideo(session: Session, actor: ActorModel) -> bool:
     return existDownloadingFilesOfActor(session, actor, __hasDownloadingVideo_process)
 
 
-def __getResVideoInfo(session: Session, file_path: str, post_id: int, res_index: int) -> ResFileInfo:
-    res = ResCtrl.getResByIndex(session, post_id, res_index)
-    if res is None:
-        return None
+def __getResVideoInfo(session: Session, file_path: str, res_id: int) -> ResFileInfo:
+    res = CommonCtrl.getRes(session, res_id)
     if res.res_type == ResType.Image:
         return None
     file_size = os.path.getsize(file_path)
@@ -205,9 +178,8 @@ def __getResVideoInfo(session: Session, file_path: str, post_id: int, res_index:
     return ResFileInfo(file_path=file_name, file_size=file_size, res_size=res.res_size)
 
 
-def __getDownloadingFiles_Process(session: Session, file, post_id, res_index, ret: list[ResFileInfo]):
-    # print(file)
-    info = __getResVideoInfo(session, file, post_id, res_index)
+def __getDownloadingFiles_Process(session: Session, file, _1: int, res_id, ret: list[ResFileInfo]):
+    info = __getResVideoInfo(session, file, res_id)
     if info is not None:
         ret.append(info)
 
@@ -219,43 +191,41 @@ def getDownloadingFilesOfActor(session: Session, actor: ActorModel) -> list[ResF
     return ret
 
 
-def _remove_file_percent_process(session: Session, file_path: str, post_id: int, res_index: int, percent: float):
-    res = ResCtrl.getResByIndex(session, post_id, res_index)
-    if res is None:
-        return
+def _remove_file_percent_process(session: Session, file_path: str, actor_id: int, res_id: int, percent: int):
+    res = CommonCtrl.getRes(session, res_id)
     if res.res_type == ResType.Image:
         return
     file_size = os.path.getsize(file_path)
-    if file_size <= res.res_size * percent:
+    if file_size * 100 <= res.res_size * percent:
         os.remove(file_path)
 
 
-def removeDownloadingFilesOfActor(session: Session, actor: ActorModel, percent: float):
-    if percent >= 1:
-        traverseDownloadingFilesOfActor(session, actor, _remove_file_process)
+def removeDownloadingFiles(session: Session, actor_id: int, percent: int):
+    if actor_id == 0:
+        if percent == 100:
+            traverseDownloadingFiles(session, _remove_file_process)
+        else:
+            traverseDownloadingFiles(session, _remove_file_percent_process, percent)
     else:
-        traverseDownloadingFilesOfActor(
-            session, actor, _remove_file_percent_process, percent)
+        actor = CommonCtrl.getActor(session, actor_id)
+        if percent == 100:
+            traverseDownloadingFilesOfActor(
+                session, actor, _remove_file_process)
+        else:
+            traverseDownloadingFilesOfActor(
+                session, actor, _remove_file_percent_process, percent)
 
 
-def _get_downloading_video_stats_process(session: Session, file, post_id, res_index, ret: dict[int, DownloadingVideoStats]):
-    res = ResCtrl.getResByIndex(session, post_id, res_index)
-    if res is None:
-        return
+def _get_downloading_video_stats_process(session: Session, file, actor_id, res_id, ret: dict[int, DownloadingVideoStats]):
+    res = CommonCtrl.getRes(session, res_id)
     if res.res_type == ResType.Image:
         return
-    post = res.post
-    if post.actor_id not in ret:
-        actor = post.actor
-        actor_abstract = ActorAbstract(
-            actor_id=actor.actor_id,
-            actor_name=actor.actor_name,
-            actor_group_id=actor.actor_group_id
-        )
-        ret[post.actor_id] = DownloadingVideoStats(
+    if actor_id not in ret:
+        actor_abstract = CommonCtrl.getActorAbstract(session, actor_id)
+        ret[actor_id] = DownloadingVideoStats(
             actor_abstract=actor_abstract
         )
-    ret[post.actor_id].add_info(os.path.getsize(file), res.res_size)
+    ret[actor_id].add_info(os.path.getsize(file), res.res_size)
 
 
 def get_downloading_video_stats(session: Session) -> list[DownloadingVideoStats]:
@@ -347,10 +317,10 @@ def getTotalDownloadingSize(session: Session) -> int:
     return sum[0]
 
 
-def __remove_outdated_process(session: Session, file_path: str, post_id: int, res_index: int, extra_data: any = None):
-    res = ResCtrl.getResByIndex(session, post_id, res_index)
+def __remove_outdated_process(session: Session, file_path: str, _1: int, res_id: int, extra_data: any = None):
+    res = CommonCtrl.getRes(session, res_id)
     if res.res_state == ResState.Del:
-        LogUtil.info(f"remove downloading file {file_path}")
+        LogUtil.info(f"remove outdated downloading file {file_path}")
         os.remove(file_path)
 
 

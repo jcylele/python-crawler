@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi.params import Query, Body
 
 import Configs
-from Consts import ErrorCode
-from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ResFileCtrl
+from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, CommonCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ResFileCtrl
 from Models.Exceptions import BusinessException
 from routers.schemas import ActorFileInfoResponse, ActorLogResponse, ActorResponse
 from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, MissingPost, PostFetchTimeStats, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
@@ -53,7 +52,7 @@ def link_actors(form: LinkActorForm, session: Session = Depends(DbCtrl.get_db_se
     # complex logic, ensure transaction is done
     ActorLinkCtrl.linkActors(session, form)
 
-    actors = [ActorCtrl.getActor(session, actor_id)
+    actors = [CommonCtrl.getActor(session, actor_id)
               for actor_id in form.actor_ids]
     return ActorListResult(data=actors)
 
@@ -61,7 +60,7 @@ def link_actors(form: LinkActorForm, session: Session = Depends(DbCtrl.get_db_se
 @router.post("/unlink", response_model=ActorListResult)
 def unlink_actors(actor_ids: list[int], session: Session = Depends(DbCtrl.get_db_session)):
     ActorLinkCtrl.unlinkActors(session, actor_ids)
-    actors = [ActorCtrl.getActor(session, actor_id)
+    actors = [CommonCtrl.getActor(session, actor_id)
               for actor_id in actor_ids]
     return ActorListResult(data=actors)
 
@@ -92,18 +91,24 @@ def get_comments(session: Session = Depends(DbCtrl.get_db_session)):
     comments = ActorQueryCtrl.getComments(session)
     return UnifiedListResponse[CommentCount](data=comments)
 
+
+@router.delete("/remove_downloading_files", response_model=CommonResponse)
+def remove_downloading_files(actor_id: int = Query(default=0), percent: int = Query(default=100), session: Session = Depends(DbCtrl.get_db_session)):
+    ResFileCtrl.removeDownloadingFiles(session, actor_id, percent)
+    return CommonResponse()
+
 # 同方法(get)按顺序匹配, 固定前缀在前，{actor_id}在后, 以下皆为单个匹配
 
 
 @router.get("/{actor_id}", response_model=ActorResult)
 def get_actor(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     return ActorResult(data=actor)
 
 
 @router.get("/{actor_id}/abstract", response_model=UnifiedResponse[ActorAbstract])
 def get_actor_abstract(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor_abstract = ActorCtrl.getActorAbstract(session, actor_id)
+    actor_abstract = CommonCtrl.getActorAbstract(session, actor_id)
     return UnifiedResponse[ActorAbstract](data=actor_abstract)
 
 
@@ -140,7 +145,7 @@ def change_actor_tag(actor_id: int, tag_list: list[int], session: Session = Depe
 
 @router.get("/{actor_id}/open", response_model=CommonResponse)
 def open_actor_folder(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     ResFileCtrl.remove_thumbnail_images(session, actor)
     subprocess.Popen(
         f'explorer "{Configs.formatActorFolderPath(actor.actor_id, actor.actor_name)}"')
@@ -157,7 +162,7 @@ def reset_actor_posts(actor_id: int, session: Session = Depends(DbCtrl.get_db_se
 
 @router.patch("/{actor_id}/clear", response_model=UnifiedResponse[ActorFileDetail])
 def clear_actor_folder(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     ActorFileCtrl.clearActorFolder(session, actor)
     session.flush()
     actor_file_detail = ActorFileCtrl.getActorFileDetail(session, actor_id)
@@ -185,35 +190,28 @@ def get_actor_video_stats(actor_id: int, session: Session = Depends(DbCtrl.get_d
 
 @router.get("/{actor_id}/downloading_files", response_model=UnifiedListResponse[ResFileInfo])
 def get_downloading_files(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     downloading_files = ResFileCtrl.getDownloadingFilesOfActor(session, actor)
     return UnifiedListResponse[ResFileInfo](data=downloading_files)
 
 
-@router.delete("/{actor_id}/remove_downloading_files", response_model=CommonResponse)
-def remove_downloading_files(actor_id: int, percent: int = Query(default=100), session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
-    ResFileCtrl.removeDownloadingFilesOfActor(session, actor, percent / 100)
-    return CommonResponse()
-
-
 @router.get("/{actor_id}/rename_files", response_model=CommonResponse)
 def rename_actor_files(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     ResFileCtrl.rename_actor_videos(session, actor)
     return CommonResponse()
 
 
 @router.patch("/{actor_id}/remove_by_dir", response_model=CommonResponse)
 def remove_by_dir(actor_id: int, is_landscape: bool = Query(default=False), session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     ResFileCtrl.remove_by_dir(session, actor, is_landscape)
     return CommonResponse()
 
 
 @router.get("/{actor_id}/linked", response_model=UnifiedResponse[list[int]])
 def get_linked_actors(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     if not actor.is_linked:
         return UnifiedResponse[list[int]](data=[actor_id])
     linked_actor_ids = ActorCtrl.getLinkedActorIds(
@@ -254,7 +252,7 @@ def get_post_fetch_dates(actor_id: int, session: Session = Depends(DbCtrl.get_db
 
 @router.get("/{actor_id}/missing_posts", response_model=UnifiedListResponse[MissingPost])
 def get_missing_posts(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    actor = ActorCtrl.getActor(session, actor_id)
+    actor = CommonCtrl.getActor(session, actor_id)
     missing_posts = ResCtrl.get_missing_posts(
         session, actor_id, actor.post_scan_version)
     return UnifiedListResponse[MissingPost](data=missing_posts)

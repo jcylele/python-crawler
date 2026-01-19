@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 import Configs
 from Consts import WorkerType, ResType
-from Ctrls import DbCtrl, RequestCtrl, PostCtrl, ResCtrl
+from Ctrls import CommonCtrl, DbCtrl, RequestCtrl, ResCtrl
 from Utils import LogUtil
 from WorkQueue.FetchQueueItem import FetchPostQueueItem
 from Workers.BaseFetchWorker import BaseFetchWorker
@@ -48,7 +48,7 @@ class FetchPostWorker(BaseFetchWorker):
         if not self.hasActorFolder(session, item.actor_info.actor_id):
             return False
         # check post completed, no need to fetch
-        post = PostCtrl.getPost(session, item.post_id)
+        post = CommonCtrl.getPost(session, item.post_id)
         if post is None:  # queue push before sql commit?
             LogUtil.error(
                 f"post {item.post_id} of actor {item.actor_info.actor_name} not found")
@@ -101,7 +101,7 @@ class FetchPostWorker(BaseFetchWorker):
 
         # write to db, enqueue items
         with DbCtrl.getSession() as session, session.begin():
-            post = PostCtrl.getPost(session, item.post_id)
+            post = CommonCtrl.getPost(session, item.post_id)
             if self.task.is_fix_res:
                 ResCtrl.fixResUrls(session, item.post_id,
                                    url_list, item.actor_info.actor_name)

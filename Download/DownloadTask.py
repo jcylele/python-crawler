@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 import Configs
 from Consts import DateFormat, PostFilter, ResType, TaskType, WorkerType
-from Ctrls import ActorQueryCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResCtrl, ResFileCtrl
+from Ctrls import ActorQueryCtrl, CommonCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResFileCtrl
 from Download import WorkerMgr
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskQueueMgr import TaskQueueMgr
@@ -157,7 +157,7 @@ class DownloadTask:
     async def completedPosts(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
-                actor = ActorCtrl.getActor(session, actor_id)
+                actor = CommonCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
                 posts = PostCtrl.getPostsOfActor(
                     session, actor_id, actor.last_post_id, True)
@@ -168,7 +168,7 @@ class DownloadTask:
     async def currentPosts(self, actor_ids: list[int]):
         with DbCtrl.getSession() as session, session.begin():
             for actor_id in actor_ids:
-                actor = ActorCtrl.getActor(session, actor_id)
+                actor = CommonCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
                 posts = PostCtrl.getPostsOfActor(
                     session, actor_id, actor.last_post_id)
@@ -223,7 +223,7 @@ class DownloadTask:
         download specific actors
         """
         with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_id)
+            actor = CommonCtrl.getActor(session, actor_id)
             # in case linked actors found, set the group id to the actor's group id
             self.setInitGroup(actor.actor_group_id)
             self.task_desc = f"Specific Actor {actor.actor_name}"
@@ -252,14 +252,14 @@ class DownloadTask:
                 actor_ids.append(actor.actor_id)
         await self.downloadActors(actor_ids)
 
-    async def __resumeActor_Process(self, session: Session, file: str, post_id: int, res_index: int, extra_data: any = None):
-        res = ResCtrl.getResByIndex(session, post_id, res_index)
+    async def __resumeActor_Process(self, session: Session, file: str, actor_id: int, res_id: int, extra_data: any = None):
+        res = CommonCtrl.getRes(session, res_id)
         if res.shouldDownload(self.download_limit):
             await self.queue_mgr.enqueueResFile(res)
 
     async def resumeActor(self, actor_id: int):
         with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_id)
+            actor = CommonCtrl.getActor(session, actor_id)
             if actor is None or not actor.actor_group.has_folder:
                 return
             self.actor_ids = [actor_id]
@@ -278,7 +278,7 @@ class DownloadTask:
 
     async def fix_posts_of_actor(self, actor_id: int):
         with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_id)
+            actor = CommonCtrl.getActor(session, actor_id)
             if actor is None:
                 return
             ActorCtrl.refreshActorPostCount(session, actor_id)
@@ -297,7 +297,7 @@ class DownloadTask:
 
     async def fix_video_of_actor(self, actor_id: int, end_date: datetime):
         with DbCtrl.getSession() as session, session.begin():
-            actor = ActorCtrl.getActor(session, actor_id)
+            actor = CommonCtrl.getActor(session, actor_id)
             if actor is None:
                 return
 
@@ -352,6 +352,6 @@ class DownloadTask:
                 list(self.worker_process_stats.values()), key=lambda x: x.worker_type)
         )
         if self.task_type < TaskType.MaxSingleActor:
-            response.actor_abstract = ActorCtrl.getActorAbstract(
+            response.actor_abstract = CommonCtrl.getActorAbstract(
                 session, self.task_arg)
         return response

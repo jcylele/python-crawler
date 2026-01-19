@@ -1,11 +1,9 @@
 import os.path
 
 import aiofiles
-from sqlalchemy import func
-from sqlalchemy.orm import Session
 
 from Consts import WorkerType, QueueType, ResState
-from Ctrls import ActorCtrl, DbCtrl, ResCtrl
+from Ctrls import CommonCtrl, DbCtrl
 from Utils import LogUtil, PyUtil
 from WorkQueue.ExtraInfo import ResFileExtraInfo
 from WorkQueue.UrlQueueItem import UrlQueueItem
@@ -24,7 +22,7 @@ class ResValidWorker(BaseWorker):
         extra_info: ResFileExtraInfo = item.extra_info
 
         with DbCtrl.getSession() as dbSession, dbSession.begin():
-            res1 = ResCtrl.getRes(dbSession, extra_info.res_id)
+            res1 = CommonCtrl.getRes(dbSession, extra_info.res_id)
             tmp_file_path = res1.tmpFilePath()
             true_file_path = res1.filePath()
             true_size = res1.res_size
@@ -59,7 +57,7 @@ class ResValidWorker(BaseWorker):
 
         # update db
         with DbCtrl.getSession() as dbSession, dbSession.begin():
-            res2 = ResCtrl.getRes(dbSession, extra_info.res_id)
+            res2 = CommonCtrl.getRes(dbSession, extra_info.res_id)
             if width > 0 and height > 0:
                 res2.res_width = width
                 res2.res_height = height

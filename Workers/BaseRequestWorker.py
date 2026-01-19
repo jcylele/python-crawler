@@ -24,7 +24,7 @@ class BaseRequestWorker(BaseWorker):
         重写 run 方法来管理 session 的生命周期。
         """
         # 2. 在这里创建 session，此时事件循环肯定正在运行。
-        self.requestSession = aiohttp.ClientSession()
+        self.requestSession = aiohttp.ClientSession(trust_env=True)
         try:
             # 3. 调用父类的 run 方法来执行核心的工作循环。
             await super().run()

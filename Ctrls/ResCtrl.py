@@ -4,7 +4,7 @@ from sqlalchemy import select, ScalarResult
 from sqlalchemy.orm import Session
 
 from Configs import getResSizeList
-from Consts import ResState, ResType
+from Consts import ErrorCode, ResState, ResType
 from Ctrls import RequestCtrl
 from Models.PostModel import PostModel
 from Models.ResDomainModel import ResDomainModel
@@ -12,13 +12,10 @@ from Models.ResModel import ResModel
 from Models.ResUrlModel import ResUrlModel
 from Utils import LogUtil, PyUtil
 from routers.schemas_others import ResSizeCount, MissingPost
+from Models.Exceptions import BusinessException
 
 
-def getRes(session: Session, res_id: int) -> ResModel:
-    """
-    get a resource record by id
-    """
-    return session.get(ResModel, res_id)
+
 
 
 def getResByIndex(session: Session, post_id: int, res_index: int) -> ResModel:

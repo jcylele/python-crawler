@@ -14,9 +14,6 @@ from Workers.ImageWait.ActorIconWait import ActorIconWait
 from Workers.BaseFetchWorker import BaseFetchWorker
 from Workers.ImageWait.ThumbnailWait import ActorThumbnailWait
 
-# max number of post id
-MAX_POST_ID = 1 << 64 - 1
-
 
 class FetchActorWorker(BaseFetchWorker):
     """
@@ -134,6 +131,8 @@ class FetchActorWorker(BaseFetchWorker):
         post_count_updated = False
         page_finished = False
 
+        post_id_set: set[int] = set()
+
         # Loop through pages, using i as the expected page number
         for i in range(1, 1000000):
             LogUtil.info(f"actor {actor_name} page {i}")
@@ -190,6 +189,13 @@ class FetchActorWorker(BaseFetchWorker):
                 thumbnail_locator = article_locator.locator(
                     ".post-card__image-container")
                 has_thumbnail = (await thumbnail_locator.count()) > 0
+
+                if post_id in post_id_set:
+                    LogUtil.error(
+                        f"actor {actor_name} page {i} post {post_id_str} duplicate")
+                    continue
+                post_id_set.add(post_id)
+
                 post_list.append(PostInfo(post_id, post_id_str, has_thumbnail))
 
             reach_last_post = await self.processPosts(post_list, page.url)

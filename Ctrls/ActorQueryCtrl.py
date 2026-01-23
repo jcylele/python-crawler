@@ -204,6 +204,8 @@ def _filterQuery(query: Select, form: ActorConditionForm) -> Select:
         query = query.where(ActorModel.icon_hash.is_(None))
     if form.fix_filter & EFixFilter.MissingPosts:
         query = query.where(ActorModel.has_missing_posts == True)
+    if form.fix_filter & EFixFilter.NoFavorite:
+        query = query.where(ActorModel.favorite_count == 0)
 
     return query
 

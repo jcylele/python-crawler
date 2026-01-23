@@ -164,6 +164,7 @@ class EFixFilter(IntFlag):
     LinkNotChecked = 1 << 2  # link not checked
     IconNotExists = 1 << 3  # icon not exists
     MissingPosts = 1 << 4  # actor has missing posts
+    NoFavorite = 1 << 5  # actor has no favorite count
 
 
 class ErrorCode(IntEnum):

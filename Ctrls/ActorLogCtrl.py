@@ -1,8 +1,9 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from Consts import ActorLogType
 from Models.ActorLogModel import ActorLogModel
+from Models.ActorModel import ActorModel
 
 
 def getActorLogs(session: Session, actor_id: int) -> list[ActorLogModel]:
@@ -20,4 +21,10 @@ def addActorLog(session: Session, actor_id: int, log_type: ActorLogType, *params
 
     session.add(alm)
     session.flush()
+
+    stmt = (update(ActorModel)
+            .where(ActorModel.actor_id == actor_id)
+            .values(last_log_time=alm.log_time))
+    session.execute(stmt)
+
     return alm

@@ -1,26 +1,28 @@
+import asyncio
 import time
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
-from starlette.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
-from starlette.staticfiles import StaticFiles
 from starlette.requests import Request
-from contextlib import asynccontextmanager
+from starlette.responses import JSONResponse
+from starlette.staticfiles import StaticFiles
 
 import Configs
 from Consts import CacheKey, ErrorCode
-from Models.Exceptions import BusinessException
-from routers.schemas_others import UnifiedResponse
-from routers import actor, actor_tag, download, others, vue, actor_group, chart, post, notice, favorite_folder, actor_tag_group
-from Utils import CacheUtil, LogUtil, PyUtil
 from Download import TaskManager, WebPool
-from Download.DownloadTask import DownloadTask
+from Models.Exceptions import BusinessException
+from routers import (actor, actor_group, actor_tag, actor_tag_group, chart,
+                     download, favorite_folder, notice, others, post, vue)
+from routers.schemas_others import UnifiedResponse
+from Utils import CacheUtil, LogUtil, PathUtil
 
 # init browser env
 Configs.initPlaywright()
 
 
-DownloadTask.initEnv()
+TaskManager.initEnv()
 
 
 @asynccontextmanager
@@ -28,11 +30,14 @@ async def lifespan(app: FastAPI):
     # --- 应用启动时 ---
     LogUtil.info("Application startup...")
     await WebPool.init_pool()
-
+    # 启动 tick 任务
+    tick_task = asyncio.create_task(TaskManager.tick())
+    
     yield
-
-    LogUtil.info("Application shutdown...")
     # --- 应用关闭时 ---
+    LogUtil.info("Application shutdown...")
+    # 取消 tick 任务
+    tick_task.cancel()
     # await asyncio.to_thread(ActorFileCtrl.process_dirty_on_shutdown)
     await TaskManager.StopAllTasks()
     await WebPool.clear_pool()
@@ -76,11 +81,12 @@ async def general_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# 耗时监控
-
 
 @app.middleware("http")
 async def add_process_time(request: Request, call_next):
+    """
+    记录API请求的耗时
+    """
     if request.url.path.startswith("/api"):
         start_time = time.time()
         response = await call_next(request)
@@ -92,11 +98,12 @@ async def add_process_time(request: Request, call_next):
     else:
         return await call_next(request)
 
-# 记录最后一次运行时间(特定操作的API)
-
 
 @app.middleware("http")
 async def monitor_last_run(request: Request, call_next):
+    """
+    记录最后一次运行时间(特定操作的API)
+    """
     response = await call_next(request)
 
     # 仅当请求成功 (200 OK) 且是 API 请求时尝试记录
@@ -116,7 +123,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-assets_folder = PyUtil.formatStaticFile("assets")
+assets_folder = PathUtil.formatStaticFile("assets")
 # html files
 app.mount("/assets", StaticFiles(directory=assets_folder), name="assets")
 # static files

@@ -58,13 +58,14 @@ class ActorLogType(Enum):
     Group = 2
     Score = 3
     Tag = 4
-    ResetPost = 5
+    ResetPostStates = 5
     Remark = 6
     Link = 7
     Unlink = 8
     PostCount = 9
     ClearFolder = 10
     Comment = 11
+    ResetLastPostId = 12
 
 
 class ResType(Enum):
@@ -140,7 +141,8 @@ class BoolEnum(Enum):
 class SortType(Enum):
     Default = 0
     Score = auto()
-    CategoryTime = auto()
+    GroupTime = auto()
+    LogTime = auto()
     TotalPostCount = auto()
     CompletedPostCount = auto()
     InitFileSize = auto()

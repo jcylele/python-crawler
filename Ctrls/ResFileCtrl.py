@@ -13,7 +13,7 @@ import Configs
 from Consts import ActorLogType, ResState, ResType
 from Ctrls import ActorLogCtrl, CommonCtrl, ResCtrl
 from Models.ActorModel import ActorModel
-from Utils import DirUtil, LogUtil
+from Utils import DirUtil, LogUtil, PyUtil
 from routers.schemas_others import ResFileInfo, DownloadingVideoStats
 
 # region traverse file functions
@@ -53,7 +53,7 @@ def traverseDownloadedFilesOfActor(session: Session, actor: ActorModel, callback
 
 
 def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str, int, int, any], None], extra_data: any = None):
-    download_folder = Configs.formatTmpFolderPath()
+    download_folder = Configs.formatDownloadingFolderPath()
     try:
         with os.scandir(download_folder) as it:
             for entry in it:
@@ -70,7 +70,7 @@ def traverseDownloadingFiles(session: Session, callback: Callable[[Session, str,
 
 
 def existDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int, any], bool], extra_data: any = None) -> bool:
-    download_folder = Configs.formatTmpFolderPath()
+    download_folder = Configs.formatDownloadingFolderPath()
     try:
         with os.scandir(download_folder) as it:
             for entry in it:
@@ -92,7 +92,7 @@ def existDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: 
 
 
 def traverseDownloadingFilesOfActor(session: Session, actor: ActorModel, callback: Callable[[Session, str, int, int, any], None], extra_data: any = None):
-    download_folder = Configs.formatTmpFolderPath()
+    download_folder = Configs.formatDownloadingFolderPath()
     try:
         with os.scandir(download_folder) as it:
             for entry in it:
@@ -118,7 +118,7 @@ async def traverseDownloadingFilesOfActor_async(session: Session, actor: ActorMo
     """
 
     try:
-        download_folder = Configs.formatTmpFolderPath()
+        download_folder = Configs.formatDownloadingFolderPath()
         all_file_names = os.listdir(download_folder)
 
         callback_tasks = []
@@ -205,7 +205,8 @@ def removeDownloadingFiles(session: Session, actor_id: int, percent: int):
         if percent == 100:
             traverseDownloadingFiles(session, _remove_file_process)
         else:
-            traverseDownloadingFiles(session, _remove_file_percent_process, percent)
+            traverseDownloadingFiles(
+                session, _remove_file_percent_process, percent)
     else:
         actor = CommonCtrl.getActor(session, actor_id)
         if percent == 100:
@@ -241,11 +242,17 @@ def _rename_actor_file_process(session: Session, path: str, post_id: int, res_in
         return
     if res.res_type == ResType.Image:
         return
-    if res.res_width == 0 or res.res_height == 0 or res.res_duration == 0:
-        return
     actor_folder, file_name = os.path.split(path)
     if DirUtil.hasPrefix(file_name):
         return
+    # media info is not set, set it
+    if res.res_width == 0:
+        if not res.setMediaInfo(PyUtil.get_media_info(path)):
+            return
+    # media has no width, skip
+    if res.res_width == -1:
+        return
+    # rename file
     new_file_name = f"{DirUtil.getPrefix(res.res_width >= res.res_height)}_{file_name}"
     os.rename(path, os.path.join(actor_folder, new_file_name))
 
@@ -276,18 +283,6 @@ def remove_by_dir(session, actor: ActorModel, is_landscape: bool):
     return
 
 
-def _remove_thumbnail_image_process(session: Session, path: str, post_id: int, res_index: int, thumbnail_folder: str):
-    res = ResCtrl.getResByIndex(session, post_id, res_index)
-    if res is None:
-        return
-    if res.res_type == ResType.Video:
-        return
-    try:
-        os.remove(os.path.join(thumbnail_folder, res.res_url_info.file_name))
-    except FileNotFoundError:
-        pass
-
-
 def _remove_empty_thumbnail_image(thumbnail_folder: str):
     with os.scandir(thumbnail_folder) as it:
         for entry in it:
@@ -296,14 +291,6 @@ def _remove_empty_thumbnail_image(thumbnail_folder: str):
             if os.path.getsize(entry.path) > 0:
                 continue
             os.remove(entry.path)
-
-
-def remove_thumbnail_images(session: Session, actor: ActorModel):
-    thumbnail_folder = Configs.formatActorThumbnailFolderPath(
-        actor.actor_id, actor.actor_name)
-    traverseDownloadedFilesOfActor(
-        session, actor, _remove_thumbnail_image_process, thumbnail_folder)
-    _remove_empty_thumbnail_image(thumbnail_folder)
 
 
 def _add_size_process(_0: Session, file: str, _1: int, _2: int, sum: list[int]):

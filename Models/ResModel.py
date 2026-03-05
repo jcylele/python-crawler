@@ -74,7 +74,7 @@ class ResModel(BaseModel):
         :return:
         """
         ext = self.res_url_info.extension
-        return f"{Configs.formatTmpFolderPath()}/{self.actor().actor_id}_{self.post_id}_{self.res_id}.{ext}"
+        return f"{Configs.formatDownloadingFolderPath()}/{self.actor().actor_id}_{self.post_id}_{self.res_id}.{ext}"
 
     def isCompleted(self) -> bool:
         return self.res_state == ResState.Down or self.res_state == ResState.Del
@@ -111,6 +111,17 @@ class ResModel(BaseModel):
             return False
         self.res_state = state
         return True
+
+    def setMediaInfo(self, info: tuple[int, int, int]) -> bool:
+        if info[0] > 0 and info[1] > 0:
+            self.res_width = info[0]
+            self.res_height = info[1]
+            self.res_duration = info[2]
+            return True
+        self.res_width = -1
+        self.res_height = -1
+        self.res_duration = 0
+        return False
 
     def __repr__(self) -> str:
         return f"Res(id={self.res_id!r}, " \

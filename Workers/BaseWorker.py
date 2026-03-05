@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 import time
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from Download.DownloadTask import DownloadTask
 
 import asyncio
+
 from sqlalchemy.orm import Session
 
 import Configs
@@ -32,7 +35,7 @@ class BaseWorker:
     def DownloadLimit(self) -> DownloadLimit:
         return self.task.download_limit
 
-    def init_category(self) -> int:
+    def init_group_id(self) -> int:
         return self.task.init_group_id
 
     def workerType(self) -> WorkerType:
@@ -60,6 +63,7 @@ class BaseWorker:
         """
         # LogUtil.info(f"{self.workerType().name}({self.task.desc}) worker started.")
         try:
+            await self._onStart()
             while True:
                 # LogUtil.info(
                 #     f"{self.workerType().name} worker waiting for item...")
@@ -99,6 +103,13 @@ class BaseWorker:
             LogUtil.exception(e)
         finally:
             await self._onStop()
+
+    async def _onStart(self):
+        """
+        called when the worker is started
+        :return:
+        """
+        pass
 
     async def _onStop(self):
         """

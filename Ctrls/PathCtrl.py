@@ -12,3 +12,6 @@ def icon_file_path(actor_info: ActorInfo) -> str:
 
 def smartActorIconSrc(actor_info: ActorInfo) -> str:
     return f"{Configs.FileWebPath}/{Configs.IconFolder}/{icon_file_name(actor_info)}"
+
+def formatTmpFileSrc(file_name: str) -> str:
+    return f"{Configs.FileWebPath}/{Configs.TmpFolder}/{file_name}"

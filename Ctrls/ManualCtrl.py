@@ -9,8 +9,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 import Configs
-from Consts import NoticeType
-from Ctrls import ActorCtrl, ActorFileCtrl, ActorSimilarCtrl, CommonCtrl, RequestCtrl, ResCtrl, ResFileCtrl
+from Consts import NoticeType, ResState
+from Ctrls import ActorCtrl, ActorFileCtrl, ActorSimilarCtrl, CommonCtrl, RequestCtrl, ResCtrl, ResFileCtrl, WatermarkCtrl
 from Models.FavoriteFolderModel import FavoriteFolderModel
 from Models.ActorGroupModel import ActorGroupModel
 from Models.ActorFileInfoModel import ActorFileInfoModel
@@ -21,7 +21,7 @@ from Models.ActorTagModel import ActorTagModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.NoticeModel import NoticeModel
 from Models.ResModel import ResModel
-from Utils import LogUtil
+from Utils import LogUtil, PyUtil
 
 
 def resetManual(session: Session):
@@ -103,39 +103,6 @@ async def check_size(session: Session, file_path: str, res_id: int):
         print(file_size == res.res_size, file_size)
 
 
-def renameThumbnailFolder():
-    with os.scandir(Configs.getRootFolder()) as it1:
-        for entry1 in it1:
-            if entry1.is_file():
-                continue
-            match_obj = re.match(r'^(\S+)_(\d+)$', entry1.name)
-            if match_obj is None:
-                LogUtil.warning(
-                    f"skipping invalid actor folder name: {entry1.name}")
-                continue
-            actor_name = match_obj.group(1)
-            with os.scandir(entry1.path) as it2:
-                folder_found = False
-                folder_name = f"_{actor_name}"
-                for entry2 in it2:
-                    if entry2.is_file():
-                        continue
-                    if entry2.name == Configs.ThumbnailFolder:
-                        LogUtil.info(
-                            f"renamed thumbnail folder of {entry1.name}")
-                        os.rename(entry2.path, os.path.join(
-                            entry1.path, folder_name))
-                        folder_found = True
-                        break
-                    if entry2.name == folder_name:
-                        folder_found = True
-                        break
-                if not folder_found:
-                    LogUtil.info(f"created thumbnail folder of {entry1.name}")
-                    os.makedirs(os.path.join(
-                        entry1.path, folder_name))
-
-
 def printResUrl(session: Session):
     stmt = select(ResModel).where(ResModel.post_id == 762440076)
     res = session.scalar(stmt)
@@ -184,20 +151,21 @@ def allPureNames(session: Session):
         for pure_name in sorted_list:
             f.write(pure_name + "\n")
 
+
 def differ_icon(session: Session):
     actor_ids = [14799, 11852]
     icon_hashes = []
     for actor_id in actor_ids:
-        stmt = select(ActorModel.icon_hash).where(ActorModel.actor_id == actor_id)
+        stmt = select(ActorModel.icon_hash).where(
+            ActorModel.actor_id == actor_id)
         icon_hash = session.scalar(stmt)
         icon_hashes.append(int(icon_hash, 16))
     for hash in icon_hashes:
         print(hex(hash))
 
 
-
 def rename_downloading_files(session: Session):
-    download_folder = Configs.formatTmpFolderPath()
+    download_folder = Configs.formatDownloadingFolderPath()
     try:
         with os.scandir(download_folder) as it:
             for entry in it:
@@ -206,14 +174,81 @@ def rename_downloading_files(session: Session):
                     continue
                 post_id = int(match_obj.group(2))
                 res_index = int(match_obj.group(3))
-                
+
                 post = CommonCtrl.getPost(session, post_id)
                 res = ResCtrl.getResByIndex(session, post_id, res_index)
 
                 new_file_name = f"{post.actor_id}_{post_id}_{res.res_id}.{match_obj.group(4)}"
-                os.rename(entry.path, os.path.join(os.path.dirname(entry.path), new_file_name))
+                os.rename(entry.path, os.path.join(
+                    os.path.dirname(entry.path), new_file_name))
 
     except Exception as e:
         LogUtil.error(f"traverseDownloadingFiles failed, get Error")
         LogUtil.exception(e)
         pass
+
+
+def favorite_count_inversions(session: Session):
+    stmt = (select(ActorModel.favorite_count)
+            .where(ActorModel.favorite_count != 0)
+            .order_by(ActorModel.actor_id.desc()))
+    counts = [c for c in session.scalars(stmt)]
+    inversions = count_inversions_merge_optimized(counts)
+    print(f"inversions: {inversions}")
+    print(f"counts: {len(counts)}")
+
+
+def count_inversions_merge_optimized(arr):
+    """
+    优化的归并排序统计逆序数
+    对基本有序数组有优化，最坏情况 O(n log n)
+    """
+    def merge_and_count(left, right):
+        result = []
+        inversions = 0
+        i = j = 0
+
+        while i < len(left) and j < len(right):
+            if left[i] <= right[j]:
+                result.append(left[i])
+                i += 1
+            else:
+                result.append(right[j])
+                inversions += len(left) - i
+                j += 1
+
+        result.extend(left[i:])
+        result.extend(right[j:])
+        return result, inversions
+
+    def merge_sort_and_count(arr):
+        if len(arr) <= 1:
+            return arr, 0
+
+        # 对于小数组，使用插入排序可能更快
+        if len(arr) <= 10:
+            return insertion_sort_and_count(arr)
+
+        mid = len(arr) // 2
+        left, left_inv = merge_sort_and_count(arr[:mid])
+        right, right_inv = merge_sort_and_count(arr[mid:])
+        merged, merge_inv = merge_and_count(left, right)
+
+        return merged, left_inv + right_inv + merge_inv
+
+    def insertion_sort_and_count(arr):
+        """小数组使用插入排序"""
+        count = 0
+        for i in range(1, len(arr)):
+            key = arr[i]
+            j = i - 1
+            while j >= 0 and arr[j] > key:
+                count += 1
+                arr[j + 1] = arr[j]
+                j -= 1
+            arr[j + 1] = key
+        return arr, count
+
+    arr_copy = arr.copy()
+    _, count = merge_sort_and_count(arr_copy)
+    return count

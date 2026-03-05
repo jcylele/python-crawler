@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from Consts import ErrorCode
-from Ctrls import ActorSimilarCtrl, DbCtrl, ManualCtrl, PostCtrl, ResFileCtrl
+from Ctrls import ActorFileCtrl, ActorSimilarCtrl, DbCtrl, ManualCtrl, PostCtrl, ResFileCtrl
 from Utils import CacheUtil
 from routers.schemas_others import CommonResponse, SettingItem, Settings, UnifiedResponse
 
@@ -82,3 +82,9 @@ def get_last_run_times():
 @router.post("/validate_all_file_info", response_model=CommonResponse)
 def validate_all_file_info(session: Session = Depends(DbCtrl.get_db_session)):
     return CommonResponse(error_code=ErrorCode.Unavailable)
+
+
+@router.post("/fix_media_info", response_model=CommonResponse)
+def fix_media_info(session: Session = Depends(DbCtrl.get_db_session)):
+    ActorFileCtrl.fix_media_info(session)
+    return CommonResponse()

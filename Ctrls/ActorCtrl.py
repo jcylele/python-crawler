@@ -1,7 +1,7 @@
 # ActorModel related operations
 from collections.abc import Iterable
 
-from sqlalchemy import delete, exists, select, event, inspect
+from sqlalchemy import delete, exists, select, event, inspect, update
 from sqlalchemy.orm import Session
 
 from Consts import ErrorCode, NoticeType, ActorLogType, ResState
@@ -13,7 +13,6 @@ from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.PostModel import PostModel
 from Utils import LogUtil, PyUtil
-from routers.schemas_others import ActorAbstract
 
 
 # region single actor
@@ -167,16 +166,22 @@ def _setResStateToDowned(session: Session, file_path: str, post_id: int, res_ind
     res.res_state = ResState.Down
 
 
-def resetActorPosts(session: Session, actor_id: int):
-    actor = CommonCtrl.getActor(session, actor_id)
-    actor.last_post_id = 0
-
+def resetResStates(session: Session, actor_id: int):
+    # set res state to init
     PostCtrl.batchSetResStates(session, actor_id, ResState.Init)
     # set res state to downed if downloaded files exist
+    actor = CommonCtrl.getActor(session, actor_id)
     ResFileCtrl.traverseDownloadedFilesOfActor(
         session, actor, _setResStateToDowned)
 
-    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetPost)
+    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetPostStates)
+
+
+def resetLastPostId(session: Session, actor_id: int):
+    stmt = update(ActorModel).where(
+        ActorModel.actor_id == actor_id).values(last_post_id=0)
+    session.execute(stmt)
+    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetLastPostId)
 
 
 def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> ActorModel:

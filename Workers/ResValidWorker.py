@@ -52,18 +52,12 @@ class ResValidWorker(BaseWorker):
             return False
 
         # get media info
-        width, height, duration = PyUtil.get_media_info(
-            true_file_path)
+        media_info = PyUtil.get_media_info(true_file_path)
 
         # update db
         with DbCtrl.getSession() as dbSession, dbSession.begin():
             res2 = CommonCtrl.getRes(dbSession, extra_info.res_id)
-            if width > 0 and height > 0:
-                res2.res_width = width
-                res2.res_height = height
-                if duration > 0:
-                    res2.res_duration = duration
-
+            res2.setMediaInfo(media_info)
             res2.setState(ResState.Down)
 
         # refresh downloaded progress

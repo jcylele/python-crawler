@@ -21,6 +21,8 @@ class ActorModel(BaseModel):
     total_post_count: Mapped[int] = mapped_column(default=0, index=True)
     current_post_count: Mapped[int] = mapped_column(default=0)
     completed_post_count: Mapped[int] = mapped_column(default=0, index=True)
+    last_log_time: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True)
     last_fetch_time: Mapped[DateTime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True)
     post_scan_version: Mapped[int] = mapped_column(default=0)

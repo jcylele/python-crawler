@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi.params import Query, Body
 
 import Configs
-from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, CommonCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ResFileCtrl
+from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, CommonCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ResFileCtrl, WatermarkCtrl
 from Models.Exceptions import BusinessException
 from routers.schemas import ActorFileInfoResponse, ActorLogResponse, ActorResponse
 from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, MissingPost, PostFetchTimeStats, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
@@ -146,18 +146,36 @@ def change_actor_tag(actor_id: int, tag_list: list[int], session: Session = Depe
 @router.get("/{actor_id}/open", response_model=CommonResponse)
 def open_actor_folder(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
     actor = CommonCtrl.getActor(session, actor_id)
-    ResFileCtrl.remove_thumbnail_images(session, actor)
     subprocess.Popen(
         f'explorer "{Configs.formatActorFolderPath(actor.actor_id, actor.actor_name)}"')
     return CommonResponse()
 
 
-@router.patch("/{actor_id}/reset_posts", response_model=UnifiedResponse[ActorFileDetail])
-def reset_actor_posts(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    ActorCtrl.resetActorPosts(session, actor_id)
+@router.get("/{actor_id}/open_thumbnail_folder", response_model=CommonResponse)
+def open_thumbnail_folder(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    actor = CommonCtrl.getActor(session, actor_id)
+    thumbnail_folder = Configs.formatActorThumbnailFolderPath(
+        actor.actor_id, actor.actor_name)
+    # generate watermark
+    WatermarkCtrl.extract_watermark(thumbnail_folder)
+    # open folder
+    subprocess.Popen(f'explorer "{thumbnail_folder}"')
+
+    return CommonResponse()
+
+
+@router.patch("/{actor_id}/reset_res_states", response_model=UnifiedResponse[ActorFileDetail])
+def reset_actor_res_states(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    ActorCtrl.resetResStates(session, actor_id)
     session.flush()
     actor_file_detail = ActorFileCtrl.getActorFileDetail(session, actor_id)
     return UnifiedResponse[ActorFileDetail](data=actor_file_detail)
+
+
+@router.patch("/{actor_id}/reset_last_post_id", response_model=CommonResponse)
+def reset_last_post_id(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
+    ActorCtrl.resetLastPostId(session, actor_id)
+    return CommonResponse()
 
 
 @router.patch("/{actor_id}/clear", response_model=UnifiedResponse[ActorFileDetail])

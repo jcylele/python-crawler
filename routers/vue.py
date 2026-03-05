@@ -2,11 +2,11 @@ from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
-from Utils import PyUtil
+from Utils import PathUtil
 
 router = APIRouter()
 
-assets_folder = PyUtil.formatStaticFile("assets")
+assets_folder = PathUtil.formatStaticFile("assets")
 templates = Jinja2Templates(directory=assets_folder)
 
 

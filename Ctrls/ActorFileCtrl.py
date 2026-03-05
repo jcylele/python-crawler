@@ -16,7 +16,7 @@ from routers.schemas_others import ActorVideoInfo, ActorFileDetail, PostFetchTim
 
 from Consts import ActorLogType, DateFormat, ErrorCode, ResState, ResType
 
-from Ctrls import  ActorLogCtrl, CommonCtrl, DbCtrl, PostCtrl, ResFileCtrl
+from Ctrls import ActorLogCtrl, CommonCtrl, DbCtrl, PostCtrl, ResFileCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
@@ -403,11 +403,7 @@ def clearActorFolder(session: Session, actor: ActorModel):
     ActorLogCtrl.addActorLog(
         session, actor.actor_id, ActorLogType.ClearFolder, DirUtil.allDirName())
     # remove all files, keep thumbnail folder
-    with os.scandir(actor_folder) as it:
-        for entry in it:
-            if entry.is_dir():
-                continue
-            os.remove(entry.path)
+    PyUtil.removeFiles(actor_folder)
 
 
 def createActorFolder(actor: ActorInfo | ActorModel):
@@ -431,7 +427,6 @@ def fix_actor_folders(session: Session):
     delete actor folder if actor is in group which has no folder
     """
     ResFileCtrl.traverseActorFolders(session, _fix_actor_folder_process)
-
 
 
 def renameActor(session: Session, actor_id: int, new_name: str):
@@ -546,4 +541,15 @@ def getPostFetchTimeStats(session: Session, actor_id: int) -> list[PostFetchTime
         ))
     return formatted_results
 
+
+def fix_media_info(session: Session):
+    stmt = (select(ResModel)
+            .where(ResModel.res_state == ResState.Down)
+            .where(ResModel.res_width == 0))
+    reses = session.scalars(stmt)
+    for res in reses:
+        file_path = res.filePath()
+        LogUtil.info(file_path)
+        res.setMediaInfo(PyUtil.get_media_info(file_path))
+    session.flush()
 # endregion

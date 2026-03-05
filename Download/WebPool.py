@@ -1,6 +1,6 @@
 import asyncio
 
-from playwright.async_api import async_playwright, Playwright, Browser, Page
+from playwright.async_api import Browser, Page, Playwright, async_playwright
 
 import Configs
 from Consts import CacheKey, WorkerType
@@ -25,24 +25,22 @@ async def init_pool():
         __browser = await __playwright.chromium.launch(headless=not Configs.getSetting(CacheKey.ShowBrowser))
 
 
-async def acquire_page(worker_type: WorkerType) -> Page:
-    """从浏览器获取一个新页面，受信号量控制"""
-    semaphore = __semaphores[worker_type]
-    await semaphore.acquire()  # 获取许可，如果许可没了就异步等待
-
-    # 每次都创建一个新页面，因为页面状态不是独立的
-    page = await __browser.new_page()
-    return page
+async def acquire_page() -> Page:
+    return await __browser.new_page()
 
 
-async def release_page(page: Page, worker_type: WorkerType):
-    """关闭页面并释放信号量许可"""
-    # 协程不能直接调用，所以我们需要一个包装
-    # 更好的方式是在 worker 的 finally 块中处理
-    semaphore = __semaphores[worker_type]
-    semaphore.release()
-    # 必须在事件循环中关闭页面
+async def release_page(page: Page):
     await page.close()
+
+
+async def acquire_page_semaphore(worker_type: WorkerType):
+    """申请信号量许可"""
+    await __semaphores[worker_type].acquire()
+
+
+def release_page_semaphore(worker_type: WorkerType):
+    """释放信号量许可"""
+    __semaphores[worker_type].release()
 
 
 async def clear_pool():

@@ -1,19 +1,20 @@
 import asyncio
 from datetime import datetime
-import os
 
+from playwright.async_api import Page
 from sqlalchemy.orm import Session
 
 import Configs
 from Consts import DateFormat, PostFilter, ResType, TaskType, WorkerType
-from Ctrls import ActorQueryCtrl, CommonCtrl, DbCtrl, ActorCtrl, PostCtrl, ActorGroupCtrl, ResFileCtrl
-from Download import WorkerMgr
+from Ctrls import (ActorCtrl, ActorGroupCtrl, ActorQueryCtrl, CommonCtrl,
+                   DbCtrl, PostCtrl, ResFileCtrl)
+from Download import WebPool, WorkerMgr
 from Download.DownloadLimit import DownloadLimit
 from Download.TaskQueueMgr import TaskQueueMgr
 from Models.ModelInfos import ActorInfo
-from Utils import LogUtil, PyUtil
-from routers.web_data import ActorUrl
 from routers.schemas_others import DownloadTaskResponse, WorkerProcessStats
+from routers.web_data import ActorUrl
+from Utils import LogUtil, PyUtil
 
 
 class DownloadTask:
@@ -31,6 +32,35 @@ class DownloadTask:
         self.task_arg = 0
         self.actor_ids = []
         self.worker_process_stats: dict[WorkerType, WorkerProcessStats] = {}
+        self.page_holder: dict[WorkerType, int] = {}
+
+    def tick(self):
+        self.release_pages()
+
+    def release_pages(self):
+        # workers may get_page/return_page in the middle of the tick
+        tmp_page_holder = self.page_holder
+        self.page_holder = {}
+        for worker_type, count in tmp_page_holder.items():
+            for _ in range(count):
+                LogUtil.debug(
+                    f"{self.task_desc} release page for {worker_type}")
+                WebPool.release_page_semaphore(worker_type)
+
+    async def get_page(self, worker_type: WorkerType) -> Page:
+        if worker_type in self.page_holder and self.page_holder[worker_type] > 0:
+            self.page_holder[worker_type] -= 1
+        else:
+            await WebPool.acquire_page_semaphore(worker_type)
+            LogUtil.debug(f"{self.task_desc} get page for {worker_type}")
+        return await WebPool.acquire_page()
+
+    async def return_page(self, worker_type: WorkerType, page: Page):
+        if worker_type in self.page_holder:
+            self.page_holder[worker_type] += 1
+        else:
+            self.page_holder[worker_type] = 1
+        await WebPool.release_page(page)
 
     @property
     def is_fix_posts(self) -> bool:
@@ -94,11 +124,11 @@ class DownloadTask:
         try:
             # wait for all queues to finish
             await self.queue_mgr.wait_for_finish()
-            LogUtil.info(f"Task {self.task_desc} queues finished.")
+            LogUtil.debug(f"Task {self.task_desc} queues finished.")
             # stop all workers by sending sentinel
             await self._notify_workers_to_stop()
             await asyncio.gather(*self.worker_tasks, return_exceptions=True)
-            LogUtil.info(f"Task {self.task_desc} workers stopped.")
+            LogUtil.debug(f"Task {self.task_desc} workers stopped.")
             self.running = False
             LogUtil.info(f"Task {self.task_desc} finished.")
 
@@ -141,7 +171,7 @@ class DownloadTask:
 
     def setInitGroup(self, group_id: int):
         """
-        set initial category for new actors
+        set initial group for new actors
         :return:
         """
         self.init_group_id = group_id
@@ -240,7 +270,7 @@ class DownloadTask:
 
     async def downloadByActorGroup(self, group_id: int):
         """
-        download actors in corresponding category
+        download actors in corresponding group
         """
         actor_ids = []
         with DbCtrl.getSession() as session, session.begin():
@@ -323,19 +353,6 @@ class DownloadTask:
         with DbCtrl.getSession() as session, session.begin():
             actor_ids = ActorQueryCtrl.getActorsWithoutTotalPostCount(session)
         await self.downloadActors(actor_ids)
-
-    @staticmethod
-    def initEnv():
-        """
-        initialize the environment
-        :return:
-        """
-        LogUtil.info("initializing environment...")
-        # should be called before any other operations
-        os.makedirs(Configs.getRootFolder(), exist_ok=True)
-        os.makedirs(Configs.formatTmpFolderPath(), exist_ok=True)
-        os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
-        DbCtrl.init()
 
     def __repr__(self):
         return self.task_desc

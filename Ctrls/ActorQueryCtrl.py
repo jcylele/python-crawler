@@ -1,17 +1,16 @@
 
-from sqlalchemy import and_, or_, asc, desc, exists, func, select, Select, case
+from sqlalchemy import and_, asc, desc, exists, func, select, Select, case
 from sqlalchemy.orm import Session, aliased
 
 import Configs
+from Utils import PyUtil
 from Consts import EFixFilter, ResState, SortType, BoolEnum
 from Ctrls import ActorFileCtrl
-from Models.PostModel import PostModel
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel, actor_all_post_completed
 from Models.ActorTagRelationship import ActorTagRelationship
 from Models.ActorFileInfoModel import ActorFileInfoModel
 from Models.ActorFavoriteRelationship import ActorFavoriteRelationship
-from Utils import PyUtil
 from routers.schemas_others import CommentCount
 from routers.web_data import ActorConditionForm, LinkFilter, TagFilter
 
@@ -243,7 +242,7 @@ def getActorCountInFolders(session: Session) -> dict[int, int]:
 
 def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
     for sort_item in form.sort_items:
-        order_func = sort_item.sort_asc and asc or desc
+        order_func = asc if sort_item.sort_asc else desc
         if sort_item.sort_type == SortType.Score:
             _query = _query.order_by(order_func(ActorMainModel.score))
         elif sort_item.sort_type == SortType.FavoriteCount:
@@ -253,8 +252,10 @@ def _sortQuery(_query: Select, form: ActorConditionForm) -> Select:
         elif sort_item.sort_type == SortType.CompletedPostCount:
             _query = _query.order_by(order_func(
                 ActorModel.completed_post_count))
-        elif sort_item.sort_type == SortType.CategoryTime:
+        elif sort_item.sort_type == SortType.GroupTime:
             _query = _query.order_by(order_func(ActorModel.group_time))
+        elif sort_item.sort_type == SortType.LogTime:
+            _query = _query.order_by(order_func(ActorModel.last_log_time))
         elif sort_item.sort_type in _sort_file_size_map:
             res_state_list = _sort_file_size_map[sort_item.sort_type]
             subq = (
@@ -311,7 +312,7 @@ def getActorList(session: Session, form: ActorConditionForm, limit: int = 0, sta
 
 def getActorsByGroup(session: Session, group_id: int) -> list[ActorModel]:
     """
-    search actors by category
+    search actors by group
     """
     _query = (select(ActorModel)
               .where(ActorModel.actor_group_id == group_id))

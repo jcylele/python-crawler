@@ -1,10 +1,13 @@
 import asyncio
 
 from imagehash import ImageHash
+
 from Consts import CacheKey
-from Ctrls import ActorFileCtrl, ActorSimilarCtrl, DbCtrl, ManualCtrl, NoticeCtrl, ImageHashCtrl
+from Ctrls import (ActorFileCtrl, ActorSimilarCtrl, DbCtrl, ImageHashCtrl,
+                   ManualCtrl, NoticeCtrl)
+from Download import TaskManager
 from Download.DownloadTask import DownloadTask
-from Utils import CacheUtil, LogUtil
+from Utils import CacheUtil, LogUtil, PyUtil
 
 
 async def async_main():
@@ -14,16 +17,12 @@ async def async_main():
 
 
 def main():
-    LogUtil.info("rename downloading files")
-    # print(ActorSimilarCtrl._possible_pure_name("whosmrandmrssmithvip"))
-    # print(ImageHashCtrl.phash("D:\\OnlyFans\\_icon\\LunaHale_fansly.png"))
-    with DbCtrl.getSession() as session, session.begin():
-       # ActorSimilarCtrl.check_similar_icons(session)
-        ManualCtrl.rename_downloading_files(session)
-    # pass
+    # with DbCtrl.getSession() as session, session.begin():
+    #     ManualCtrl.favorite_count_inversions(session)
+    pass
 
 
 if __name__ == '__main__':
-    DownloadTask.initEnv()
+    TaskManager.initEnv()
     # asyncio.run(async_main())
     main()

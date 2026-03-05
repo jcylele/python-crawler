@@ -1,6 +1,11 @@
 import asyncio
+import os
+
+import Configs
 from Consts import TaskType
+from Ctrls import DbCtrl
 from Download.DownloadTask import DownloadTask
+from Utils import LogUtil
 
 next_task_id = 0
 task_dict: dict[int, DownloadTask] = {}
@@ -20,11 +25,12 @@ def NewTask(task_type: TaskType) -> DownloadTask:
 
 
 def RemoveFinishedTasks():
-    finished_task = []
+    finished_tasks: list[int] = []
     for task_uid, task in task_dict.items():
         if task.isDone():
-            finished_task.append(task_uid)
-    for task_uid in finished_task:
+            finished_tasks.append(task_uid)
+            task.release_pages()
+    for task_uid in finished_tasks:
         del task_dict[task_uid]
 
 
@@ -61,3 +67,23 @@ def GetActorIds() -> list[int]:
     for task in task_dict.values():
         actor_ids.extend(task.actor_ids)
     return actor_ids
+
+
+async def tick():
+    while True:
+        await asyncio.sleep(2)
+        for task in task_dict.values():
+            task.tick()
+
+
+def initEnv():
+    """
+    initialize the environment
+    """
+    LogUtil.info("initializing environment...")
+    # should be called before any other operations
+    os.makedirs(Configs.getRootFolder(), exist_ok=True)
+    os.makedirs(Configs.formatDownloadingFolderPath(), exist_ok=True)
+    os.makedirs(Configs.formatIconFolderPath(), exist_ok=True)
+    DbCtrl.init()
+    # asyncio.create_task(tick())

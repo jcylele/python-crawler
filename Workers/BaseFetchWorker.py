@@ -1,15 +1,16 @@
 import asyncio
+
+from playwright.async_api import Locator, Page, Response, Route
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from sqlalchemy.orm import Session
-from playwright.async_api import Page, Locator, Response, Route, TimeoutError as PlaywrightTimeoutError
 
 import Configs
 from Consts import WorkerType
-from Ctrls import CommonCtrl, DbCtrl, ActorCtrl
+from Ctrls import ActorCtrl, CommonCtrl, DbCtrl
 from Models.ModelInfos import ActorInfo
 from Utils import LogUtil
-from Download import WebPool
-from WorkQueue.BaseQueueItem import BaseQueueItem
 from Workers.BaseWorker import BaseWorker
+from WorkQueue.BaseQueueItem import BaseQueueItem
 
 
 class BaseFetchWorker(BaseWorker):
@@ -34,7 +35,7 @@ class BaseFetchWorker(BaseWorker):
                 if actor is None:
                     self.DownloadLimit().onActor()
                     actor = ActorCtrl.addActor(
-                        session, actor_info, self.init_category())
+                        session, actor_info, self.init_group_id())
                     new_actor_ids.append(actor.actor_id)
 
                 actor.favorite_count = actor_info.favorite_count
@@ -151,7 +152,7 @@ class BaseFetchWorker(BaseWorker):
 
         page = None
         try:
-            page = await WebPool.acquire_page(self.workerType())
+            page = await self.task.get_page(self.workerType())
             await self._setup_page(page)
             page.on("response", self.on_response)
             await page.goto(self._url(item), timeout=60000)
@@ -191,4 +192,4 @@ class BaseFetchWorker(BaseWorker):
                 return False
         finally:
             if page:
-                await WebPool.release_page(page, self.workerType())
+                await self.task.return_page(self.workerType(), page)

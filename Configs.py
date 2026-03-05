@@ -3,16 +3,16 @@ import re
 import sys
 
 from Consts import CacheFile, CacheKey, QueueType, WorkerType
-from Utils import CacheUtil, PyUtil
+from Utils import CacheUtil, PathUtil
 
-# tmp file inside RootFolder for downloading files which will be  moved to other locations when completed
-TmpFolder = "_downloading"
+# folder inside RootFolder for downloading files which will be  moved to other locations when completed
+DownloadingFolder = "_downloading"
 # folder for downloading icons of actors
 IconFolder = "_icon"
+# folder for temporary files
+TmpFolder = "_tmp"
 # web path for files, app mount prefix
 FileWebPath = "files"
-# thumbnail image folder in actor folder
-ThumbnailFolder = "_thumbnail"
 
 # wait for images js
 WAIT_ALL_IMAGES_JS: str | None = None
@@ -55,7 +55,7 @@ def getRootFolder() -> str:
 def getWaitAllImagesJs(selector: str) -> str:
     global WAIT_ALL_IMAGES_JS
     if WAIT_ALL_IMAGES_JS is None:
-        with open(PyUtil.formatStaticFile('configs/wait_all_images.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
+        with open(PathUtil.formatStaticFile('configs/wait_all_images.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
             WAIT_ALL_IMAGES_JS = wait_for_images_js_file.read()
     return f"({WAIT_ALL_IMAGES_JS})('{selector}')"
 
@@ -63,10 +63,9 @@ def getWaitAllImagesJs(selector: str) -> str:
 def getWaitSingleImageJs(selector: str) -> str:
     global WAIT_SINGLE_IMAGE_JS
     if WAIT_SINGLE_IMAGE_JS is None:
-        with open(PyUtil.formatStaticFile('configs/wait_single_image.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
+        with open(PathUtil.formatStaticFile('configs/wait_single_image.js'), 'r', encoding='utf-8') as wait_for_images_js_file:
             WAIT_SINGLE_IMAGE_JS = wait_for_images_js_file.read()
     return f"({WAIT_SINGLE_IMAGE_JS})('{selector}')"
-
 
 def __generateResSizeList() -> list[int]:
     ret = [0]
@@ -102,13 +101,15 @@ def initPlaywright():
             print(
                 "Warning: LOCALAPPDATA environment variable not found. Playwright might fail.")
 
-
 def formatTmpFolderPath() -> str:
+    return f"{getRootFolder()}\\{TmpFolder}"
+
+def formatDownloadingFolderPath() -> str:
     """
     temporary folder for downloading files
     :return:
     """
-    return f"{getRootFolder()}\\{TmpFolder}"
+    return f"{getRootFolder()}\\{DownloadingFolder}"
 
 
 def formatIconFolderPath() -> str:

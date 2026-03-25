@@ -1,4 +1,4 @@
-from enum import Enum, IntFlag, auto, IntEnum
+from enum import Enum, IntEnum, IntFlag, auto
 
 
 class DateFormat(Enum):
@@ -123,6 +123,7 @@ class TaskType(IntEnum):
     Resume = auto()
     FixPost = auto()
     FixRes = auto()
+    Thumbnail = auto()
 
     MaxSingleActor = 100  # above are single actor tasks, below are multiple actor tasks
 

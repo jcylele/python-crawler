@@ -5,8 +5,9 @@ from Download.QueueMgr import QueueMgr
 from Models.ModelInfos import ActorInfo, PostInfo
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-from WorkQueue.ExtraInfo import ResInfoExtraInfo, ResFileExtraInfo
-from WorkQueue.FetchQueueItem import FetchActorsQueueItem, FetchActorQueueItem, FetchPostQueueItem
+from WorkQueue.ExtraInfo import ResFileExtraInfo, ResInfoExtraInfo
+from WorkQueue.FetchQueueItem import (FetchActorQueueItem,
+                                      FetchActorsQueueItem, FetchPostQueueItem)
 from WorkQueue.UrlQueueItem import UrlQueueItem
 
 
@@ -21,10 +22,10 @@ class TaskQueueMgr(QueueMgr):
         return True
 
     def canFetchPost(self, task_type: TaskType) -> bool:
-        return task_type not in [TaskType.New, TaskType.FixPost, TaskType.Manual]
+        return task_type not in [TaskType.New, TaskType.FixPost, TaskType.Manual, TaskType.Thumbnail]
 
     def canFetchRes(self, task_type: TaskType) -> bool:
-        return task_type not in [TaskType.New, TaskType.FixPost, TaskType.Manual]
+        return task_type not in [TaskType.New, TaskType.FixPost, TaskType.Manual, TaskType.Thumbnail]
 
     async def enqueueFetchActors(self, start_page: int):
         item = FetchActorsQueueItem(start_page)

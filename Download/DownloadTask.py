@@ -23,7 +23,7 @@ class DownloadTask:
         self.task_type = task_type
 
         self.running = False
-        self.worker_tasks = []
+        self.worker_tasks: list[asyncio.Task] = []
         self.watcher_task: asyncio.Task | None = None
         self.queue_mgr = TaskQueueMgr(task_type)
         self.download_limit: DownloadLimit | None = None
@@ -72,7 +72,7 @@ class DownloadTask:
 
     @property
     def wait_thumbnail(self) -> bool:
-        return self.download_limit.allowResDownload(ResType.Image)
+        return self.task_type == TaskType.Thumbnail or self.download_limit.allowResDownload(ResType.Image)
 
     def _getWorkerStats(self, worker_type: WorkerType) -> WorkerProcessStats:
         worker_stats = self.worker_process_stats.get(worker_type)
@@ -337,11 +337,17 @@ class DownloadTask:
             await self._fix_video_urls_of_actor(session, ActorInfo(actor), end_date)
         await self.start()
 
-    async def fix_actor_link(self):
-        pass
+    async def download_thumbnail_of_actor(self, actor_id: int):
+        with DbCtrl.getSession() as session, session.begin():
+            actor = CommonCtrl.getActor(session, actor_id)
+            if actor is None:
+                return
+            self.actor_ids = [actor_id]
+            self.task_desc = f"thumbnail of actor {actor.actor_name}"
+            self.task_arg = actor_id
+            await self.queue_mgr.enqueueFetchActor(actor_id)
 
-    async def fix_actor_icon(self):
-        pass
+        await self.start()
 
     async def manual(self):
         """

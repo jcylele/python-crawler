@@ -1,9 +1,10 @@
-
-
 from pydantic import BaseModel
 
 from Consts import BoolEnum, EFixFilter, ResType, SortType
 
+
+class BaseBatchActor(BaseModel):
+    actor_ids: list[int]
 
 class TagUsedInfo(BaseModel):
     used_count: int
@@ -59,13 +60,11 @@ class ActorTagForm(BaseModel):
     tag_priority: int
 
 
-class BatchActorGroup(BaseModel):
-    actor_ids: list[int]
+class BatchActorGroup(BaseBatchActor):
     group_id: int
 
 
-class LinkActorForm(BaseModel):
-    actor_ids: list[int]
+class LinkActorForm(BaseBatchActor):
     score: int
     tag_list: list[int]
     remark: str
@@ -99,6 +98,9 @@ class DownloadLimitForm(BaseModel):
     def fixResLimit():
         return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size=0)
 
+    @staticmethod
+    def thumbnailLimit():
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size=0)
 
 class ActorGroupCond(BaseModel):
     cond_type: int
@@ -109,7 +111,7 @@ class BaseDownloadForm(BaseModel):
     download_limit: DownloadLimitForm
 
 
-class ActorIdDownloadForm(BaseDownloadForm):
+class SpecificDownloadForm(BaseDownloadForm):
     actor_ids: list[int]
 
 
@@ -129,8 +131,7 @@ class ActorUrl(BaseModel):
 class UrlDownloadForm(GroupDownloadForm):
     urls: list[ActorUrl]
 
-class FixVideoForm(BaseModel):
-    actor_ids: list[int]
+class FixVideoForm(BaseBatchActor):
     end_date: str
 
 class CommonGroupForm(BaseModel):

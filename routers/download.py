@@ -7,11 +7,14 @@ from sqlalchemy.orm import Session
 from Consts import DateFormat, TaskType
 from Ctrls import DbCtrl
 from Download.DownloadLimit import DownloadLimit
-from Download.TaskManager import NewTask, GetAllTask, StopTask, StopAllTasks, GetActorIds, GetTaskCount
+from Download.TaskManager import (GetActorIds, GetAllTask, GetTaskCount,
+                                  NewTask, StopAllTasks, StopTask)
+from routers.schemas_others import (CommonResponse, DownloadTaskResponse,
+                                    UnifiedListResponse, UnifiedResponse)
+from routers.web_data import (BaseBatchActor, DownloadLimitForm, FixVideoForm,
+                              GroupDownloadForm, NewDownloadForm,
+                              SpecificDownloadForm, UrlDownloadForm)
 from Utils import PyUtil
-from routers.web_data import FixVideoForm, GroupDownloadForm, ActorIdDownloadForm, UrlDownloadForm, \
-    NewDownloadForm, DownloadLimitForm
-from routers.schemas_others import CommonResponse, DownloadTaskResponse, UnifiedListResponse, UnifiedResponse
 
 router = APIRouter(
     prefix="/api/download",
@@ -41,7 +44,7 @@ async def download_by_group(form: GroupDownloadForm):
     return CommonResponse()
 
 
-@router.patch("/resume/{actor_id}", response_model=CommonResponse)
+@router.post("/resume/{actor_id}", response_model=CommonResponse)
 async def resume_actor(actor_id: int):
     limit = DownloadLimit(DownloadLimitForm.resumeVideoLimit())
     task = NewTask(TaskType.Resume)
@@ -58,9 +61,9 @@ async def _fix_posts_process(actor_id: int):
 
 
 @router.post("/fix_posts", response_model=CommonResponse)
-async def fix_posts(actor_ids: list[int]):
+async def fix_posts(form: BaseBatchActor):
     tasks = []
-    for actor_id in actor_ids:
+    for actor_id in form.actor_ids:
         tasks.append(asyncio.create_task(_fix_posts_process(actor_id)))
     await asyncio.gather(*tasks)
     return CommonResponse()
@@ -82,6 +85,21 @@ async def fix_res(form: FixVideoForm):
     await asyncio.gather(*tasks)
     return CommonResponse()
 
+async def _download_thumbnail_process(actor_id: int):
+    limit = DownloadLimit(DownloadLimitForm.thumbnailLimit())
+    task = NewTask(TaskType.Thumbnail)
+    task.setLimit(limit)
+    await task.download_thumbnail_of_actor(actor_id)
+
+
+@router.post("/thumbnail", response_model=CommonResponse)
+async def downlaod_thumbnail(form: BaseBatchActor):
+    tasks = []
+    for actor_id in form.actor_ids:
+        tasks.append(asyncio.create_task(
+            _download_thumbnail_process(actor_id)))
+    await asyncio.gather(*tasks)
+    return CommonResponse()
 
 @router.post("/manual", response_model=CommonResponse)
 async def manual(form: GroupDownloadForm):
@@ -101,7 +119,7 @@ async def _download_specific_process(actor_id: int, download_limit: DownloadLimi
 
 
 @router.post("/specific", response_model=CommonResponse)
-async def download_specific(form: ActorIdDownloadForm):
+async def download_specific(form: SpecificDownloadForm):
     tasks = []
     for actor_id in form.actor_ids:
         tasks.append(asyncio.create_task(_download_specific_process(

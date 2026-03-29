@@ -50,7 +50,15 @@ class DownloadLimit(object):
             return True
 
     def checkResSize(self, res_size: int) -> bool:
-        return not (res_size > self.limit.single_file_size > 0)
+        min_size = self.limit.single_file_size_min
+        max_size = self.limit.single_file_size_max
+
+        # max=0 means no upper limit; min=0 means no lower limit.
+        if min_size > 0 and res_size < min_size:
+            return False
+        if max_size > 0 and res_size > max_size:
+            return False
+        return True
 
     def canDownload(self, file_size: int) -> bool:
         if self.progress.file_count >= self.limit.file_count > 0:

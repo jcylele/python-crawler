@@ -84,23 +84,27 @@ class DownloadLimitForm(BaseModel):
     res_type: int
     file_count: int
     total_file_size: int
-    single_file_size: int
+    # Single file size range (bytes).
+    # - single_file_size_min: lower bound, 0 means no lower limit
+    # - single_file_size_max: upper bound, 0 means no upper limit
+    single_file_size_min: int
+    single_file_size_max: int
 
     @staticmethod
     def resumeVideoLimit():
-        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size=0)
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Video.value, file_count=0, total_file_size=0, single_file_size_min=0, single_file_size_max=0)
 
     @staticmethod
     def fixPostsLimit():
-        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size=0)
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size_min=0, single_file_size_max=0)
 
     @staticmethod
     def fixResLimit():
-        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size=0)
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size_min=0, single_file_size_max=0)
 
     @staticmethod
     def thumbnailLimit():
-        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size=0)
+        return DownloadLimitForm(actor_count=0, post_count=0, post_filter=0, res_type=ResType.Null.value, file_count=0, total_file_size=0, single_file_size_min=0, single_file_size_max=0)
 
 class ActorGroupCond(BaseModel):
     cond_type: int

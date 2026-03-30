@@ -65,7 +65,6 @@ class ActorLogType(Enum):
     PostCount = 9
     ClearFolder = 10
     Comment = 11
-    ResetLastPostId = 12
 
 
 class ResType(Enum):
@@ -78,7 +77,7 @@ class ResState(Enum):
     Init = 1
     Down = 2
     Skip = 3  # obsolete but keep for compatibility
-    Del = 4
+    Finished = 4
 
 
 class WorkerType(Enum):

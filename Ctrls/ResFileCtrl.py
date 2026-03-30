@@ -5,16 +5,17 @@ ResFileCtrl is responsible for traversing related files of the resources.
 import asyncio
 import os
 import re
-from typing import Any, Coroutine
 from collections.abc import Callable
+from typing import Any, Coroutine
+
 from sqlalchemy.orm import Session
 
 import Configs
 from Consts import ActorLogType, ResState, ResType
 from Ctrls import ActorLogCtrl, CommonCtrl, ResCtrl
 from Models.ActorModel import ActorModel
+from routers.schemas_others import DownloadingVideoStats, ResFileInfo
 from Utils import DirUtil, LogUtil, PyUtil
-from routers.schemas_others import ResFileInfo, DownloadingVideoStats
 
 # region traverse file functions
 
@@ -271,7 +272,7 @@ def _remove_by_dir_process(session: Session, path: str, post_id: int, res_index:
     if res is None:
         return
 
-    res.setState(ResState.Del)
+    res.setState(ResState.Finished)
     os.remove(path)
 
 
@@ -306,7 +307,7 @@ def getTotalDownloadingSize(session: Session) -> int:
 
 def __remove_outdated_process(session: Session, file_path: str, _1: int, res_id: int, extra_data: any = None):
     res = CommonCtrl.getRes(session, res_id)
-    if res.res_state == ResState.Del:
+    if res.res_state == ResState.Finished:
         LogUtil.info(f"remove outdated downloading file {file_path}")
         os.remove(file_path)
 

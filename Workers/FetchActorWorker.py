@@ -1,18 +1,22 @@
 import asyncio
 import re
+
+from playwright.async_api import Page, Response
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import expect
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from playwright.async_api import Page, Response, expect, TimeoutError as PlaywrightTimeoutError
 
 import Configs
-from Consts import WorkerType, NoticeType, ActorLogType
-from Ctrls import ActorCtrl, CommonCtrl, DbCtrl, RequestCtrl, PostCtrl, NoticeCtrl, ActorLogCtrl
+from Consts import ActorLogType, NoticeType, WorkerType
+from Ctrls import (ActorCtrl, ActorLogCtrl, CommonCtrl, DbCtrl, NoticeCtrl,
+                   PostCtrl, RequestCtrl)
 from Models.ModelInfos import ActorInfo, PostInfo
 from Utils import LogUtil
-from WorkQueue.FetchQueueItem import FetchActorQueueItem
-from Workers.ImageWait.ActorIconWait import ActorIconWait
 from Workers.BaseFetchWorker import BaseFetchWorker
+from Workers.ImageWait.ActorIconWait import ActorIconWait
 from Workers.ImageWait.ThumbnailWait import ActorThumbnailWait
+from WorkQueue.FetchQueueItem import FetchActorQueueItem
 
 
 class FetchActorWorker(BaseFetchWorker):
@@ -27,17 +31,12 @@ class FetchActorWorker(BaseFetchWorker):
         self.actor_thumbnail_wait = ActorThumbnailWait()
         self.actor_thumbnail_wait.set_wait(task.wait_thumbnail)
 
-    async def processPosts(self, post_list: list[PostInfo], from_url: str) -> bool:
-        reach_last = False
+    async def processPosts(self, post_list: list[PostInfo]):
         posts_to_enqueue: list[PostInfo] = []
         with DbCtrl.getSession() as session, session.begin():
             actor_id = self.actor_info.actor_id
             actor = CommonCtrl.getActor(session, actor_id)
-            last_post_id = 0 if self.task.is_all_posts() else actor.last_post_id
             for post_info in post_list:
-                if post_info.post_id <= last_post_id:
-                    reach_last = True
-                    continue
                 post = CommonCtrl.tryGetPost(session, post_info.post_id)
                 if post is None:
                     PostCtrl.addPost(session, self.actor_info, post_info)
@@ -62,8 +61,6 @@ class FetchActorWorker(BaseFetchWorker):
         # 在事务提交后，再将所有任务推入队列
         for post_info in posts_to_enqueue:
             await self.queue_mgr().enqueueFetchPost(self.actor_info, post_info)
-
-        return reach_last
 
     def updateActorPostScanVersion(self):
         with DbCtrl.getSession() as session, session.begin():
@@ -198,7 +195,7 @@ class FetchActorWorker(BaseFetchWorker):
 
                 post_list.append(PostInfo(post_id, post_id_str, has_thumbnail))
 
-            reach_last_post = await self.processPosts(post_list, page.url)
+            await self.processPosts(post_list)
             post_count += len(post_list)
 
             await self.actor_thumbnail_wait.wait(page)
@@ -211,7 +208,7 @@ class FetchActorWorker(BaseFetchWorker):
                 post_count_updated = True
 
             # Check break conditions
-            if reach_last_post or (not self.DownloadLimit().morePost(post_count)):
+            if not self.DownloadLimit().morePost(post_count):
                 break
 
             # Next page logic

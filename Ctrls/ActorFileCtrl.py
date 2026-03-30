@@ -2,26 +2,24 @@ import os
 import shutil
 import threading
 from collections.abc import Iterable
-from sqlalchemy import Select, delete, exists, select, func, case, event
+
+from sqlalchemy import Select, case, delete, event, exists, func, select
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
 import Configs
-from Models.Exceptions import BusinessException
-from Models.ModelInfos import ActorInfo
-from Models.ActorModel import ActorModel
-from Utils import DirUtil, PyUtil
-from Utils.PyUtil import time_cost
-from routers.schemas_others import ActorVideoInfo, ActorFileDetail, PostFetchTimeStats
-
 from Consts import ActorLogType, DateFormat, ErrorCode, ResState, ResType
-
 from Ctrls import ActorLogCtrl, CommonCtrl, DbCtrl, PostCtrl, ResFileCtrl
 from Models.ActorFileInfoModel import ActorFileInfoModel
+from Models.ActorModel import ActorModel
+from Models.Exceptions import BusinessException
+from Models.ModelInfos import ActorInfo
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-
-from Utils import LogUtil
+from routers.schemas_others import (ActorFileDetail, ActorVideoInfo,
+                                    PostFetchTimeStats)
+from Utils import DirUtil, LogUtil, PyUtil
+from Utils.PyUtil import time_cost
 
 _dirty_lock = threading.Lock()
 _cleanup_timer: threading.Timer | None = None
@@ -387,7 +385,7 @@ def deleteActorFolder(session: Session, actor: ActorModel):
         shutil.rmtree(actor_folder)
     ResFileCtrl.removeActorDownloadingFiles(session, actor)
 
-    PostCtrl.batchSetResStates(session, actor.actor_id, ResState.Del)
+    PostCtrl.batchSetResStates(session, actor.actor_id, ResState.Down, ResState.Finished)
 
 
 def clearActorFolder(session: Session, actor: ActorModel):
@@ -399,7 +397,7 @@ def clearActorFolder(session: Session, actor: ActorModel):
     if not os.path.exists(actor_folder):
         return
     # set res state according to file existence
-    PostCtrl.removeCurrentResFiles(session, actor.actor_id)
+    PostCtrl.batchSetResStates(session, actor.actor_id, ResState.Down, ResState.Finished)
     ActorLogCtrl.addActorLog(
         session, actor.actor_id, ActorLogType.ClearFolder, DirUtil.allDirName())
     # remove all files, keep thumbnail folder

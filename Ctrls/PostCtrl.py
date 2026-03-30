@@ -1,7 +1,8 @@
 # PostModel related operations
 
 from datetime import datetime
-from sqlalchemy import ScalarResult, func, select, update, Select, exists, or_
+
+from sqlalchemy import ScalarResult, Select, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from Consts import ResState, ResType
@@ -10,9 +11,9 @@ from Models.ActorModel import ActorModel
 from Models.ModelInfos import ActorInfo, PostInfo
 from Models.PostModel import PostModel
 from Models.ResModel import ResModel
-from Utils import PyUtil
-from routers.web_data import PostFilterForm
 from routers.schemas_others import ActorPostInfo
+from routers.web_data import PostFilterForm
+from Utils import PyUtil
 
 
 def getMaxPostId(session: Session, actor_id: int) -> int:
@@ -36,24 +37,12 @@ def addPost(session: Session, actor_info: ActorInfo, post_info: PostInfo):
     session.flush()
 
 
-def batchSetResStates(session: Session, actor_id: int, state: ResState):
+def batchSetResStates(session: Session, actor_id: int, old_state: ResState, new_state: ResState):
     _query = (update(ResModel)
               .where(ResModel.post_id == PostModel.post_id)
               .where(PostModel.actor_id == actor_id)
-              .values(res_state=state))
-    session.execute(_query)
-    session.flush()
-    # manually delete
-    ActorFileCtrl.deleteActorFileInfo(actor_id)
-
-
-# set current downloaded res(file exists) to del
-def removeCurrentResFiles(session: Session, actor_id: int):
-    _query = (update(ResModel)
-              .where(ResModel.post_id == PostModel.post_id)
-              .where(PostModel.actor_id == actor_id)
-              .where(ResModel.res_state == ResState.Down)
-              .values(res_state=ResState.Del))
+              .where(ResModel.res_state == old_state)
+              .values(res_state=new_state))
     session.execute(_query)
     session.flush()
     # manually delete
@@ -112,11 +101,9 @@ def setPostComment(session: Session, post_id: int, comment: str):
     session.flush()
 
 
-def getPostsOfActor(session: Session, actor_id: int, last_post_id: int = 0, only_complete: bool = False) -> ScalarResult[PostModel]:
+def getPostsOfActor(session: Session, actor_id: int, only_complete: bool = False) -> ScalarResult[PostModel]:
     _query = (select(PostModel)
               .where(PostModel.actor_id == actor_id))
-    if last_post_id > 0:
-        _query = _query.where(PostModel.post_id > last_post_id)
     if only_complete:
         _query = _query.where(PostModel.completed == True)
     _query = _query.order_by(PostModel.has_thumbnail,

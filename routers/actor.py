@@ -2,14 +2,22 @@ import subprocess
 from typing import TypeAlias
 
 from fastapi import APIRouter, Depends
+from fastapi.params import Body, Query
 from sqlalchemy.orm import Session
-from fastapi.params import Query, Body
 
 import Configs
-from Ctrls import ActorFileCtrl, ActorLinkCtrl, ActorQueryCtrl, CommonCtrl, DbCtrl, ActorCtrl, ActorLogCtrl, ResCtrl, ResFileCtrl, WatermarkCtrl
+from Ctrls import (ActorCtrl, ActorFileCtrl, ActorLinkCtrl, ActorLogCtrl,
+                   ActorQueryCtrl, CommonCtrl, DbCtrl, ResCtrl, ResFileCtrl,
+                   WatermarkCtrl)
 from Models.Exceptions import BusinessException
-from routers.schemas import ActorFileInfoResponse, ActorLogResponse, ActorResponse
-from routers.schemas_others import ActorAbstract, ActorVideoInfo, CommentCount, CommonResponse, MissingPost, PostFetchTimeStats, ResFileInfo, ActorFileDetail, ResSizeCount, UnifiedListResponse, UnifiedResponse
+from routers.schemas import (ActorFileInfoResponse, ActorLogResponse,
+                             ActorResponse)
+from routers.schemas_others import (ActorAbstract, ActorFileDetail,
+                                    ActorVideoInfo, CommentCount,
+                                    CommonResponse, MissingPost,
+                                    PostFetchTimeStats, ResFileInfo,
+                                    ResSizeCount, UnifiedListResponse,
+                                    UnifiedResponse)
 from routers.web_data import ActorConditionForm, BatchActorGroup, LinkActorForm
 
 router = APIRouter(
@@ -170,12 +178,6 @@ def reset_actor_res_states(actor_id: int, session: Session = Depends(DbCtrl.get_
     session.flush()
     actor_file_detail = ActorFileCtrl.getActorFileDetail(session, actor_id)
     return UnifiedResponse[ActorFileDetail](data=actor_file_detail)
-
-
-@router.patch("/{actor_id}/reset_last_post_id", response_model=CommonResponse)
-def reset_last_post_id(actor_id: int, session: Session = Depends(DbCtrl.get_db_session)):
-    ActorCtrl.resetLastPostId(session, actor_id)
-    return CommonResponse()
 
 
 @router.patch("/{actor_id}/clear", response_model=UnifiedResponse[ActorFileDetail])

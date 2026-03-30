@@ -1,6 +1,7 @@
 
-from sqlalchemy import ColumnElement, String, ForeignKey, DateTime, and_, func, BigInteger, event, or_
-from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
+from sqlalchemy import (BigInteger, ColumnElement, DateTime, ForeignKey,
+                        String, and_, event, func, or_)
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from Configs import DB_STR_LEN_REMARK, DB_STR_LEN_SHORT
 from Models.BaseModel import BaseModel
@@ -36,7 +37,6 @@ class ActorModel(BaseModel):
     )
     group_time: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), default=func.now(), index=True)
-    last_post_id: Mapped[int] = mapped_column(BigInteger, default=0)
     link_checked: Mapped[bool] = mapped_column(default=False)
     manual_done: Mapped[bool] = mapped_column(default=False)
     # info for this actor (not shared), just to record trivial things
@@ -96,10 +96,6 @@ class ActorModel(BaseModel):
     @property
     def remark(self) -> str:
         return self.main_actor.remark
-
-    @property
-    def has_last_post_id(self) -> bool:
-        return self.last_post_id > 0
 
     @property
     def tag_ids(self) -> list[int]:

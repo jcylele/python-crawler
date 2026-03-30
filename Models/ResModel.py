@@ -1,5 +1,5 @@
-from sqlalchemy import ForeignKey, BigInteger, Index
-from sqlalchemy.orm import mapped_column, Mapped, relationship
+from sqlalchemy import BigInteger, ForeignKey, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 import Configs
 from Consts import ResState, ResType
@@ -77,7 +77,7 @@ class ResModel(BaseModel):
         return f"{Configs.formatDownloadingFolderPath()}/{self.actor().actor_id}_{self.post_id}_{self.res_id}.{ext}"
 
     def isCompleted(self) -> bool:
-        return self.res_state == ResState.Down or self.res_state == ResState.Del
+        return self.res_state != ResState.Init
 
     def shouldDownload(self, download_limit: DownloadLimit) -> bool:
         if self.isCompleted():
@@ -110,6 +110,8 @@ class ResModel(BaseModel):
         if self.res_state == state:
             return False
         self.res_state = state
+        if state == ResState.Down:
+            self.was_downloaded = True
         return True
 
     def setMediaInfo(self, info: tuple[int, int, int]) -> bool:

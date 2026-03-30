@@ -1,19 +1,19 @@
 # ActorModel related operations
 from collections.abc import Iterable
 
-from sqlalchemy import delete, exists, select, event, inspect, update
+from sqlalchemy import delete, event, exists, inspect, select, update
 from sqlalchemy.orm import Session
 
-from Consts import ErrorCode, NoticeType, ActorLogType, ResState
-from Ctrls import CommonCtrl, DbCtrl, PostCtrl, ResCtrl, ActorGroupCtrl, NoticeCtrl, ActorLogCtrl, ActorFileCtrl, ResFileCtrl
-from Models.Exceptions import BusinessException
-from Models.ModelInfos import ActorInfo
+from Consts import ActorLogType, ErrorCode, NoticeType, ResState
+from Ctrls import (ActorFileCtrl, ActorGroupCtrl, ActorLogCtrl, CommonCtrl,
+                   DbCtrl, NoticeCtrl, PostCtrl, ResCtrl, ResFileCtrl)
 from Models.ActorMainModel import ActorMainModel
 from Models.ActorModel import ActorModel
 from Models.ActorTagRelationship import ActorTagRelationship
+from Models.Exceptions import BusinessException
+from Models.ModelInfos import ActorInfo
 from Models.PostModel import PostModel
 from Utils import LogUtil, PyUtil
-
 
 # region single actor
 
@@ -163,25 +163,18 @@ def _setResStateToDowned(session: Session, file_path: str, post_id: int, res_ind
     res = ResCtrl.getResByIndex(session, post_id, res_index)
     if res is None:
         return
-    res.res_state = ResState.Down
+    res.setState(ResState.Down)
 
 
 def resetResStates(session: Session, actor_id: int):
     # set res state to init
-    PostCtrl.batchSetResStates(session, actor_id, ResState.Init)
+    PostCtrl.batchSetResStates(session, actor_id, ResState.Finished, ResState.Init)
     # set res state to downed if downloaded files exist
     actor = CommonCtrl.getActor(session, actor_id)
     ResFileCtrl.traverseDownloadedFilesOfActor(
         session, actor, _setResStateToDowned)
 
     ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetPostStates)
-
-
-def resetLastPostId(session: Session, actor_id: int):
-    stmt = update(ActorModel).where(
-        ActorModel.actor_id == actor_id).values(last_post_id=0)
-    session.execute(stmt)
-    ActorLogCtrl.addActorLog(session, actor_id, ActorLogType.ResetLastPostId)
 
 
 def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> ActorModel:
@@ -201,8 +194,6 @@ def changeActorGroup(session: Session, actor_id: int, new_group_id: int) -> Acto
     if oldHas != newHas:
         if oldHas:
             ActorFileCtrl.deleteActorFolder(session, actor)
-            last_post_id = PostCtrl.getMaxPostId(session, actor_id)
-            actor.last_post_id = last_post_id
         else:
             ActorFileCtrl.createActorFolder(actor)
 

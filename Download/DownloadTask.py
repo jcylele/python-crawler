@@ -176,9 +176,6 @@ class DownloadTask:
         """
         self.init_group_id = group_id
 
-    def is_all_posts(self) -> bool:
-        return self.download_limit.getPostFilter() == PostFilter.All
-
     async def normalPosts(self, actor_ids: list[int]):
         for actor_id in actor_ids:
             await self.queue_mgr.enqueueFetchActor(actor_id)
@@ -190,7 +187,7 @@ class DownloadTask:
                 actor = CommonCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
                 posts = PostCtrl.getPostsOfActor(
-                    session, actor_id, actor.last_post_id, True)
+                    session, actor_id, True)
                 for post in posts:
                     await self.queue_mgr.enqueueAllRes(
                         actor_info, post, self.download_limit)
@@ -201,7 +198,7 @@ class DownloadTask:
                 actor = CommonCtrl.getActor(session, actor_id)
                 actor_info = ActorInfo(actor)
                 posts = PostCtrl.getPostsOfActor(
-                    session, actor_id, actor.last_post_id)
+                    session, actor_id)
                 for post in posts:
                     if not post.completed:  # the post is not analysed yet
                         await self.queue_mgr.enqueueFetchPost(

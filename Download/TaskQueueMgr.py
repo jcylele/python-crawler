@@ -54,7 +54,7 @@ class TaskQueueMgr(QueueMgr):
             return
         post_url = RequestCtrl.formatPostUrl(
             actor_info, post.post_id_str)
-        for res in post.res_list:
+        for res in post.res_list: # type: ResModel
             if res.isCompleted():
                 continue
 

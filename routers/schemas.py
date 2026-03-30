@@ -142,7 +142,6 @@ class ActorResponse(BaseModel):
     # properties from ORM
 
     is_linked: bool
-    has_last_post_id: bool
     folder_ids: list[int]
     commented_posts: list[PostResponse]
 
